@@ -3,6 +3,7 @@ const knownRequestIds = new Set();
 const activeTransfers = new Map(); // requestId -> { el, timer, type, requestId }
 let currentModalRequestId = null;
 let deviceName = '—';
+let pendingTarget = null; // target device untuk file picker
 
 // ===== Helper: Format Bytes =====
 function formatBytes(bytes) {
@@ -120,6 +121,7 @@ function renderDevices(devices) {
           <span class="dev-ip">${d.ip}:${d.port}</span>
         </div>
         <div class="drop-hint">📤 Seret file ke sini untuk mengirim</div>
+        <button class="btn-file-pick" data-ip="${d.ip}" data-port="${d.transferPort || (d.port + 1)}" data-device-name="${escapeHtml(d.deviceName)}">+ Pilih File</button>
       </div>`;
   }
 
@@ -170,7 +172,29 @@ function setupDragDrop() {
 
     await uploadAndSend(ip, port, targetName, file);
   });
+
+  // Click delegation untuk file picker button
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-file-pick');
+    if (!btn) return;
+    pendingTarget = {
+      ip: btn.dataset.ip,
+      port: parseInt(btn.dataset.port),
+      targetName: btn.dataset.deviceName
+    };
+    document.getElementById('fileInput').click();
+  });
 }
+
+// ===== File Picker Handler =====
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file || !pendingTarget) return;
+  const { ip, port, targetName } = pendingTarget;
+  pendingTarget = null;
+  await uploadAndSend(ip, port, targetName, file);
+  e.target.value = ''; // reset supaya file yg sama bisa dipilih lagi
+});
 
 // ===== Upload + Send Flow =====
 async function uploadAndSend(ip, port, targetName, file) {

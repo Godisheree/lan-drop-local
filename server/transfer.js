@@ -86,12 +86,13 @@ function startRawReceive(requestId, req) {
       if (meta.type === 'file-start') {
         metadataRead = true;
         socket.removeListener('data', metaHandler);
-        const savePath = path.join(downloadsDir, meta.fileName || req.fileName);
+        const safeName = path.basename(meta.fileName || req.fileName);
+        const savePath = path.join(downloadsDir, safeName);
         const totalSize = meta.fileSize;
 
         // Init progress dengan ukuran beneran
         transferProgress.set(requestId, {
-          fileName: meta.fileName || req.fileName,
+          fileName: safeName,
           fileSize: totalSize,
           bytesTransferred: 0,
           status: 'transferring',
@@ -271,8 +272,8 @@ function startFileSend(requestId, filePath) {
   const stat = fs.statSync(filePath);
   const actualSize = stat.size;
 
-  // Update metadata dgn path asli
-  req.fileName = path.basename(filePath);
+  // Update ukuran — jangan overwrite fileName (udah bener dari metadata request,
+  // karena filePath bisa jadi path hash dari multer)
   req.fileSize = actualSize;
 
   // Init progress

@@ -134,6 +134,29 @@ h2 {
   border-top: 1px solid #252b3d;
   text-align: center;
 }
+.device-card .btn-file-pick {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  min-height: 44px;
+  background: #252b3d;
+  border: 1px solid #3a4055;
+  border-radius: 8px;
+  color: #6c8cff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.device-card .btn-file-pick:hover {
+  background: #2a3148;
+  border-color: #6c8cff;
+}
+.device-card .btn-file-pick:active {
+  transform: scale(0.97);
+}
 .device-card .file-info {
   font-size: 0.8rem;
   color: #6c8cff;
