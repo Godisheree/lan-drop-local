@@ -7,7 +7,7 @@ const discovery = require('./discovery');
 const transfer = require('./transfer');
 
 // ===================== Multer Setup =====================
-const uploadsDir = path.join(__dirname, '..', 'uploads-temp');
+const uploadsDir = process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp');
 fs.mkdirSync(uploadsDir, { recursive: true });
 const upload = multer({ dest: uploadsDir });
 

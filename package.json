@@ -1,9 +1,12 @@
 {
   "name": "lan-drop",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "LAN file sharing via browser — no cloud, no setup",
+  "main": "main.js",
   "scripts": {
+    "start": "node server/index.js",
+    "electron-dev": "electron .",
+    "build-win": "electron-builder --win",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,5 +16,31 @@
   "dependencies": {
     "express": "^5.2.1",
     "multer": "^2.2.0"
+  },
+  "devDependencies": {
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.landrop.app",
+    "productName": "LAN Drop",
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server/**/*",
+      "public/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "main.js"
+    }
   }
 }

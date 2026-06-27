@@ -1,6 +1,10 @@
+picture/
 node_modules/
 downloads/
 uploads-temp/
 .claude/
 .env
+dist/
+dist-*/
+out/
 
