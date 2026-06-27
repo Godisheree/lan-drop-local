@@ -46,8 +46,12 @@ Express entry point. Serves `public/` statically, mounts discovery + transfer RE
 ### Discovery (`server/discovery.js`)
 UDP broadcast on port 41234. Each device broadcasts a JSON `announce` packet every 2 seconds containing `{deviceId, deviceName, ip, port, transferPort}`. Listener populates a `knownDevices` Map; entries expire after 10s of no broadcast, cleaned every 3s. Exposes `GET /devices` via `getDevices()`.
 
+### Platform (`server/platform.js`)
+Runtime environment detection. `isTermux()` checks `process.env.PREFIX` for `com.termux` (more reliable than `os.platform()` on Android). `isWindows()` checks `process.platform === 'win32'`.
+
 ### Transfer (`server/transfer.js`)
 TCP-based transfer protocol over `net` module on port 3001. Custom **length-prefixed frame protocol**:
+- **Auto-Save:** After file write completes, detects platform and moves file to user-friendly location. Windows → `D:\Downloads\Download - Lan Drop\` (fallback to `<home>\Downloads\Download - Lan Drop\` if D: doesn't exist). Termux → `~/storage/pictures/` (photo), `~/storage/movies/` (video), or `~/storage/downloads/` (other). Uses `fs.rename()` with `EXDEV` fallback to copy+unlink. Runs `termux-media-scan` for photos/videos on Termux so files appear in Gallery automatically. All errors are non-fatal — file stays in internal `downloads/` as safe fallback.
 
 - **Frame format:** 4-byte big-endian uint32 length prefix + UTF-8 JSON payload
 - `FrameParser` class: incremental buffer parser, handles partial reads
@@ -130,6 +134,7 @@ Day-by-day specs in `picture/text/`:
 - `hari 4_SPEC.md` — File streaming + progress endpoint
 - `hari 5_SPEC.md` — Web UI (drag-drop, upload flow, progress bars)
 - `FEATURE_FILE_PICKER_SPEC.md` — File picker button for mobile ux
+- `FEATURE_AUTOSAVE_SPEC.md` — Auto-save to platform-specific folders (Windows Downloads / Termux storage)
 
 ## Available Agent Types (`.claude/agents/`)
 

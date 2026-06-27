@@ -2,6 +2,9 @@ const net = require('net');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { exec } = require('child_process');
+const { isTermux, isWindows } = require('./platform');
 
 // ===================== Konstanta =====================
 const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
@@ -51,6 +54,70 @@ function sendFramedMessage(socket, obj) {
   const header = Buffer.alloc(4);
   header.writeUInt32BE(payload.length);
   socket.write(Buffer.concat([header, payload]));
+}
+
+// ===================== Auto-Save: Klasifikasi File =====================
+const PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic'];
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.mkv', '.avi', '.webm', '.3gp'];
+
+function classifyFileType(fileName) {
+  const ext = path.extname(fileName).toLowerCase();
+  if (PHOTO_EXTENSIONS.includes(ext)) return 'photo';
+  if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
+  return 'other';
+}
+
+// ===================== Auto-Save: Directory Resolution =====================
+const WINDOWS_PREFERRED_DIR = 'D:\\Downloads\\Download - Lan Drop';
+
+function getWindowsSaveDir() {
+  try {
+    fs.accessSync('D:\\');
+    return WINDOWS_PREFERRED_DIR;
+  } catch (_) {
+    const fallback = path.join(os.homedir(), 'Downloads', 'Download - Lan Drop');
+    console.warn(`[Transfer] Drive D: tidak ditemukan, fallback simpan ke: ${fallback}`);
+    return fallback;
+  }
+}
+
+function getTermuxStorageDir(category) {
+  // category: 'pictures' | 'movies' | 'downloads'
+  const dir = path.join(os.homedir(), 'storage', category);
+  if (fs.existsSync(dir)) {
+    return dir;
+  }
+  console.warn(`[Transfer] ~/storage/${category} tidak ditemukan (mungkin termux-setup-storage belum dijalankan). Fallback ke folder internal.`);
+  return null;
+}
+
+// ===================== Auto-Save: Move File (rename fallback copy+unlink) =====================
+function moveFile(source, destination) {
+  return new Promise((resolve, reject) => {
+    fs.rename(source, destination, (err) => {
+      if (!err) return resolve();
+
+      if (err.code === 'EXDEV') {
+        // Lintas filesystem — copy dulu baru unlink
+        const readStream = fs.createReadStream(source);
+        const writeStream = fs.createWriteStream(destination);
+
+        readStream.on('error', reject);
+        writeStream.on('error', reject);
+
+        writeStream.on('finish', () => {
+          fs.unlink(source, (unlinkErr) => {
+            if (unlinkErr) console.warn(`[Transfer] Gagal hapus file source setelah copy: ${unlinkErr.message}`);
+            resolve();
+          });
+        });
+
+        readStream.pipe(writeStream);
+      } else {
+        reject(err);
+      }
+    });
+  });
 }
 
 // ===================== Raw Receive: baca file dari socket setelah handshake =====================
@@ -129,13 +196,58 @@ function startRawReceive(requestId, req) {
         };
         socket.on('data', dataHandler);
 
-        writeStream.on('finish', () => {
+        writeStream.on('finish', async () => {
           const p = transferProgress.get(requestId);
           if (p) {
             p.status = 'completed';
             p.bytesTransferred = totalSize;
+            p.savePath = savePath; // internal path
           }
           req.status = 'completed';
+
+          // ===== Auto-Save: Pindah file ke folder sesuai platform =====
+          let finalPath = savePath; // default: tetap di internal
+
+          try {
+            if (isWindows()) {
+              const targetDir = getWindowsSaveDir();
+              if (targetDir) {
+                fs.mkdirSync(targetDir, { recursive: true });
+                const targetPath = path.join(targetDir, safeName);
+                await moveFile(savePath, targetPath);
+                finalPath = targetPath;
+                console.log(`[Transfer] File disimpan ke: ${targetPath}`);
+              }
+            } else if (isTermux()) {
+              const fileType = classifyFileType(safeName);
+              const category = fileType === 'photo' ? 'pictures' : fileType === 'video' ? 'movies' : 'downloads';
+              const storageDir = getTermuxStorageDir(category);
+              if (storageDir) {
+                fs.mkdirSync(storageDir, { recursive: true });
+                const targetPath = path.join(storageDir, safeName);
+                await moveFile(savePath, targetPath);
+                finalPath = targetPath;
+                console.log(`[Transfer] File disimpan ke: ${targetPath}`);
+
+                // Scan biar muncul di Galeri (khusus foto/video)
+                if (fileType === 'photo' || fileType === 'video') {
+                  exec(`termux-media-scan "${targetPath}"`, (err) => {
+                    if (err) {
+                      console.warn(`[Transfer] termux-media-scan gagal (mungkin termux-api belum terinstall): ${err.message}`);
+                    }
+                  });
+                }
+              }
+            }
+            // Platform lain (Linux desktop, dll): tetap di internal — no-op
+          } catch (moveErr) {
+            console.error(`[Transfer] Gagal pindah file ke folder tujuan: ${moveErr.message} — file tetap aman di ${savePath}`);
+            // File tetap valid di internal, transfer tetap sukses
+          }
+
+          // Update savedTo di progress
+          if (p) p.savedTo = finalPath;
+
           console.log(`[Transfer] ✅ ${requestId} — ${meta.fileName} received (${totalSize} bytes)`);
           socket.end(); // sinyal ke pengirim
         });
@@ -360,7 +472,8 @@ function getTransferProgress(requestId) {
     bytesTransferred: p.bytesTransferred,
     percent,
     status: p.status,
-    savePath: p.savePath
+    savePath: p.savePath,
+    savedTo: p.savedTo
   };
 }
 
