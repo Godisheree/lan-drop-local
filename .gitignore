@@ -1,5 +1,6 @@
 node_modules/
-uploads-temp/
 downloads/
+uploads-temp/
+.claude/
 .env
-*.log
+
