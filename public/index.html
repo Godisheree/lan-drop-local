@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAN DROP</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div class="logo">📡 LAN DROP</div>
+      <div class="device-name" id="deviceName">—</div>
+    </header>
+
+    <!-- Main Layout -->
+    <div id="main">
+      <!-- Left: Device List -->
+      <section id="devices-section">
+        <h2>Perangkat Online</h2>
+        <div id="deviceList" class="device-list">
+          <p class="empty-msg" id="emptyDevices">🔍 Mencari perangkat lain di jaringan...</p>
+        </div>
+      </section>
+
+      <!-- Right: Activity -->
+      <section id="activity-section">
+        <h2>Aktivitas Transfer</h2>
+        <div id="transferList" class="transfer-list">
+          <p class="empty-msg">Belum ada transfer.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Modal Incoming Request -->
+  <div id="requestModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>📥 Permintaan Masuk</h3>
+      <p id="modalInfo"></p>
+      <div class="modal-actions">
+        <button id="btnAccept" class="btn btn-accept">✅ Terima</button>
+        <button id="btnReject" class="btn btn-reject">❌ Tolak</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="client.js"></script>
+</body>
+</html>
