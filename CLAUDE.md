@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **LAN DROP** is a peer-to-peer LAN file sharing app built with Node.js + Express. Users on the same WiFi share files browser-to-browser (mobile ↔ laptop). No cloud, no setup — both sides open the same URL.
 
-Built across 7 days: server scaffolding → UDP discovery → TCP handshake → file streaming → UI → testing → Electron packaging. All day 1-5 code is implemented and proven end-to-end (laptop ↔ Android/Termux tested).
+Built across 7 days: server scaffolding → UDP discovery → TCP handshake → file streaming → UI → testing → Electron packaging (Day 7). All code implemented and proven end-to-end (laptop Windows ↔ Android/Termux tested). Desktop can also be run as standalone installer via Electron.
 
 ## Stack
 
@@ -37,6 +37,18 @@ PORT=4000 TRANSFER_PORT=4001 node server/index.js
 ```
 
 No test framework — all tests are manual flows documented in `picture/text/hari 4_SPEC.md` and `picture/text/hari 5_SPEC.md`.
+
+## Electron Packaging
+
+Desktop packaging with Electron. Run in dev mode (`npm run electron-dev`) or build installer:
+```bash
+npm run electron-dev        # Run in Electron dev mode
+npm run build-win           # Build Windows installer (output: dist/LAN Drop Setup x.x.x.exe)
+```
+
+The Electron wrapper (`main.js`) `require()`s the Express server directly in the main process (not as a child process), so the server lifecycle follows the app window. On close, `app.quit()` ensures no orphan node.exe processes remain.
+
+**Critical implementation detail — uploads-temp in ASAR:** The multer upload directory default is `path.join(__dirname, '..', 'uploads-temp')` which breaks inside the ASAR (read-only). `main.js` sets `process.env.LANDROP_UPLOAD_DIR` to `app.getPath('temp')/landrop-uploads/` before requiring the server, and `server/index.js` checks this env var as a fallback. This is the ONLY modification to server/ code for Electron compatibility.
 
 ## Architecture
 
@@ -135,6 +147,7 @@ Day-by-day specs in `picture/text/`:
 - `hari 5_SPEC.md` — Web UI (drag-drop, upload flow, progress bars)
 - `FEATURE_FILE_PICKER_SPEC.md` — File picker button for mobile ux
 - `FEATURE_AUTOSAVE_SPEC.md` — Auto-save to platform-specific folders (Windows Downloads / Termux storage)
+- `DAY7_SPEC.md` — Electron packaging & Windows NSIS installer
 
 ## Available Agent Types (`.claude/agents/`)
 
