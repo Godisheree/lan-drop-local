@@ -58,7 +58,7 @@ function sendFramedMessage(socket, obj) {
 
 // ===================== Auto-Save: Klasifikasi File =====================
 const PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic'];
-const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.mkv', '.avi', '.webm', '.3gp'];
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.mkv', '.avi', '.webm', '.3gp', '.mpeg', '.mpg'];
 
 function classifyFileType(fileName) {
   const ext = path.extname(fileName).toLowerCase();
