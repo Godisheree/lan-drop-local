@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const { isTermux, isWindows } = require('./platform');
 
 // ===================== Konstanta =====================
@@ -89,6 +89,75 @@ function getTermuxStorageDir(category) {
   }
   console.warn(`[Transfer] ~/storage/${category} tidak ditemukan (mungkin termux-setup-storage belum dijalankan). Fallback ke folder internal.`);
   return null;
+}
+
+// ===================== Video Transcoding =====================
+// Format video lama/yang mungkin gak di-support native HP → konversi ke H.264 .mp4
+const NEEDS_TRANSCODE = ['.mpeg', '.mpg', '.avi', '.mkv', '.webm', '.mov', '.3gp', '.flv', '.ts'];
+let _ffmpegChecked = false;
+let _ffmpegOk = false;
+
+function checkFfmpeg() {
+  return new Promise((resolve) => {
+    const proc = spawn('ffmpeg', ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 });
+    proc.on('error', () => resolve(false));
+    proc.on('exit', (code) => resolve(code === 0));
+  });
+}
+
+function transcodeToMp4(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', inputPath,
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      '-y', outputPath
+    ];
+    const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', (err) => reject(err));
+    proc.on('exit', (code) => {
+      if (code === 0) resolve(outputPath);
+      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-300)}`));
+    });
+  });
+}
+
+async function transcodeIfNeeded(filePath, fileName) {
+  const ext = path.extname(fileName).toLowerCase();
+  if (!NEEDS_TRANSCODE.includes(ext)) return { filePath, fileName, fileSize: null };
+
+  // Cek ffmpeg availability sekali aja
+  if (!_ffmpegChecked) {
+    _ffmpegChecked = true;
+    _ffmpegOk = await checkFfmpeg();
+    if (!_ffmpegOk) {
+      console.log('[Transfer] ffmpeg tidak tersedia — skip konversi video, kirim original');
+    }
+  }
+  if (!_ffmpegOk) return { filePath, fileName, fileSize: null };
+
+  const outName = path.basename(fileName, ext) + '.mp4';
+  const outDir = path.dirname(filePath);
+  const outPath = path.join(outDir, outName);
+
+  try {
+    console.log(`[Transfer] Mengonversi ${fileName} → ${outName}...`);
+    const start = Date.now();
+    await transcodeToMp4(filePath, outPath);
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    const stat = fs.statSync(outPath);
+    console.log(`[Transfer] ✅ Konversi selesai (${elapsed}s): ${outName} (${stat.size} bytes)`);
+    return { filePath: outPath, fileName: outName, fileSize: stat.size };
+  } catch (err) {
+    console.warn(`[Transfer] Konversi video gagal: ${err.message} — kirim original`);
+    // Hapus file output kalau ada
+    try { fs.unlinkSync(outPath); } catch (_) {}
+    return { filePath, fileName, fileSize: null };
+  }
 }
 
 // ===================== Auto-Save: Move File (rename fallback copy+unlink) =====================
@@ -366,7 +435,7 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
 }
 
 // ===================== Start File Send (dipanggil setelah accepted) =====================
-function startFileSend(requestId, filePath) {
+async function startFileSend(requestId, filePath) {
   const req = outgoingRequests.get(requestId);
   if (!req) throw new Error(`Request ${requestId} not found`);
   if (req.status !== 'accepted') throw new Error(`Request ${requestId} status is "${req.status}", expected "accepted"`);
@@ -381,12 +450,26 @@ function startFileSend(requestId, filePath) {
   // Validasi file
   if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
-  const stat = fs.statSync(filePath);
-  const actualSize = stat.size;
+  // ===== Transcoding: konversi video yg mungkin gak di-support HP =====
+  let sendFilePath = filePath;
+  let sendFileName = req.fileName;
+  let sendFileSize = null;
 
-  // Update ukuran — jangan overwrite fileName (udah bener dari metadata request,
-  // karena filePath bisa jadi path hash dari multer)
+  const transResult = await transcodeIfNeeded(filePath, req.fileName);
+  sendFilePath = transResult.filePath;
+  if (transResult.fileSize !== null) {
+    sendFileName = transResult.fileName;
+    sendFileSize = transResult.fileSize;
+  }
+
+  const stat = fs.statSync(sendFilePath);
+  const actualSize = sendFileSize || stat.size;
+
+  // Update ukuran & fileName (kalau berubah karena konversi)
   req.fileSize = actualSize;
+  if (sendFileName !== req.fileName) {
+    req.fileName = sendFileName;
+  }
 
   // Init progress
   transferProgress.set(requestId, {
@@ -403,7 +486,7 @@ function startFileSend(requestId, filePath) {
     fileSize: actualSize
   });
 
-  const readStream = fs.createReadStream(filePath);
+  const readStream = fs.createReadStream(sendFilePath);
 
   readStream.on('data', (chunk) => {
     const p = transferProgress.get(requestId);

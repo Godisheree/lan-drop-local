@@ -85,7 +85,7 @@ app.get('/transfer/status/:requestId', (req, res) => {
 // ===================== Hari 4 — Streaming Endpoints =====================
 
 // POST /transfer/send-file — mulai streaming file setelah accepted
-app.post('/transfer/send-file', (req, res) => {
+app.post('/transfer/send-file', async (req, res) => {
   const { requestId, filePath } = req.body;
 
   if (!requestId || !filePath) {
@@ -93,7 +93,7 @@ app.post('/transfer/send-file', (req, res) => {
   }
 
   try {
-    const result = transfer.startFileSend(requestId, filePath);
+    const result = await transfer.startFileSend(requestId, filePath);
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
