@@ -489,7 +489,7 @@ async function startFileSend(requestId, filePath) {
 
   // Init progress
   transferProgress.set(requestId, {
-    fileName: req.fileName,
+    fileName: sendFileName,
     fileSize: actualSize,
     bytesTransferred: 0,
     status: 'transferring'
@@ -498,7 +498,7 @@ async function startFileSend(requestId, filePath) {
   // Kirim metadata actual file size dulu sebelum raw stream
   sendFramedMessage(socket, {
     type: 'file-start',
-    fileName: req.fileName,
+    fileName: sendFileName,
     fileSize: actualSize
   });
 
