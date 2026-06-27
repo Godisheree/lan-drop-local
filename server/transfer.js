@@ -94,14 +94,30 @@ function getTermuxStorageDir(category) {
 // ===================== Video Transcoding =====================
 // Format video lama/yang mungkin gak di-support native HP → konversi ke H.264 .mp4
 const NEEDS_TRANSCODE = ['.mpeg', '.mpg', '.avi', '.mkv', '.webm', '.mov', '.3gp', '.flv', '.ts'];
-let _ffmpegChecked = false;
-let _ffmpegOk = false;
+
+// Lokasi umum ffmpeg di Windows (winget, manual install, dll)
+const FFMPEG_CANDIDATES = [
+  'ffmpeg',
+  'ffmpeg.exe',
+  path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.1-full_build', 'bin', 'ffmpeg.exe'),
+  path.join(process.env.ProgramFiles || '', 'ffmpeg', 'bin', 'ffmpeg.exe'),
+  path.join(process.env.ProgramW6432 || '', 'ffmpeg', 'bin', 'ffmpeg.exe'),
+  path.join(os.homedir(), 'ffmpeg', 'bin', 'ffmpeg.exe'),
+];
+
+let _ffmpegPath = undefined; // undefined=belum cek, false=cek&gakada, string=path
 
 function checkFfmpeg() {
   return new Promise((resolve) => {
-    const proc = spawn('ffmpeg', ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 });
-    proc.on('error', () => resolve(false));
-    proc.on('exit', (code) => resolve(code === 0));
+    (function tryNext(i) {
+      if (i >= FFMPEG_CANDIDATES.length) return resolve(false);
+      const candidate = FFMPEG_CANDIDATES[i];
+      const proc = spawn(candidate, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 });
+      let settled = false;
+      const done = (result) => { if (!settled) { settled = true; if (result) { _ffmpegPath = candidate; resolve(true); } else tryNext(i + 1); } };
+      proc.on('error', () => done(false));
+      proc.on('exit', (code) => done(code === 0));
+    })(0);
   });
 }
 
@@ -115,7 +131,7 @@ function transcodeToMp4(inputPath, outputPath) {
       '-movflags', '+faststart',
       '-y', outputPath
     ];
-    const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn(_ffmpegPath || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
     proc.on('error', (err) => reject(err));
@@ -131,14 +147,14 @@ async function transcodeIfNeeded(filePath, fileName) {
   if (!NEEDS_TRANSCODE.includes(ext)) return { filePath, fileName, fileSize: null };
 
   // Cek ffmpeg availability sekali aja
-  if (!_ffmpegChecked) {
-    _ffmpegChecked = true;
-    _ffmpegOk = await checkFfmpeg();
-    if (!_ffmpegOk) {
+  if (_ffmpegPath === undefined) {
+    const ok = await checkFfmpeg();
+    if (!ok) {
+      _ffmpegPath = false; // cache negative result
       console.log('[Transfer] ffmpeg tidak tersedia — skip konversi video, kirim original');
     }
   }
-  if (!_ffmpegOk) return { filePath, fileName, fileSize: null };
+  if (!_ffmpegPath) return { filePath, fileName, fileSize: null };
 
   const outName = path.basename(fileName, ext) + '.mp4';
   const outDir = path.dirname(filePath);
