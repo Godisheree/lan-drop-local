@@ -14,6 +14,15 @@ function formatBytes(bytes) {
   return `${i === 0 ? val : val.toFixed(1)} ${units[i]}`;
 }
 
+// ===== Helper: File Type Emoji =====
+function getFileEmoji(fileName) {
+  const ext = fileName.split('.').pop().toLowerCase();
+  if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma'].includes(ext)) return '🎵';
+  if (['mp4', 'mkv', 'avi', 'mov', 'webm', 'mpeg', 'mpg', '3gp', 'flv', 'ts'].includes(ext)) return '🎬';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'].includes(ext)) return '🖼️';
+  return '📄';
+}
+
 // ===== Toast =====
 function showToast(msg, type) {
   const old = document.querySelector('.toast');
@@ -444,10 +453,11 @@ function addTransferItem(requestId, data) {
     ? `→ ${escapeHtml(data.targetName || '?')}`
     : `← ${escapeHtml(data.senderName || '?')}`;
   const fileName = escapeHtml(data.fileName || '?');
+  const fileEmoji = getFileEmoji(data.fileName || '');
 
   div.innerHTML = `
     <div class="tf-header">
-      <span class="tf-name">${fileName}</span>
+      <span class="tf-name">${fileEmoji} ${fileName}</span>
       <span class="tf-direction ${dirClass}">${dirLabel}</span>
     </div>
     <div class="tf-status ${data.status}">${data.statusText || ''}</div>
@@ -505,3 +515,66 @@ document.getElementById('requestModal').addEventListener('click', (e) => {
 
 // ===== Start =====
 init();
+
+// ===== Ripple Background Effect =====
+(function initRippleBackground() {
+  // Nonaktifkan untuk layar kecil (mobile) — performa
+  if (window.innerWidth < 700) return;
+  // Hormati preferensi reduced-motion OS
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'ripple-bg';
+  canvas.style.position = 'fixed';
+  canvas.style.top = '0';
+  canvas.style.left = '0';
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  canvas.style.zIndex = '0';
+  canvas.style.pointerEvents = 'none';
+  document.body.insertBefore(canvas, document.body.firstChild);
+
+  const ctx = canvas.getContext('2d');
+  let mouseX = window.innerWidth / 2;
+  let mouseY = window.innerHeight / 2;
+  let dots = [];
+  const SPACING = 40;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    dots = [];
+    for (let x = 0; x < canvas.width + SPACING; x += SPACING) {
+      for (let y = 0; y < canvas.height + SPACING; y += SPACING) {
+        dots.push({ baseX: x, baseY: y });
+      }
+    }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const dot of dots) {
+      const dx = dot.baseX - mouseX;
+      const dy = dot.baseY - mouseY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const maxDist = 200;
+      const influence = Math.max(0, 1 - dist / maxDist);
+      const radius = 1.5 + influence * 3;
+      const opacity = 0.04 + influence * 0.10;
+
+      ctx.beginPath();
+      ctx.arc(dot.baseX, dot.baseY, radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(91, 141, 239, ${opacity})`;
+      ctx.fill();
+    }
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();

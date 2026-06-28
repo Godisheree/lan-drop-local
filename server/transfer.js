@@ -109,14 +109,19 @@ let _ffmpegPath = undefined; // undefined=belum cek, false=cek&gakada, string=pa
 
 function checkFfmpeg() {
   return new Promise((resolve) => {
+    console.log('[FFMPEG] checkFfmpeg: mulai scan ffmpeg...');
     (function tryNext(i) {
-      if (i >= FFMPEG_CANDIDATES.length) return resolve(false);
+      if (i >= FFMPEG_CANDIDATES.length) {
+        console.log('[FFMPEG] checkFfmpeg: SEMUA kandidat habis — ffmpeg TIDAK ditemukan');
+        return resolve(false);
+      }
       const candidate = FFMPEG_CANDIDATES[i];
+      console.log(`[FFMPEG] checkFfmpeg: coba kandidat [${i}]: "${candidate}"`);
       const proc = spawn(candidate, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 });
       let settled = false;
-      const done = (result) => { if (!settled) { settled = true; if (result) { _ffmpegPath = candidate; resolve(true); } else tryNext(i + 1); } };
+      const done = (result) => { if (!settled) { settled = true; if (result) { console.log(`[FFMPEG] checkFfmpeg: ✅ DITEMUKAN di "${candidate}"`); _ffmpegPath = candidate; resolve(true); } else { console.log(`[FFMPEG] checkFfmpeg: ❌ "${candidate}" gagal, lanjut next...`); tryNext(i + 1); } } };
       proc.on('error', () => done(false));
-      proc.on('exit', (code) => done(code === 0));
+      proc.on('exit', (code) => { console.log(`[FFMPEG] checkFfmpeg: "${candidate}" exit code=${code}`); done(code === 0); });
     })(0);
   });
 }
@@ -142,37 +147,162 @@ function transcodeToMp4(inputPath, outputPath) {
   });
 }
 
+function remuxToM4a(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    // Output: MP3 container. Audio MP3 → copy murni tanpa re-encode.
+    // Kenapa MP3, bukan M4A? Karena audio asli file-file ini adalah MP3,
+    // dan container M4A (format ipod) tidak support MP3 — cuma AAC/ALAC.
+    // Dengan MP3 container, copy murni jadi super cepat dan lossless.
+    const args = [
+      '-i', inputPath,
+      '-c:a', 'copy',         // copy audio stream tanpa re-encode (lossless)
+      '-vn',                  // buang semua stream video (cover art, dll)
+      '-y', outputPath
+    ];
+    const proc = spawn(_ffmpegPath || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', (err) => reject(err));
+    proc.on('exit', (code) => {
+      if (code === 0) resolve(outputPath);
+      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-300)}`));
+    });
+  });
+}
+
+function getStreamInfo(filePath) {
+  return new Promise((resolve) => {
+    // ffprobe biasanya di PATH atau satu direktori dengan ffmpeg
+    const ffprobePath = _ffmpegPath
+      ? _ffmpegPath.replace(/ffmpeg(\.exe)?$/i, (m) => 'ffprobe' + m.slice(6))
+      : 'ffprobe';
+    const proc = spawn(ffprobePath, [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_streams',
+      filePath
+    ], { timeout: 10000 });
+    let stdout = '';
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.on('error', () => resolve(null));
+    proc.on('exit', (code) => {
+      if (code === 0) {
+        try { resolve(JSON.parse(stdout)); } catch (_) { resolve(null); }
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
 async function transcodeIfNeeded(filePath, fileName) {
   const ext = path.extname(fileName).toLowerCase();
-  if (!NEEDS_TRANSCODE.includes(ext)) return { filePath, fileName, fileSize: null };
+  console.log(`[TRANSCODE] transcodeIfNeeded: file="${fileName}", ext="${ext}"`);
+  if (!NEEDS_TRANSCODE.includes(ext)) {
+    console.log(`[TRANSCODE] ext "${ext}" TIDAK ada di NEEDS_TRANSCODE — skip transcode, kirim original`);
+    return { filePath, fileName, fileSize: null, wasProcessed: false };
+  }
+  console.log(`[TRANSCODE] ext "${ext}" TERMASUK NEEDS_TRANSCODE — lanjut cek ffmpeg`);
 
   // Cek ffmpeg availability sekali aja
   if (_ffmpegPath === undefined) {
+    console.log('[TRANSCODE] _ffmpegPath masih undefined, akan jalankan checkFfmpeg()...');
     const ok = await checkFfmpeg();
     if (!ok) {
       _ffmpegPath = false; // cache negative result
-      console.log('[Transfer] ffmpeg tidak tersedia — skip konversi video, kirim original');
+      console.log('[TRANSCODE] ffmpeg TIDAK tersedia — skip konversi video, kirim original');
+    } else {
+      console.log(`[TRANSCODE] ffmpeg tersedia di "${_ffmpegPath}" — lanjut konversi`);
     }
+  } else if (_ffmpegPath === false) {
+    console.log('[TRANSCODE] _ffmpegPath = false (cache negatif) — ffmpeg sebelumnya gak ketemu, kirim original');
+  } else {
+    console.log(`[TRANSCODE] _ffmpegPath sudah terisi = "${_ffmpegPath}" — lanjut konversi langsung`);
   }
-  if (!_ffmpegPath) return { filePath, fileName, fileSize: null };
+  if (!_ffmpegPath) {
+    console.log('[TRANSCODE] _ffmpegPath falsy — FALLBACK: kirim original tanpa konversi');
+    return { filePath, fileName, fileSize: null, wasProcessed: false };
+  }
+
+  // ===== Fix: Multer simpan file tanpa ekstensi, ffmpeg perlu ekstensi untuk deteksi format =====
+  let inputPath = filePath;
+  const inputExt = path.extname(filePath).toLowerCase();
+  let tempLinkedPath = null;
+  if (inputExt !== ext) {
+    console.log(`[TRANSCODE] Input file gak punya ekstensi "${ext}" — bikin temp file dengan ekstensi`);
+    tempLinkedPath = filePath + ext;
+    try {
+      fs.linkSync(filePath, tempLinkedPath);
+      console.log(`[TRANSCODE] Hardlink dibuat: ${tempLinkedPath}`);
+    } catch (_) {
+      try {
+        fs.symlinkSync(filePath, tempLinkedPath);
+        console.log(`[TRANSCODE] Symlink dibuat: ${tempLinkedPath}`);
+      } catch (_) {
+        fs.copyFileSync(filePath, tempLinkedPath);
+        console.log(`[TRANSCODE] Copy fallback: ${tempLinkedPath}`);
+      }
+    }
+    inputPath = tempLinkedPath;
+  }
 
   const outName = path.basename(fileName, ext) + '.mp4';
   const outDir = path.dirname(filePath);
   const outPath = path.join(outDir, outName);
 
+  // Probe stream info biar tau ada video atau cuma audio
+  const probe = await getStreamInfo(inputPath);
+
+  const ffprobeFailed = !probe;
+  let hasRealVideo, hasAttachedPic, hasAudio;
+
+  if (ffprobeFailed) {
+    console.log('[TRANSCODE] ffprobe gagal — fallback ke transcode .mp4 (tidak punya info stream)');
+    hasRealVideo = false; hasAttachedPic = false; hasAudio = false;
+  } else {
+    hasRealVideo = probe?.streams?.some(s => s.codec_type === 'video' && s.disposition?.attached_pic !== 1) || false;
+    hasAttachedPic = probe?.streams?.some(s => s.codec_type === 'video' && s.disposition?.attached_pic === 1) || false;
+    hasAudio = probe?.streams?.some(s => s.codec_type === 'audio') || false;
+    console.log(`[TRANSCODE] Probe: hasRealVideo=${hasRealVideo}, hasAttachedPic=${hasAttachedPic}, hasAudio=${hasAudio}, streams=${probe?.streams?.length || 0}`);
+  }
+
+  if (!hasRealVideo && hasAudio) {
+    // Audio-only (atau cuma ada album art): remux ke MP3
+    const audioOutName = path.basename(fileName, ext) + '.mp3';
+    const audioOutPath = path.join(outDir, audioOutName);
+    console.log(`[Transfer] Audio-only file (album art ${hasAttachedPic ? 'ditemukan' : 'tidak ada'}) — remux ${fileName} → ${audioOutName}...`);
+    try {
+      const start = Date.now();
+      await remuxToM4a(inputPath, audioOutPath);
+      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      const stat = fs.statSync(audioOutPath);
+      console.log(`[Transfer] ✅ Remux selesai (${elapsed}s): ${audioOutName} (${stat.size} bytes)`);
+      return { filePath: audioOutPath, fileName: audioOutName, fileSize: stat.size, wasProcessed: true };
+    } catch (err) {
+      console.warn(`[Transfer] Remux gagal: ${err.message} — kirim original`);
+      try { fs.unlinkSync(audioOutPath); } catch (_) {}
+      return { filePath, fileName, fileSize: null, wasProcessed: false };
+    }
+  }
+
   try {
     console.log(`[Transfer] Mengonversi ${fileName} → ${outName}...`);
     const start = Date.now();
-    await transcodeToMp4(filePath, outPath);
+    await transcodeToMp4(inputPath, outPath);
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     const stat = fs.statSync(outPath);
     console.log(`[Transfer] ✅ Konversi selesai (${elapsed}s): ${outName} (${stat.size} bytes)`);
-    return { filePath: outPath, fileName: outName, fileSize: stat.size };
+    return { filePath: outPath, fileName: outName, fileSize: stat.size, wasProcessed: true };
   } catch (err) {
     console.warn(`[Transfer] Konversi video gagal: ${err.message} — kirim original`);
     // Hapus file output kalau ada
     try { fs.unlinkSync(outPath); } catch (_) {}
-    return { filePath, fileName, fileSize: null };
+    return { filePath, fileName, fileSize: null, wasProcessed: false };
+  } finally {
+    // Bersihin temp file/link
+    if (tempLinkedPath) {
+      try { fs.unlinkSync(tempLinkedPath); console.log(`[TRANSCODE] Temp file dibersihkan: ${tempLinkedPath}`); } catch (_) {}
+    }
   }
 }
 
@@ -472,10 +602,14 @@ async function startFileSend(requestId, filePath) {
   let sendFileSize = null;
 
   const transResult = await transcodeIfNeeded(filePath, req.fileName);
+  console.log(`[SEND_FILE] transResult: filePath="${transResult.filePath}", fileName="${transResult.fileName}", fileSize=${transResult.fileSize}`);
   sendFilePath = transResult.filePath;
   if (transResult.fileSize !== null) {
+    console.log(`[SEND_FILE] transResult.fileSize !== null — UPDATE sendFileName "${sendFileName}" → "${transResult.fileName}"`);
     sendFileName = transResult.fileName;
     sendFileSize = transResult.fileSize;
+  } else {
+    console.log(`[SEND_FILE] transResult.fileSize === null — TIDAK update sendFileName, tetap "${sendFileName}"`);
   }
 
   const stat = fs.statSync(sendFilePath);
@@ -496,6 +630,9 @@ async function startFileSend(requestId, filePath) {
   });
 
   // Kirim metadata actual file size dulu sebelum raw stream
+  console.log(`[SEND_FILE] ⚠️⚠️⚠️ sendFileName PERSIS sebelum file-start frame: "${sendFileName}"`);
+  console.log(`[SEND_FILE] ⚠️⚠️⚠️ sendFilePath: "${sendFilePath}", actualSize: ${actualSize}`);
+  console.log(`[SEND_FILE] ⚠️⚠️⚠️ sendFileName === req.fileName? ${sendFileName === req.fileName}`);
   sendFramedMessage(socket, {
     type: 'file-start',
     fileName: sendFileName,

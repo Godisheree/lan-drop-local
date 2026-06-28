@@ -1,19 +1,41 @@
 /* ===== Reset & Base ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0f1219;
-  color: #e0e4ec;
-  line-height: 1.5;
+
+:root {
+  --bg-primary: #FAFAFA;
+  --bg-card: #FFFFFF;
+  --text-primary: #1D1D1F;
+  --text-secondary: #86868B;
+  --accent: #5B8DEF;
+  --accent-soft: rgba(91, 141, 239, 0.12);
+  --success: #34C759;
+  --failure: #FF3B30;
+  --warning: #FF9500;
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.16), 0 8px 20px rgba(0, 0, 0, 0.08);
 }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 #app {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== Header ===== */
@@ -21,29 +43,28 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
-  background: #1a1f2e;
-  border-radius: 12px;
-  margin-bottom: 16px;
-  border: 1px solid #2a3040;
+  padding: 8px 4px 20px;
+  margin-bottom: 8px;
 }
 .logo {
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  color: #6c8cff;
+  color: var(--accent);
+  letter-spacing: -0.02em;
 }
 .device-name {
-  font-size: 0.85rem;
-  color: #8e9bb5;
-  background: #252b3d;
-  padding: 4px 14px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+  padding: 5px 14px;
   border-radius: 20px;
+  font-weight: 500;
 }
 
 /* ===== Main Layout ===== */
 #main {
   display: flex;
-  gap: 16px;
+  gap: 24px;
   flex: 1;
 }
 #devices-section {
@@ -56,191 +77,213 @@ body {
 }
 
 h2 {
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #6c7a9e;
-  margin-bottom: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  letter-spacing: -0.01em;
 }
 
 /* ===== Device List ===== */
 .device-list, .transfer-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .empty-msg {
-  color: #5a6785;
+  color: var(--text-secondary);
   text-align: center;
-  padding: 40px 16px;
+  padding: 48px 16px;
   font-size: 0.9rem;
 }
 
 /* ===== Device Card ===== */
 .device-card {
-  background: #1a1f2e;
-  border: 2px dashed #2a3040;
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 20px;
+  padding: 20px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
   position: relative;
+  box-shadow: var(--shadow-card);
 }
 .device-card:hover {
-  border-color: #3d4760;
-  background: #1e2436;
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
 }
 .device-card.online {
   border-style: solid;
-  border-color: #2a334a;
+  border-color: var(--border-subtle);
 }
 .device-card.online:hover {
-  border-color: #6c8cff;
-  background: #1e2539;
+  border-color: var(--border-subtle);
 }
 .device-card.drag-over {
-  border-color: #6c8cff !important;
-  background: #222a44 !important;
-  box-shadow: 0 0 20px rgba(108, 140, 255, 0.15);
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  transform: scale(1.02) !important;
+  box-shadow: var(--shadow-card-hover) !important;
 }
 
 .device-card .device-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
+
+/* Online indicator — pulsing dot */
 .device-card .indicator {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #22c55e;
+  background: var(--success);
   flex-shrink: 0;
+  animation: pulse-dot 2s ease-in-out infinite;
 }
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
+
 .device-card .dev-name {
   font-weight: 600;
   font-size: 0.95rem;
+  letter-spacing: -0.02em;
 }
 .device-card .dev-ip {
   font-size: 0.78rem;
-  color: #6c7a9e;
-  margin-left: 20px;
+  color: var(--text-secondary);
+  margin-left: auto;
 }
 .device-card .drop-hint {
-  font-size: 0.75rem;
-  color: #5a6785;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #252b3d;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
   text-align: center;
 }
+
+/* ===== File Picker Button — pill style ===== */
 .device-card .btn-file-pick {
   display: block;
   width: 100%;
-  margin-top: 8px;
-  padding: 10px;
+  margin-top: 10px;
+  padding: 10px 20px;
   min-height: 44px;
-  background: #252b3d;
-  border: 1px solid #3a4055;
-  border-radius: 8px;
-  color: #6c8cff;
+  background: var(--accent-soft);
+  border: none;
+  border-radius: 999px;
+  color: var(--accent);
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   text-align: center;
-  transition: all 0.15s;
+  transition: all 0.2s ease;
 }
 .device-card .btn-file-pick:hover {
-  background: #2a3148;
-  border-color: #6c8cff;
+  background: var(--accent);
+  color: #fff;
 }
 .device-card .btn-file-pick:active {
   transform: scale(0.97);
 }
+
 .device-card .file-info {
   font-size: 0.8rem;
-  color: #6c8cff;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #252b3d;
+  color: var(--accent);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
   text-align: center;
   font-weight: 500;
 }
 
 /* ===== Transfer Items ===== */
 .transfer-item {
-  background: #1a1f2e;
-  border-radius: 10px;
-  padding: 14px;
-  border: 1px solid #252b3d;
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-subtle);
 }
 .transfer-item .tf-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 0.85rem;
 }
 .transfer-item .tf-name {
   font-weight: 500;
   word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .transfer-item .tf-direction {
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-radius: 12px;
   flex-shrink: 0;
+  font-weight: 500;
 }
 .transfer-item .tf-direction.send {
-  background: #1e3a5f;
-  color: #6cb4ff;
+  background: rgba(91, 141, 239, 0.12);
+  color: var(--accent);
 }
 .transfer-item .tf-direction.receive {
-  background: #1e3f2e;
-  color: #4ade80;
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--success);
 }
 .transfer-item .tf-status {
   font-size: 0.8rem;
-  margin-top: 4px;
+  margin-top: 6px;
+  color: var(--text-secondary);
 }
 .transfer-item .tf-status.completed {
-  color: #4ade80;
+  color: var(--success);
 }
 .transfer-item .tf-status.failed {
-  color: #f87171;
+  color: var(--failure);
 }
 .transfer-item .tf-status.rejected {
-  color: #fbbf24;
+  color: var(--warning);
 }
 .transfer-item .tf-status.waiting {
-  color: #fbbf24;
+  color: var(--warning);
+}
+.transfer-item .tf-status.transferring {
+  color: var(--accent);
 }
 
 /* ===== Progress Bar ===== */
 .progress-bar {
-  margin-top: 8px;
+  margin-top: 10px;
   height: 6px;
-  background: #252b3d;
-  border-radius: 4px;
+  background: var(--border-subtle);
+  border-radius: 999px;
   overflow: hidden;
 }
 .progress-bar .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6c8cff, #8aa4ff);
-  border-radius: 4px;
+  background: var(--accent);
+  border-radius: 999px;
   transition: width 0.3s ease;
   width: 0%;
 }
 .progress-bar .progress-fill.completed {
-  background: linear-gradient(90deg, #4ade80, #22c55e);
+  background: var(--success);
 }
 .progress-bar .progress-fill.failed {
-  background: linear-gradient(90deg, #f87171, #ef4444);
+  background: var(--failure);
 }
 .progress-text {
-  font-size: 0.78rem;
-  color: #8e9bb5;
-  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
   text-align: right;
 }
 
@@ -248,33 +291,41 @@ h2 {
 .modal {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 .modal.hidden { display: none; }
 
 .modal-content {
-  background: #1a1f2e;
-  border: 1px solid #2a3040;
-  border-radius: 16px;
-  padding: 28px;
+  background: var(--bg-card);
+  border-radius: 24px;
+  padding: 32px;
   max-width: 420px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-modal);
+  animation: modal-in 0.2s ease-out;
 }
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .modal-content h3 {
   font-size: 1.1rem;
   margin-bottom: 12px;
-  color: #e0e4ec;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 .modal-content p {
   font-size: 0.9rem;
-  color: #8e9bb5;
+  color: var(--text-secondary);
   line-height: 1.6;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 .modal-actions {
   display: flex;
@@ -283,26 +334,26 @@ h2 {
 
 /* ===== Buttons ===== */
 .btn {
-  padding: 10px 24px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
   flex: 1;
 }
 .btn:active { transform: scale(0.97); }
 .btn-accept {
-  background: #22c55e;
-  color: #000;
+  background: var(--success);
+  color: #fff;
 }
 .btn-accept:hover { background: #2dd96b; }
 .btn-reject {
-  background: #3a3040;
-  color: #f87171;
+  background: var(--border-subtle);
+  color: var(--text-secondary);
 }
-.btn-reject:hover { background: #4a3540; }
+.btn-reject:hover { background: rgba(0, 0, 0, 0.1); color: var(--failure); }
 
 /* ===== Notification Toast ===== */
 .toast {
@@ -310,33 +361,34 @@ h2 {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1a1f2e;
-  border: 1px solid #2a3040;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
   padding: 12px 24px;
-  border-radius: 10px;
+  border-radius: 14px;
   font-size: 0.85rem;
-  color: #e0e4ec;
+  color: var(--text-primary);
   z-index: 200;
-  animation: fadeIn 0.2s ease;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  animation: toast-in 0.25s ease;
+  box-shadow: var(--shadow-card-hover);
+  white-space: nowrap;
 }
 .toast.error {
-  border-color: #ef4444;
-  color: #fca5a5;
+  color: var(--failure);
 }
 .toast.success {
-  border-color: #22c55e;
-  color: #86efac;
+  color: var(--success);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* ===== Responsive ===== */
 @media (max-width: 700px) {
-  #main { flex-direction: column; }
-  #header { flex-wrap: wrap; gap: 8px; }
-  .logo { font-size: 1.1rem; }
+  #app { padding: 14px; }
+  #main { flex-direction: column; gap: 16px; }
+  #header { padding: 6px 2px 16px; }
+  .logo { font-size: 1.2rem; }
+  .toast { white-space: normal; max-width: 85vw; }
 }
