@@ -3,6 +3,8 @@ node_modules/
 downloads/
 uploads-temp/
 .claude/
+.agents/
+skills-lock.json
 .env
 dist/
 dist-*/
