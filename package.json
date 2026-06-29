@@ -1,6 +1,6 @@
 {
   "name": "lan-drop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "LAN file sharing via browser — no cloud, no setup",
   "main": "main.js",
   "scripts": {
