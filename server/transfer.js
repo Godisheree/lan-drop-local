@@ -487,6 +487,7 @@ function startTransferServer() {
           fileSize: msg.fileSize,
           senderName: msg.senderName,
           senderId: msg.senderId,
+          batchId: msg.batchId, // optional: grouping multi-file
           status: 'pending',
           createdAt: Date.now()
         });
@@ -529,7 +530,8 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
       fileName: metadata.fileName,
       fileSize: metadata.fileSize,
       senderName: metadata.senderName,
-      senderId: metadata.senderId
+      senderId: metadata.senderId,
+      batchId: metadata.batchId // optional: grouping multi-file
     });
   });
 
@@ -567,6 +569,7 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
     targetPort,
     fileName: metadata.fileName,
     fileSize: metadata.fileSize,
+    batchId: metadata.batchId, // optional: grouping multi-file
     createdAt: Date.now()
   });
 
@@ -716,6 +719,7 @@ function getPendingRequests() {
       fileSize: req.fileSize,
       senderName: req.senderName,
       senderId: req.senderId,
+      batchId: req.batchId,
       status: req.status,
       createdAt: req.createdAt
     });

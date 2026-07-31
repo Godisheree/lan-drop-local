@@ -2,7 +2,9 @@
 const knownRequestIds = new Set();
 const activeTransfers = new Map(); // requestId -> { el, timer, type, requestId }
 let currentModalRequestId = null;
-let requestQueue = []; // antrian request masuk (tampil satu-satu)
+let currentGroup = null; // group batch yang lagi tampil di modal
+let requestQueue = []; // antrian GROUP request masuk (tampil satu-satu)
+// group: { batchId, senderName, requests: [{requestId, fileName, fileSize}] }
 let deviceName = '—';
 let pendingTarget = null; // target device untuk file picker
 
@@ -173,14 +175,14 @@ function setupDragDrop() {
     if (!card) return;
     card.classList.remove('drag-over');
 
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
 
     const ip = card.dataset.ip;
     const port = parseInt(card.dataset.port);
     const targetName = card.dataset.deviceName;
 
-    await uploadAndSend(ip, port, targetName, file);
+    await sendBatch(ip, port, targetName, files);
   });
 
   // Click delegation untuk file picker button
@@ -198,49 +200,54 @@ function setupDragDrop() {
 
 // ===== File Picker Handler =====
 document.getElementById('fileInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file || !pendingTarget) return;
+  const files = e.target.files;
+  if (!files || files.length === 0 || !pendingTarget) return;
   const { ip, port, targetName } = pendingTarget;
   pendingTarget = null;
-  await uploadAndSend(ip, port, targetName, file);
+  await sendBatch(ip, port, targetName, files);
   e.target.value = ''; // reset supaya file yg sama bisa dipilih lagi
 });
 
-// ===== Upload + Send Flow =====
-async function uploadAndSend(ip, port, targetName, file) {
-  // Show file info immediately
-  showToast(`📤 Mengupload ${file.name} (${formatBytes(file.size)})...`, '');
+// ===== Upload + Send Flow (multi-file) =====
+async function sendBatch(ip, port, targetName, files) {
+  const fileList = Array.from(files);
+  if (fileList.length === 0) return;
+  showToast(`📤 Mengupload ${fileList.length} file...`, '');
 
   try {
-    // Step 1: Upload file to own server
+    // Step 1: Upload semua file ke server sendiri (1 request)
     const formData = new FormData();
-    formData.append('file', file);
+    for (const f of fileList) formData.append('file', f);
     const uploadRes = await fetch('/transfer/upload', { method: 'POST', body: formData });
     if (!uploadRes.ok) throw new Error('Upload gagal');
-    const { filePath, fileName, fileSize } = await uploadRes.json();
+    const { files: uploaded } = await uploadRes.json();
 
-    showToast(`📤 Mengirim request ke ${targetName}...`, '');
+    // batchId sama untuk semua request dalam satu kiriman
+    const batchId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-    // Step 2: Send transfer request
-    const reqRes = await api('/transfer/request', {
-      method: 'POST',
-      body: JSON.stringify({ targetIp: ip, targetPort: port, fileName, fileSize })
-    });
-    const { requestId } = reqRes;
+    // Step 2: kirim SEMUA request dulu (bisa jadi N request dalam <100ms)
+    // — biar receiver dapat daftar lengkap dalam satu popup
+    const sent = [];
+    for (const f of uploaded) {
+      const reqRes = await api('/transfer/request', {
+        method: 'POST',
+        body: JSON.stringify({ targetIp: ip, targetPort: port, fileName: f.fileName, fileSize: f.fileSize, batchId })
+      });
+      sent.push({ requestId: reqRes.requestId, filePath: f.filePath, fileName: f.fileName, fileSize: f.fileSize });
+    }
 
-    // Step 3: Add to active transfers (sending, waiting)
-    addTransferItem(requestId, {
-      direction: 'send',
-      fileName,
-      fileSize,
-      targetName,
-      status: 'waiting',
-      statusText: '⏳ Menunggu diterima...'
-    });
-
-    // Step 4: Poll status until accepted/rejected
-    await pollSendStatus(requestId, filePath);
-
+    // Step 3: tambah item + polling status semua
+    for (const s of sent) {
+      addTransferItem(s.requestId, {
+        direction: 'send',
+        fileName: s.fileName,
+        fileSize: s.fileSize,
+        targetName,
+        status: 'waiting',
+        statusText: '⏳ Menunggu diterima...'
+      });
+      await pollSendStatus(s.requestId, s.filePath);
+    }
   } catch (err) {
     showToast('❌ Gagal: ' + err.message, 'error');
   }
@@ -296,83 +303,111 @@ async function fetchPending() {
       if (req.status !== 'pending') continue;
       if (knownRequestIds.has(req.requestId)) continue;
       knownRequestIds.add(req.requestId);
-      requestQueue.push(req);
+
+      // Group by batchId — request satu kiriman gabung jadi satu group.
+      // batchId kosong (single-file/versi lama) → pakai requestId sendiri biar gak nyatu
+      const groupKey = req.batchId || req.requestId;
+      let group = requestQueue.find(g => g.batchId === groupKey);
+      if (!group && currentGroup && currentGroup.batchId === groupKey) group = currentGroup;
+
+      if (group) {
+        group.requests.push({ requestId: req.requestId, fileName: req.fileName, fileSize: req.fileSize });
+        if (currentGroup === group) renderModalGroup(group); // modal lagi tampil, update list request nyusul
+      } else {
+        requestQueue.push({
+          batchId: groupKey,
+          senderName: req.senderName,
+          requests: [{ requestId: req.requestId, fileName: req.fileName, fileSize: req.fileSize }]
+        });
+      }
     }
     showNextRequest();
   } catch (_) {}
 }
 
-// Tampilkan request berikutnya dari antrian — cuma satu modal aktif
+// Render isi modal untuk satu group
+function renderModalGroup(group) {
+  const info = document.getElementById('modalInfo');
+  const files = group.requests;
+
+  if (files.length === 1) {
+    currentModalRequestId = files[0].requestId;
+    info.innerHTML = `
+      <strong>${escapeHtml(group.senderName)}</strong> ingin mengirim file:<br>
+      📄 <strong>${escapeHtml(files[0].fileName)}</strong> (${formatBytes(files[0].fileSize)})
+    `;
+  } else {
+    currentModalRequestId = null; // batch — tidak terikat satu request
+    const list = files.map(f =>
+      `<div>${getFileEmoji(f.fileName)} ${escapeHtml(f.fileName)} <span class="modal-fsize">(${formatBytes(f.fileSize)})</span></div>`
+    ).join('');
+    info.innerHTML = `
+      <strong>${escapeHtml(group.senderName)}</strong> ingin mengirim <strong>${files.length}</strong> file:<br>
+      ${list}
+    `;
+  }
+}
+
+// Tampilkan group berikutnya dari antrian — cuma satu modal aktif
 function showNextRequest() {
   const modal = document.getElementById('requestModal');
   if (!modal.classList.contains('hidden')) return; // masih ada yg tampil
-  const req = requestQueue.shift();
-  if (!req) return;
-  currentModalRequestId = req.requestId;
-  const info = document.getElementById('modalInfo');
-  info.innerHTML = `
-    <strong>${escapeHtml(req.senderName)}</strong> ingin mengirim file:<br>
-    📄 <strong>${escapeHtml(req.fileName)}</strong> (${formatBytes(req.fileSize)})
-  `;
+  const group = requestQueue.shift();
+  if (!group) return;
+  currentGroup = group;
+  renderModalGroup(group);
   modal.classList.remove('hidden');
 }
 
 function hideModal() {
   document.getElementById('requestModal').classList.add('hidden');
   currentModalRequestId = null;
+  currentGroup = null;
 }
 
-// ===== Accept / Reject =====
+// ===== Accept / Reject (batch-aware) =====
 async function acceptRequest() {
-  const requestId = currentModalRequestId;
-  if (!requestId) return;
+  const group = currentGroup;
+  if (!group) return;
   hideModal();
 
-  try {
-    await api('/transfer/respond', {
-      method: 'POST',
-      body: JSON.stringify({ requestId, accept: true })
-    });
-
-    // Find request info from knownRequestIds or we can fetch pending again
-    // We stored senderName and fileName in the modal, let's add transfer item
-    const infoEl = document.getElementById('modalInfo');
-    const senderMatch = infoEl.textContent.match(/(.+?) ingin mengirim/);
-    const senderName = senderMatch ? senderMatch[1].trim() : 'Unknown';
-    const fileNameMatch = infoEl.textContent.match(/📄\s+(.+?)\s+\(/);
-    const fileName = fileNameMatch ? fileNameMatch[1].trim() : 'File';
-
-    addTransferItem(requestId, {
-      direction: 'receive',
-      fileName,
-      senderName,
-      status: 'transferring',
-      statusText: '⏳ Menunggu pengirim...'
-    });
-
-    // Start polling progress
-    pollProgress(requestId, 'receive');
-    showToast('✅ Request diterima, menunggu file...', 'success');
-  } catch (err) {
-    showToast('❌ Gagal: ' + err.message, 'error');
+  for (const r of group.requests) {
+    try {
+      await api('/transfer/respond', {
+        method: 'POST',
+        body: JSON.stringify({ requestId: r.requestId, accept: true })
+      });
+      addTransferItem(r.requestId, {
+        direction: 'receive',
+        fileName: r.fileName,
+        senderName: group.senderName,
+        status: 'transferring',
+        statusText: '⏳ Menunggu pengirim...'
+      });
+      // Start polling progress
+      pollProgress(r.requestId, 'receive');
+    } catch (err) {
+      showToast(`❌ Gagal ${r.fileName}: ` + err.message, 'error');
+    }
   }
+  showToast(`✅ ${group.requests.length} request diterima, menunggu file...`, 'success');
   showNextRequest();
 }
 
 async function rejectRequest() {
-  const requestId = currentModalRequestId;
-  if (!requestId) return;
+  const group = currentGroup;
+  if (!group) return;
   hideModal();
 
-  try {
-    await api('/transfer/respond', {
-      method: 'POST',
-      body: JSON.stringify({ requestId, accept: false })
-    });
-    showToast('❌ Permintaan ditolak', '');
-  } catch (err) {
-    showToast('❌ Gagal: ' + err.message, 'error');
+  for (const r of group.requests) {
+    try {
+      await api('/transfer/respond', {
+        method: 'POST',
+        body: JSON.stringify({ requestId: r.requestId, accept: false })
+      });
+    } catch (_) {}
   }
+  showToast('❌ Permintaan ditolak', '');
   showNextRequest();
 }
 

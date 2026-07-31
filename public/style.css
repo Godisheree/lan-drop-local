@@ -327,6 +327,11 @@ h2 {
   line-height: 1.6;
   margin-bottom: 24px;
 }
+.modal-content .modal-fsize {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
 .modal-actions {
   display: flex;
   gap: 10px;

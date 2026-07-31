@@ -35,7 +35,7 @@ app.get('/devices', (req, res) => {
 
 // POST /transfer/request — kirim permintaan transfer ke device lain
 app.post('/transfer/request', (req, res) => {
-  const { targetIp, targetPort, fileName, fileSize } = req.body;
+  const { targetIp, targetPort, fileName, fileSize, batchId } = req.body;
 
   if (!targetIp || !targetPort || !fileName || fileSize === undefined) {
     return res.status(400).json({ error: 'Missing fields: targetIp, targetPort, fileName, fileSize' });
@@ -45,6 +45,7 @@ app.post('/transfer/request', (req, res) => {
     const result = transfer.sendTransferRequest(targetIp, parseInt(targetPort), {
       fileName,
       fileSize,
+      batchId, // optional: grouping request multi-file
       senderName: DEVICE_NAME,
       senderId: `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`
     });
@@ -114,16 +115,16 @@ app.get('/transfer/progress/:requestId', (req, res) => {
 // ===================== Upload Route (Hari 5) =====================
 
 // POST /transfer/upload — terima file dari browser, simpan sementara
-app.post('/transfer/upload', upload.single('file'), (req, res) => {
-  if (!req.file) {
+app.post('/transfer/upload', upload.array('file', 50), (req, res) => {
+  if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const filePath = path.resolve(req.file.path);
-  res.json({
-    filePath,
-    fileName: req.file.originalname,
-    fileSize: req.file.size
-  });
+  const files = req.files.map(f => ({
+    filePath: path.resolve(f.path),
+    fileName: f.originalname,
+    fileSize: f.size
+  }));
+  res.json({ files });
 });
 
 // ===================== Server Startup =====================
