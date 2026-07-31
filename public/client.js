@@ -2,6 +2,7 @@
 const knownRequestIds = new Set();
 const activeTransfers = new Map(); // requestId -> { el, timer, type, requestId }
 let currentModalRequestId = null;
+let requestQueue = []; // antrian request masuk (tampil satu-satu)
 let deviceName = '—';
 let pendingTarget = null; // target device untuk file picker
 
@@ -295,14 +296,19 @@ async function fetchPending() {
       if (req.status !== 'pending') continue;
       if (knownRequestIds.has(req.requestId)) continue;
       knownRequestIds.add(req.requestId);
-      showRequestModal(req);
+      requestQueue.push(req);
     }
+    showNextRequest();
   } catch (_) {}
 }
 
-function showRequestModal(req) {
-  currentModalRequestId = req.requestId;
+// Tampilkan request berikutnya dari antrian — cuma satu modal aktif
+function showNextRequest() {
   const modal = document.getElementById('requestModal');
+  if (!modal.classList.contains('hidden')) return; // masih ada yg tampil
+  const req = requestQueue.shift();
+  if (!req) return;
+  currentModalRequestId = req.requestId;
   const info = document.getElementById('modalInfo');
   info.innerHTML = `
     <strong>${escapeHtml(req.senderName)}</strong> ingin mengirim file:<br>
@@ -350,6 +356,7 @@ async function acceptRequest() {
   } catch (err) {
     showToast('❌ Gagal: ' + err.message, 'error');
   }
+  showNextRequest();
 }
 
 async function rejectRequest() {
@@ -366,6 +373,7 @@ async function rejectRequest() {
   } catch (err) {
     showToast('❌ Gagal: ' + err.message, 'error');
   }
+  showNextRequest();
 }
 
 // ===== Progress Polling =====
@@ -507,11 +515,6 @@ function updateTransferItem(requestId, data) {
 // ===== Button Listeners =====
 document.getElementById('btnAccept').addEventListener('click', acceptRequest);
 document.getElementById('btnReject').addEventListener('click', rejectRequest);
-
-// Hide modal on click outside
-document.getElementById('requestModal').addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) hideModal();
-});
 
 // ===== Start =====
 init();

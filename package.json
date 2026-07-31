@@ -14,11 +14,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@electron-internal/extract-zip": "^1.0.4",
     "express": "^5.2.1",
     "multer": "^2.2.0"
   },
   "devDependencies": {
-    "electron": "^42.5.0",
+    "electron": "^43.1.0",
     "electron-builder": "^26.15.3"
   },
   "build": {

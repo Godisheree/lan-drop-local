@@ -10,8 +10,9 @@ const CLEANUP_INTERVAL = 3000;
 // ===================== Identitas Device =====================
 const LAN_PORT = process.env.PORT || 3000;
 const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
-const deviceId = `${os.hostname()}-${Math.random().toString(36).slice(2, 8)}`;
-const deviceName = os.hostname();
+const DEVICE_NAME = 'Godhumanv2';
+const deviceId = `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`;
+const deviceName = DEVICE_NAME;
 
 // ===================== State =====================
 const knownDevices = new Map();

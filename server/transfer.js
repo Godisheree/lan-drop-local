@@ -68,17 +68,10 @@ function classifyFileType(fileName) {
 }
 
 // ===================== Auto-Save: Directory Resolution =====================
-const WINDOWS_PREFERRED_DIR = 'D:\\Downloads\\Download - Lan Drop';
+const WINDOWS_PREFERRED_DIR = path.join(__dirname, '..', '..', 'Pictures');
 
 function getWindowsSaveDir() {
-  try {
-    fs.accessSync('D:\\');
-    return WINDOWS_PREFERRED_DIR;
-  } catch (_) {
-    const fallback = path.join(os.homedir(), 'Downloads', 'Download - Lan Drop');
-    console.warn(`[Transfer] Drive D: tidak ditemukan, fallback simpan ke: ${fallback}`);
-    return fallback;
-  }
+  return WINDOWS_PREFERRED_DIR;
 }
 
 function getTermuxStorageDir(category) {

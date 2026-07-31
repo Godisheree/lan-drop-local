@@ -6,6 +6,8 @@ const multer = require('multer');
 const discovery = require('./discovery');
 const transfer = require('./transfer');
 
+const DEVICE_NAME = 'Godhumanv2';
+
 // ===================== Multer Setup =====================
 const uploadsDir = process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp');
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -21,7 +23,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 // ===================== Discovery Routes =====================
 
 app.get('/me', (req, res) => {
-  res.json({ deviceName: os.hostname() });
+  res.json({ deviceName: DEVICE_NAME });
 });
 
 app.get('/devices', (req, res) => {
@@ -43,8 +45,8 @@ app.post('/transfer/request', (req, res) => {
     const result = transfer.sendTransferRequest(targetIp, parseInt(targetPort), {
       fileName,
       fileSize,
-      senderName: os.hostname(),
-      senderId: `${os.hostname()}-${Math.random().toString(36).slice(2, 8)}`
+      senderName: DEVICE_NAME,
+      senderId: `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`
     });
     res.json(result);
   } catch (err) {
