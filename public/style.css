@@ -166,12 +166,15 @@ h2 {
   text-align: center;
 }
 
-/* ===== File Picker Button — pill style ===== */
-.device-card .btn-file-pick {
-  display: block;
-  width: 100%;
+/* ===== File Picker Buttons — pill style ===== */
+.device-card .btn-file-row {
+  display: flex;
+  gap: 8px;
   margin-top: 10px;
-  padding: 10px 20px;
+}
+.device-card .btn-file-pick {
+  flex: 1;
+  padding: 10px 12px;
   min-height: 44px;
   background: var(--accent-soft);
   border: none;
@@ -182,6 +185,10 @@ h2 {
   cursor: pointer;
   text-align: center;
   transition: all 0.2s ease;
+}
+.device-card .btn-file-pick.btn-media-pick {
+  background: var(--accent);
+  color: #fff;
 }
 .device-card .btn-file-pick:hover {
   background: var(--accent);

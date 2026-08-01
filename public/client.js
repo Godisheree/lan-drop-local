@@ -133,7 +133,10 @@ function renderDevices(devices) {
           <span class="dev-ip">${d.ip}:${d.port}</span>
         </div>
         <div class="drop-hint">📤 Seret file ke sini untuk mengirim</div>
-        <button class="btn-file-pick" data-ip="${d.ip}" data-port="${d.transferPort || (d.port + 1)}" data-device-name="${escapeHtml(d.deviceName)}">+ Pilih File</button>
+        <div class="btn-file-row">
+          <button class="btn-file-pick btn-media-pick" data-ip="${d.ip}" data-port="${d.transferPort || (d.port + 1)}" data-device-name="${escapeHtml(d.deviceName)}">📷 Foto/Video</button>
+          <button class="btn-file-pick" data-ip="${d.ip}" data-port="${d.transferPort || (d.port + 1)}" data-device-name="${escapeHtml(d.deviceName)}">📁 File Lain</button>
+        </div>
       </div>`;
   }
 
@@ -194,19 +197,26 @@ function setupDragDrop() {
       port: parseInt(btn.dataset.port),
       targetName: btn.dataset.deviceName
     };
-    document.getElementById('fileInput').click();
+    const inputId = e.target.closest('.btn-media-pick') ? 'mediaInput' : 'fileInput';
+    document.getElementById(inputId).click();
   });
 }
 
-// ===== File Picker Handler =====
-document.getElementById('fileInput').addEventListener('change', async (e) => {
-  const files = e.target.files;
-  if (!files || files.length === 0 || !pendingTarget) return;
-  const { ip, port, targetName } = pendingTarget;
-  pendingTarget = null;
-  await sendBatch(ip, port, targetName, files);
-  e.target.value = ''; // reset supaya file yg sama bisa dipilih lagi
-});
+// ===== File Picker Handlers =====
+function setupFileInput(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !pendingTarget) return;
+    const { ip, port, targetName } = pendingTarget;
+    pendingTarget = null;
+    await sendBatch(ip, port, targetName, files);
+    e.target.value = ''; // reset supaya file yg sama bisa dipilih lagi
+  });
+}
+setupFileInput('mediaInput');
+setupFileInput('fileInput');
 
 // ===== Upload + Send Flow (multi-file) =====
 async function sendBatch(ip, port, targetName, files) {
