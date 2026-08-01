@@ -62,24 +62,30 @@ async function init() {
 
   // Ambil hostname dari URL sebagai fallback device name
   setupDragDrop();
+  setupTextSend();
+  setupTextOverlay();
   startPolling();
 }
 
 // ===== Polling =====
 let devicesTimer = null;
 let pendingTimer = null;
+let textTimer = null;
 let progressTimers = new Map();
 
 function startPolling() {
   devicesTimer = setInterval(fetchDevices, 2500);
   pendingTimer = setInterval(fetchPending, 2000);
+  textTimer = setInterval(pollReceivedTexts, 2000);
   fetchDevices();
   fetchPending();
+  pollReceivedTexts();
 }
 
 function stopPolling() {
   if (devicesTimer) { clearInterval(devicesTimer); devicesTimer = null; }
   if (pendingTimer) { clearInterval(pendingTimer); pendingTimer = null; }
+  if (textTimer) { clearInterval(textTimer); textTimer = null; }
   for (const t of progressTimers.values()) clearInterval(t);
   progressTimers.clear();
 }
@@ -136,6 +142,7 @@ function renderDevices(devices) {
         <div class="btn-file-row">
           <button class="btn-file-pick btn-media-pick" data-ip="${d.ip}" data-port="${d.transferPort || (d.port + 1)}" data-device-name="${escapeHtml(d.deviceName)}">📷 Foto/Video</button>
           <button class="btn-file-pick" data-ip="${d.ip}" data-port="${d.transferPort || (d.port + 1)}" data-device-name="${escapeHtml(d.deviceName)}">📁 File Lain</button>
+          <button class="btn-file-pick btn-text-pick" data-ip="${d.ip}" data-port="${d.transferPort || (d.port + 1)}" data-device-name="${escapeHtml(d.deviceName)}">✏️ Teks</button>
         </div>
       </div>`;
   }
@@ -192,6 +199,10 @@ function setupDragDrop() {
   list.addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-file-pick');
     if (!btn) return;
+    
+    // Jangan trigger file picker untuk tombol text
+    if (btn.classList.contains('btn-text-pick')) return;
+    
     pendingTarget = {
       ip: btn.dataset.ip,
       port: parseInt(btn.dataset.port),
@@ -217,6 +228,95 @@ function setupFileInput(inputId) {
 }
 setupFileInput('mediaInput');
 setupFileInput('fileInput');
+
+// ===== Kirim Teks =====
+let textTarget = null;
+
+function setupTextSend() {
+  // Buka composer dari tombol ✏️ Teks di kartu device
+  document.getElementById('deviceList').addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-text-pick');
+    if (!btn) return;
+    textTarget = {
+      ip: btn.dataset.ip,
+      port: parseInt(btn.dataset.port),
+      targetName: btn.dataset.deviceName
+    };
+    document.getElementById('textTargetName').textContent = 'ke ' + (btn.dataset.deviceName || '?');
+    const textarea = document.getElementById('textInput');
+    textarea.value = '';
+    updateCharCount();
+    textarea.focus();
+    document.getElementById('textComposerModal').classList.remove('hidden');
+  });
+
+  const textarea = document.getElementById('textInput');
+  textarea.addEventListener('input', updateCharCount);
+
+  document.getElementById('btnSendText').addEventListener('click', sendText);
+  document.getElementById('btnCancelText').addEventListener('click', hideTextComposer);
+  document.getElementById('btnCloseTextComposer').addEventListener('click', hideTextComposer);
+}
+
+function updateCharCount() {
+  const textarea = document.getElementById('textInput');
+  const count = textarea.value.length;
+  const countEl = document.getElementById('charCount');
+  if (countEl) {
+    countEl.textContent = count > 0 ? `${count} karakter` : '';
+  }
+}
+
+function hideTextComposer() {
+  document.getElementById('textComposerModal').classList.add('hidden');
+  textTarget = null;
+}
+
+async function sendText() {
+  const text = document.getElementById('textInput').value;
+  if (!text.trim() || !textTarget) return;
+  const target = textTarget;
+  hideTextComposer();
+
+  showToast('📤 Mengirim teks...', '');
+  try {
+    // Step 1: request (receiver auto-accept karena kind=text)
+    const reqRes = await api('/transfer/request-text', {
+      method: 'POST',
+      body: JSON.stringify({ targetIp: target.ip, targetPort: target.port, fileName: 'Teks' })
+    });
+
+    // Step 2: tunggu accepted, lalu kirim isi
+    await new Promise((resolve, reject) => {
+      const timer = setInterval(async () => {
+        try {
+          const st = await api(`/transfer/status/${reqRes.requestId}`);
+          if (st.status === 'accepted') {
+            clearInterval(timer);
+            resolve();
+          } else if (st.status === 'rejected') {
+            clearInterval(timer);
+            reject(new Error('Ditolak penerima'));
+          } else if (st.status === 'disconnected') {
+            clearInterval(timer);
+            reject(new Error('Koneksi terputus'));
+          }
+        } catch (_) {}
+      }, 1000);
+    });
+
+    // Step 3: kirim isi teks
+    await api('/transfer/send-text', {
+      method: 'POST',
+      body: JSON.stringify({ requestId: reqRes.requestId, text })
+    });
+
+    showToast('✅ Teks terkirim', 'success');
+  } catch (err) {
+    showToast('❌ Gagal kirim teks: ' + err.message, 'error');
+  }
+}
+setupTextSend();
 
 // ===== Upload + Send Flow (multi-file) =====
 async function sendBatch(ip, port, targetName, files) {
@@ -356,6 +456,118 @@ function renderModalGroup(group) {
       ${list}
     `;
   }
+}
+
+// ===== Teks Masuk (Overlay) =====
+let textOverlayQueue = []; // teks yang belum ditampilkan, biar tidak menimpa yang sedang dibaca
+let currentText = null;    // teks yang sedang tampil
+
+async function pollReceivedTexts() {
+  try {
+    const texts = await api('/transfer/text');
+    for (const t of texts) {
+      if (textOverlayQueue.some(q => q.id === t.id) || (currentText && currentText.id === t.id)) continue;
+      if (!t.text || !t.text.trim()) continue; // string kosong → abaikan
+      if (textOverlayQueue.length === 0 && !currentText && isOverlayIdle()) {
+        showTextOverlay(t);
+      } else {
+        textOverlayQueue.push(t);
+      }
+    }
+  } catch (_) {}
+}
+
+function isOverlayIdle() {
+  const overlay = document.getElementById('textOverlay');
+  return overlay.classList.contains('hidden');
+}
+
+function calculateTextOverlayHeight(textLength) {
+  // Rough estimate: ~40 chars per line at typical width
+  const estimatedLines = Math.ceil(textLength / 40);
+  const lineHeight = 22; // px
+  const padding = 100; // header + button + padding + borders
+  const contentHeight = estimatedLines * lineHeight + padding;
+  
+  // min: 120px, max: 60vh desktop / 70vh mobile
+  const maxHeight = window.innerWidth < 700 ? window.innerHeight * 0.7 : window.innerHeight * 0.6;
+  return Math.min(Math.max(contentHeight, 120), maxHeight);
+}
+
+function showTextOverlay(t) {
+  currentText = t;
+  document.getElementById('textOverlaySender').textContent = t.senderName || '?';
+  const body = document.getElementById('textOverlayBody');
+  body.textContent = t.text;
+  
+  // Calculate and set initial height
+  const content = document.getElementById('textOverlayContent');
+  if (content) {
+    const height = calculateTextOverlayHeight(t.text.length);
+    content.style.height = height + 'px';
+  }
+  
+  document.getElementById('btnCopyText').textContent = '📋 Salin';
+  document.getElementById('textOverlay').classList.remove('hidden');
+}
+
+function hideTextOverlay() {
+  const closingId = currentText ? currentText.id : null;
+  document.getElementById('textOverlay').classList.add('hidden');
+  const content = document.getElementById('textOverlayContent');
+  if (content) content.style.height = '';
+  currentText = null;
+  ackText(closingId);
+  const next = textOverlayQueue.shift();
+  if (next) showTextOverlay(next);
+}
+
+async function ackText(textId) {
+  if (!textId) return;
+  try { await api(`/transfer/text/${textId}/ack`, { method: 'POST' }); } catch (_) {}
+}
+
+async function copyText() {
+  const text = currentText ? currentText.text : '';
+  if (!text) return;
+  const btn = document.getElementById('btnCopyText');
+  try {
+    // Harus dipicu klik langsung — syarat Clipboard API di browser mobile
+    await navigator.clipboard.writeText(text);
+    btn.textContent = '✅ Disalin!';
+    setTimeout(() => { btn.textContent = '📋 Salin'; }, 1500);
+  } catch (_) {
+    // Fallback: pilih teks agar user bisa salin manual
+    const body = document.getElementById('textOverlayBody');
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    btn.textContent = '⚠️ Pilih teks lalu salin manual';
+    setTimeout(() => { btn.textContent = '📋 Salin'; }, 3000);
+  }
+}
+
+// Setup text overlay event handlers
+function setupTextOverlay() {
+  const overlay = document.getElementById('textOverlay');
+  
+  // Close button handler
+  const closeBtn = document.getElementById('btnCloseTextOverlay');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', hideTextOverlay);
+  }
+  
+  // Copy button handler
+  document.getElementById('btnCopyText').addEventListener('click', copyText);
+  
+  // Close on backdrop click (desktop only, to avoid accidental mobile closes)
+  overlay.addEventListener('click', (e) => {
+    if (window.innerWidth >= 700 && e.target === overlay) {
+      hideTextOverlay();
+    }
+  });
 }
 
 // Tampilkan group berikutnya dari antrian — cuma satu modal aktif

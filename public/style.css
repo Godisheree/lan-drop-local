@@ -344,6 +344,140 @@ h2 {
   gap: 10px;
 }
 
+/* ===== Text Composer & Overlay ===== */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.modal-header h3 {
+  margin-bottom: 0;
+  font-size: 1.05rem;
+}
+.modal-x {
+  background: var(--border-subtle);
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.modal-x:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--failure);
+}
+.text-composer {
+  max-width: 480px;
+}
+.composer-target {
+  margin: 8px 0 4px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.text-composer textarea {
+  width: 100%;
+  min-height: 110px;
+  max-height: 50vh;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  margin: 12px 0;
+}
+.text-composer textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.text-composer .char-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: right;
+  margin: -6px 0 10px;
+  display: block;
+}
+
+/* Overlay teks masuk — box tinggi dinamis, teks scroll di dalam, tombol Salin tetap nempel di bawah */
+.text-overlay {
+  max-width: min(90vw, 480px);
+  width: min(90vw, 480px);
+  min-height: 120px;
+  max-height: 60vh;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.text-overlay .modal-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.text-overlay .text-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 46px;
+  max-height: calc(60vh - 130px);
+  flex: 1;
+  margin: 12px 0;
+  padding: 8px 4px;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Scrollbar styling for text body */
+.text-overlay .text-body::-webkit-scrollbar {
+  width: 6px;
+}
+.text-overlay .text-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.text-overlay .text-body::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+.text-overlay .text-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+.text-overlay .modal-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.text-overlay .modal-actions .btn {
+  flex: 1;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 700px) {
+  .text-overlay {
+    max-height: 70vh;
+    min-height: 110px;
+  }
+  .text-overlay .text-body {
+    max-height: calc(70vh - 140px);
+  }
+}
+
 /* ===== Buttons ===== */
 .btn {
   padding: 12px 24px;

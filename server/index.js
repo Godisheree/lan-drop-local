@@ -87,6 +87,56 @@ app.get('/transfer/status/:requestId', (req, res) => {
 
 // ===================== Hari 4 — Streaming Endpoints =====================
 
+// POST /transfer/request-text — kirim permintaan transfer teks
+app.post('/transfer/request-text', (req, res) => {
+  const { targetIp, targetPort, fileName } = req.body;
+
+  if (!targetIp || !targetPort || !fileName) {
+    return res.status(400).json({ error: 'Missing fields: targetIp, targetPort, fileName' });
+  }
+
+  try {
+    const result = transfer.sendTransferRequest(targetIp, parseInt(targetPort), {
+      fileName,
+      fileSize: 0,
+      kind: 'text',
+      senderName: DEVICE_NAME,
+      senderId: `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// POST /transfer/send-text — kirim isi teks setelah accepted
+app.post('/transfer/send-text', async (req, res) => {
+  const { requestId, text } = req.body;
+
+  if (!requestId || typeof text !== 'string') {
+    return res.status(400).json({ error: 'Missing fields: requestId, text' });
+  }
+
+  try {
+    const result = await transfer.startTextSend(requestId, text);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /transfer/text — polling teks masuk (langsung dihapus setelah diambil)
+app.get('/transfer/text', (req, res) => {
+  res.json(transfer.getReceivedTexts());
+});
+
+// POST /transfer/text/:id/ack — tandai teks selesai ditampilkan, hapus dari queue
+app.post('/transfer/text/:id/ack', (req, res) => {
+  const removed = transfer.consumeReceivedText(req.params.id);
+  if (!removed) return res.status(404).json({ error: 'Text not found' });
+  res.json({ ok: true });
+});
+
 // POST /transfer/send-file — mulai streaming file setelah accepted
 app.post('/transfer/send-file', async (req, res) => {
   const { requestId, filePath } = req.body;

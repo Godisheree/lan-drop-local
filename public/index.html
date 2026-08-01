@@ -46,6 +46,37 @@
     </div>
   </div>
 
+  <!-- Modal Tulis Teks -->
+  <div id="textComposerModal" class="modal hidden">
+    <div class="modal-content text-composer">
+      <div class="modal-header">
+        <h3>✏️ Kirim Teks</h3>
+        <button class="modal-x" id="btnCloseTextComposer">✕</button>
+      </div>
+      <p class="composer-target" id="textTargetName">ke —</p>
+      <textarea id="textInput" rows="5" placeholder="Tulis pesan atau tempel tautan..." autocorrect="off"></textarea>
+      <div class="char-count" id="charCount"></div>
+      <div class="modal-actions">
+        <button id="btnCancelText" class="btn btn-reject">Batal</button>
+        <button id="btnSendText" class="btn btn-accept">📤 Kirim</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay Teks Masuk — Auto-sizing dengan copy button pinned di bawah -->
+  <div id="textOverlay" class="modal hidden">
+    <div class="modal-content text-overlay" id="textOverlayContent">
+      <div class="modal-header">
+        <h3>💬 Teks dari <span id="textOverlaySender">—</span></h3>
+        <button class="modal-x" id="btnCloseTextOverlay">✕</button>
+      </div>
+      <div id="textOverlayBody" class="text-body"></div>
+      <div class="modal-actions">
+        <button id="btnCopyText" class="btn btn-accept">📋 Salin</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Hidden file inputs untuk file picker -->
   <input type="file" id="mediaInput" accept="image/*,video/*" multiple style="display:none">
   <input type="file" id="fileInput" multiple style="display:none">

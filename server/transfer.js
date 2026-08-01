@@ -11,8 +11,10 @@ const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
 
 // ===================== State =====================
 const pendingRequests = new Map(); // requestId -> { socket, parser, fileName, fileSize, senderName, senderId, status, createdAt }
-const outgoingRequests = new Map(); // requestId -> { socket, parserHandler, status, targetIp, targetPort, fileName, fileSize, createdAt }
+const outgoingRequests = new Map(); // requestId -> { socket, parserHandler, status, targetIp, targetPort, fileName, fileSize, text?, createdAt }
 const transferProgress = new Map(); // requestId -> { fileName, fileSize, bytesTransferred, status, savePath? }
+let receivedTexts = []; // { id, senderName, text, timestamp } — teks masuk, diambil frontend via polling
+const TEXT_TTL = 10 * 60 * 1000; // teks diterima dibersihkan setelah 10 menit
 let tcpServer = null;
 
 // ===================== Frame Parser =====================
@@ -358,7 +360,50 @@ function startRawReceive(requestId, req) {
     // Dapet satu frame — parse
     try {
       const meta = JSON.parse(buf.slice(0, expectedLen).toString());
-      if (meta.type === 'file-start') {
+      if (meta.type === 'text') {
+        // ===== Teks: baca sisa payload, simpan in-memory, TANPA tulis ke disk =====
+        metadataRead = true;
+        socket.removeListener('data', metaHandler);
+        const textLength = meta.length || Infinity; // byte length payload UTF-8
+        let chunks = [buf.slice(expectedLen)]; // data yang udah ikut dalam buffer
+        let collected = chunks[0].length;
+        let finished = false;
+
+        // Teks bisa kepisah di beberapa packet TCP — kumpulkan sampai lengkap
+        const textHandler = (data) => {
+          const need = textLength - collected;
+          if (need <= 0) return;
+          chunks.push(data.length > need ? data.slice(0, need) : data);
+          collected += data.length > need ? need : data.length;
+          if (collected >= textLength) {
+            socket.removeListener('data', textHandler);
+            finishText();
+          }
+        };
+        socket.on('data', textHandler);
+        socket.on('end', finishText); // fallback: socket nutup tanpa length eksplisit
+
+        function finishText() {
+          if (finished) return;
+          finished = true;
+          socket.removeListener('data', textHandler);
+          const text = Buffer.concat(chunks).toString('utf-8');
+          receivedTexts.push({ id: requestId, senderName: req.senderName, text, timestamp: Date.now() });
+          if (receivedTexts.length > 50) receivedTexts.shift(); // batas kapasitas
+
+          const p = transferProgress.get(requestId);
+          if (p) { p.status = 'completed'; p.bytesTransferred = text.length; }
+          req.status = 'completed';
+          console.log(`[Transfer] ✅ ${requestId} — teks diterima (${text.length} chars) dari ${req.senderName}`);
+          socket.end();
+        }
+
+        // Kalau teks singkat sudah kebaca semua di buffer awal
+        if (collected >= textLength) {
+          socket.removeListener('data', textHandler);
+          finishText();
+        }
+      } else if (meta.type === 'file-start') {
         metadataRead = true;
         socket.removeListener('data', metaHandler);
         const safeName = path.basename(meta.fileName || req.fileName);
@@ -488,10 +533,16 @@ function startTransferServer() {
           senderName: msg.senderName,
           senderId: msg.senderId,
           batchId: msg.batchId, // optional: grouping multi-file
+          kind: msg.kind,       // 'file' | 'text' — text langsung diterima, tanpa modal
           status: 'pending',
           createdAt: Date.now()
         });
         console.log(`[Transfer] Incoming request ${requestId}: ${msg.fileName} (${msg.fileSize} bytes) from ${msg.senderName}`);
+
+        // Text: langsung auto-accept + terima frame isi, tanpa menunggu modal
+        if (msg.kind === 'text') {
+          respondToRequest(requestId, true);
+        }
       }
     });
 
@@ -531,7 +582,8 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
       fileSize: metadata.fileSize,
       senderName: metadata.senderName,
       senderId: metadata.senderId,
-      batchId: metadata.batchId // optional: grouping multi-file
+      batchId: metadata.batchId, // optional: grouping multi-file
+      kind: metadata.kind || 'file'
     });
   });
 
@@ -669,6 +721,41 @@ async function startFileSend(requestId, filePath) {
   return { requestId, fileSize: actualSize };
 }
 
+// ===================== Start Text Send (dipanggil setelah accepted) =====================
+async function startTextSend(requestId, text) {
+  const req = outgoingRequests.get(requestId);
+  if (!req) throw new Error(`Request ${requestId} not found`);
+  if (req.status !== 'accepted') throw new Error(`Request ${requestId} status is "${req.status}", expected "accepted"`);
+
+  const { socket } = req;
+
+  // Lepas frame parser dari socket — beralih ke raw streaming
+  if (req.parserHandler) {
+    socket.removeListener('data', req.parserHandler);
+  }
+
+  // Init progress
+  transferProgress.set(requestId, {
+    fileName: 'Teks',
+    fileSize: Buffer.byteLength(text, 'utf-8'),
+    bytesTransferred: 0,
+    status: 'transferring'
+  });
+
+  // Frame metadata type=text, lalu payload UTF-8 mentah
+  sendFramedMessage(socket, { type: 'text', length: Buffer.byteLength(text, 'utf-8') });
+  socket.write(Buffer.from(text, 'utf-8'));
+
+  socket.on('close', () => {
+    const p = transferProgress.get(requestId);
+    if (p && p.status === 'transferring') p.status = 'completed';
+    req.status = 'completed';
+    console.log(`[Transfer] ✅ ${requestId} — teks terkirim, dikonfirmasi penerima`);
+  });
+
+  return { requestId };
+}
+
 // ===================== Respond Accept/Reject =====================
 function respondToRequest(requestId, accepted) {
   const req = pendingRequests.get(requestId);
@@ -720,11 +807,26 @@ function getPendingRequests() {
       senderName: req.senderName,
       senderId: req.senderId,
       batchId: req.batchId,
+      kind: req.kind || 'file',
       status: req.status,
       createdAt: req.createdAt
     });
   }
   return result;
+}
+
+// Teks masuk disimpan in-memory, frontend polling lalu hapus. Teks >10 menit dibersihkan.
+function getReceivedTexts() {
+  const now = Date.now();
+  receivedTexts = receivedTexts.filter(t => now - t.timestamp < TEXT_TTL);
+  return receivedTexts.slice();
+}
+
+function consumeReceivedText(textId) {
+  const idx = receivedTexts.findIndex(t => t.id === textId);
+  if (idx === -1) return false;
+  receivedTexts.splice(idx, 1);
+  return true;
 }
 
 function getRequestStatus(requestId) {
@@ -763,8 +865,11 @@ module.exports = {
   sendTransferRequest,
   respondToRequest,
   startFileSend,
+  startTextSend,
   getTransferProgress,
   getPendingRequests,
+  getReceivedTexts,
+  consumeReceivedText,
   getRequestStatus,
   TRANSFER_PORT
 };
