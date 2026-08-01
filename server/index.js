@@ -6,7 +6,8 @@ const multer = require('multer');
 const discovery = require('./discovery');
 const transfer = require('./transfer');
 
-const DEVICE_NAME = 'Godhumanv2';
+// Generate device name from hostname atau environment variable
+const DEVICE_NAME = process.env.DEVICE_NAME || os.hostname() || 'LAN-Device';
 
 // ===================== Multer Setup =====================
 const uploadsDir = process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp');
