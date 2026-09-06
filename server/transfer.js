@@ -449,16 +449,27 @@ function startRawReceive(requestId, req) {
         };
         socket.on('data', dataHandler);
 
+        let peerEnded = false; // sender nutup bersih (FIN) = cancel eksplisit, bukan drop
+        socket.on('end', () => { peerEnded = true; });
+
         socket.on('close', () => {
-          if (written < totalSize) {
-            // Transfer keputus di tengah jalan — bukan selesai normal (itu dihandle writeStream 'finish')
-            writeStream.destroy();
-            fs.unlink(savePath, () => {}); // hapus file partial, abaikan error
-            console.log(`[Transfer] ⚠️ ${requestId} — koneksi diputus di tengah transfer (${written}/${totalSize}), file partial dihapus`);
-            const p = transferProgress.get(requestId);
-            if (p && p.status === 'transferring') p.status = 'cancelled';
-            req.status = 'cancelled';
+          const p = transferProgress.get(requestId);
+          if (p && p.status === 'transferring') {
+            if (req.cancelledByUser || peerEnded) {
+              p.status = 'cancelled';
+            } else if (written >= totalSize) {
+              p.status = 'completed';
+            } else {
+              p.status = 'failed';
+            }
+            if (p.status !== 'completed') {
+              // Transfers gak selesai (cancelled/failed) → hapus file partial
+              writeStream.destroy();
+              fs.unlink(savePath, () => {}); // abaikan error kalau udah kehapus
+              console.log(`[Transfer] ⚠️ ${requestId} — transfer ${p.status} (${written}/${totalSize}), file partial dihapus`);
+            }
           }
+          req.status = p ? p.status : 'disconnected';
         });
 
         writeStream.on('finish', async () => {
@@ -736,7 +747,13 @@ async function startFileSend(requestId, filePath) {
   socket.on('close', () => {
     const p = transferProgress.get(requestId);
     if (p && p.status === 'transferring') {
-      p.status = (p.bytesTransferred >= p.fileSize) ? 'completed' : 'cancelled';
+      if (req.cancelledByUser) {
+        p.status = 'cancelled';
+      } else if (p.bytesTransferred >= p.fileSize) {
+        p.status = 'completed';
+      } else {
+        p.status = 'failed';
+      }
     }
     req.status = p ? p.status : 'disconnected';
     console.log(`[Transfer] ${p && p.status === 'completed' ? '✅' : '⚠️'} ${requestId} — transfer ${p ? p.status : 'disconnected'} (${p ? p.bytesTransferred + '/' + p.fileSize : 0} bytes)`);
@@ -873,10 +890,15 @@ function cancelOutgoingTransfer(requestId) {
   if (req.status === 'completed' || req.status === 'failed' || req.status === 'cancelled' || req.status === 'rejected') {
     throw new Error('Transfer sudah selesai, tidak bisa dibatalkan');
   }
+  req.cancelledByUser = true; // flag eksplisit: user beneran klik Batal, bukan koneksi drop
   if (req.readStream) {
     try { req.readStream.destroy(); } catch (_) {}
   }
-  if (req.socket) req.socket.destroy();
+  if (req.socket) {
+    // FIN doang (graceful), TANPA destroy — biar FIN beneran sampe ke penerima.
+    // Kalau destroy menyusul, jadi RST & penerima gak bisa bedain cancel vs drop.
+    try { req.socket.end(); } catch (_) {}
+  }
   const p = transferProgress.get(requestId);
   if (p) p.status = 'cancelled';
   outgoingRequests.delete(requestId);
@@ -888,6 +910,7 @@ function cancelIncomingTransfer(requestId) {
   if (req.status === 'completed' || req.status === 'failed' || req.status === 'cancelled' || req.status === 'rejected') {
     throw new Error('Transfer sudah selesai, tidak bisa dibatalkan');
   }
+  req.cancelledByUser = true; // flag eksplisit: user beneran klik Batal, bukan koneksi drop
   if (req.socket) req.socket.destroy();
   const p = transferProgress.get(requestId);
   if (p) p.status = 'cancelled';
