@@ -789,6 +789,12 @@ function updateTransferItem(requestId, data) {
     if (pt) pt.textContent = data.percent + '%';
   }
 
+  // Hapus tombol Batal begitu status terminal (transfer kelar) — biar gak bisa diklik lagi
+  if (data.status === 'completed' || data.status === 'failed' || data.status === 'rejected' || data.status === 'cancelled') {
+    const btn = el.querySelector('.btn-cancel');
+    if (btn) btn.remove();
+  }
+
   // Clean up completed/failed/cancelled from activeTransfers after a delay
   if (data.status === 'completed' || data.status === 'failed' || data.status === 'rejected' || data.status === 'cancelled') {
     setTimeout(() => {

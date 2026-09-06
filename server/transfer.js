@@ -870,6 +870,9 @@ function getRequestStatus(requestId) {
 function cancelOutgoingTransfer(requestId) {
   const req = outgoingRequests.get(requestId);
   if (!req) throw new Error(`Request ${requestId} not found`);
+  if (req.status === 'completed' || req.status === 'failed' || req.status === 'cancelled' || req.status === 'rejected') {
+    throw new Error('Transfer sudah selesai, tidak bisa dibatalkan');
+  }
   if (req.readStream) {
     try { req.readStream.destroy(); } catch (_) {}
   }
@@ -882,6 +885,9 @@ function cancelOutgoingTransfer(requestId) {
 function cancelIncomingTransfer(requestId) {
   const req = pendingRequests.get(requestId);
   if (!req) throw new Error(`Request ${requestId} not found`);
+  if (req.status === 'completed' || req.status === 'failed' || req.status === 'cancelled' || req.status === 'rejected') {
+    throw new Error('Transfer sudah selesai, tidak bisa dibatalkan');
+  }
   if (req.socket) req.socket.destroy();
   const p = transferProgress.get(requestId);
   if (p) p.status = 'cancelled';
