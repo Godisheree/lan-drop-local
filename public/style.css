@@ -265,6 +265,29 @@ h2 {
 .transfer-item .tf-status.transferring {
   color: var(--accent);
 }
+.transfer-item .tf-status.cancelled {
+  color: var(--text-secondary);
+}
+.transfer-item .btn-cancel {
+  flex-shrink: 0;
+  margin-left: 8px;
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.transfer-item .btn-cancel:hover {
+  background: rgba(255, 59, 48, 0.1);
+  border-color: var(--failure);
+  color: var(--failure);
+}
+.transfer-item .btn-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
 /* ===== Progress Bar ===== */
 .progress-bar {

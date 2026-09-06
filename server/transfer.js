@@ -449,6 +449,18 @@ function startRawReceive(requestId, req) {
         };
         socket.on('data', dataHandler);
 
+        socket.on('close', () => {
+          if (written < totalSize) {
+            // Transfer keputus di tengah jalan — bukan selesai normal (itu dihandle writeStream 'finish')
+            writeStream.destroy();
+            fs.unlink(savePath, () => {}); // hapus file partial, abaikan error
+            console.log(`[Transfer] ⚠️ ${requestId} — koneksi diputus di tengah transfer (${written}/${totalSize}), file partial dihapus`);
+            const p = transferProgress.get(requestId);
+            if (p && p.status === 'transferring') p.status = 'cancelled';
+            req.status = 'cancelled';
+          }
+        });
+
         writeStream.on('finish', async () => {
           const p = transferProgress.get(requestId);
           if (p) {
@@ -699,6 +711,7 @@ async function startFileSend(requestId, filePath) {
   });
 
   const readStream = fs.createReadStream(sendFilePath);
+  req.readStream = readStream;
 
   readStream.on('data', (chunk) => {
     const p = transferProgress.get(requestId);
@@ -723,10 +736,10 @@ async function startFileSend(requestId, filePath) {
   socket.on('close', () => {
     const p = transferProgress.get(requestId);
     if (p && p.status === 'transferring') {
-      p.status = 'completed';
+      p.status = (p.bytesTransferred >= p.fileSize) ? 'completed' : 'cancelled';
     }
-    req.status = 'completed';
-    console.log(`[Transfer] ✅ ${requestId} — transfer confirmed by receiver`);
+    req.status = p ? p.status : 'disconnected';
+    console.log(`[Transfer] ${p && p.status === 'completed' ? '✅' : '⚠️'} ${requestId} — transfer ${p ? p.status : 'disconnected'} (${p ? p.bytesTransferred + '/' + p.fileSize : 0} bytes)`);
   });
 
   return { requestId, fileSize: actualSize };
@@ -854,6 +867,27 @@ function getRequestStatus(requestId) {
   return null;
 }
 
+function cancelOutgoingTransfer(requestId) {
+  const req = outgoingRequests.get(requestId);
+  if (!req) throw new Error(`Request ${requestId} not found`);
+  if (req.readStream) {
+    try { req.readStream.destroy(); } catch (_) {}
+  }
+  if (req.socket) req.socket.destroy();
+  const p = transferProgress.get(requestId);
+  if (p) p.status = 'cancelled';
+  outgoingRequests.delete(requestId);
+}
+
+function cancelIncomingTransfer(requestId) {
+  const req = pendingRequests.get(requestId);
+  if (!req) throw new Error(`Request ${requestId} not found`);
+  if (req.socket) req.socket.destroy();
+  const p = transferProgress.get(requestId);
+  if (p) p.status = 'cancelled';
+  pendingRequests.delete(requestId);
+}
+
 function stopTransferServer() {
   if (tcpServer) { tcpServer.close(); tcpServer = null; }
   for (const [, req] of pendingRequests) { if (req.socket) req.socket.destroy(); }
@@ -882,5 +916,7 @@ module.exports = {
   getReceivedTexts,
   consumeReceivedText,
   getRequestStatus,
+  cancelOutgoingTransfer,
+  cancelIncomingTransfer,
   TRANSFER_PORT
 };

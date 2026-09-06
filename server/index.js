@@ -110,6 +110,22 @@ app.post('/transfer/request-text', (req, res) => {
   }
 });
 
+// POST /transfer/cancel/:requestId — batalin transfer (sisi pengirim 'send' / penerima 'receive')
+app.post('/transfer/cancel/:requestId', (req, res) => {
+  const { requestId } = req.params;
+  const { role } = req.body; // 'send' atau 'receive'
+  try {
+    if (role === 'receive') {
+      transfer.cancelIncomingTransfer(requestId);
+    } else {
+      transfer.cancelOutgoingTransfer(requestId);
+    }
+    res.json({ requestId, status: 'cancelled' });
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
 // POST /transfer/send-text — kirim isi teks setelah accepted
 app.post('/transfer/send-text', async (req, res) => {
   const { requestId, text } = req.body;

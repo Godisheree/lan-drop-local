@@ -366,6 +366,13 @@ async function sendBatch(ip, port, targetName, files) {
 async function pollSendStatus(requestId, filePath) {
   return new Promise((resolve) => {
     const timer = setInterval(async () => {
+      // Item udah dihapus/dibatalkan → stop, jangan lempar 404 terus-menerus
+      const transfer = activeTransfers.get(requestId);
+      if (!transfer) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
       try {
         const st = await api(`/transfer/status/${requestId}`);
 
@@ -431,6 +438,20 @@ async function fetchPending() {
         });
       }
     }
+
+    // Bonus: kalau modal lagi tampil tapi group-nya hilang dari pending (sender batalin) → auto dismiss
+    if (currentGroup) {
+      const modal = document.getElementById('requestModal');
+      const stillPending = pendings.some(p => p.status === 'pending' && currentGroup.requests.some(r => r.requestId === p.requestId));
+      const modalVisible = !modal.classList.contains('hidden');
+      if (modalVisible && currentGroup && !stillPending) {
+        // Semua request group ini udah gak ada di pending — berarti dibatalkan sender
+        const senderName = currentGroup.senderName || 'Pengirim';
+        hideModal();
+        showToast(`📴 ${senderName} membatalkan kiriman`, 'info');
+      }
+    }
+
     showNextRequest();
   } catch (_) {}
 }
@@ -622,6 +643,12 @@ function pollProgress(requestId, type) {
   }
 
   const timer = setInterval(async () => {
+    // Item udah dihapus/dibatalkan → stop polling
+    if (!activeTransfers.has(requestId)) {
+      clearInterval(timer);
+      progressTimers.delete(requestId);
+      return;
+    }
     try {
       const prog = await api(`/transfer/progress/${requestId}`);
       if (!prog) return;
@@ -629,6 +656,19 @@ function pollProgress(requestId, type) {
       const percent = prog.percent || 0;
       const transferred = prog.bytesTransferred || 0;
       const total = prog.fileSize || 0;
+
+      if (prog.status === 'cancelled') {
+        clearInterval(timer);
+        progressTimers.delete(requestId);
+        updateTransferItem(requestId, {
+          status: 'cancelled',
+          statusText: '🚫 Dibatalkan',
+          percent,
+          transferred,
+          total
+        });
+        return;
+      }
 
       if (prog.status === 'completed') {
         clearInterval(timer);
@@ -701,10 +741,17 @@ function addTransferItem(requestId, data) {
   const fileName = escapeHtml(data.fileName || '?');
   const fileEmoji = getFileEmoji(data.fileName || '');
 
+  // Tombol Batal: cuma untuk pengirim, status 'waiting'/'transferring'
+  const canCancel = data.direction === 'send' && (data.status === 'waiting' || data.status === 'transferring');
+  const cancelBtn = canCancel
+    ? `<button class="btn-cancel" data-rid="${requestId}">✕ Batal</button>`
+    : '';
+
   div.innerHTML = `
     <div class="tf-header">
       <span class="tf-name">${fileEmoji} ${fileName}</span>
       <span class="tf-direction ${dirClass}">${dirLabel}</span>
+      ${cancelBtn}
     </div>
     <div class="tf-status ${data.status}">${data.statusText || ''}</div>
     <div class="progress-bar">
@@ -742,8 +789,8 @@ function updateTransferItem(requestId, data) {
     if (pt) pt.textContent = data.percent + '%';
   }
 
-  // Clean up completed/failed from activeTransfers after a delay
-  if (data.status === 'completed' || data.status === 'failed' || data.status === 'rejected') {
+  // Clean up completed/failed/cancelled from activeTransfers after a delay
+  if (data.status === 'completed' || data.status === 'failed' || data.status === 'rejected' || data.status === 'cancelled') {
     setTimeout(() => {
       activeTransfers.delete(requestId);
     }, 5000);
@@ -753,6 +800,30 @@ function updateTransferItem(requestId, data) {
 // ===== Button Listeners =====
 document.getElementById('btnAccept').addEventListener('click', acceptRequest);
 document.getElementById('btnReject').addEventListener('click', rejectRequest);
+
+// Cancel transfer (pengirim) — event delegation biar button dinamis kebaca
+document.getElementById('transferList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-cancel');
+  if (!btn) return;
+  const requestId = btn.dataset.rid;
+  btn.disabled = true;
+  try {
+    await api(`/transfer/cancel/${requestId}`, {
+      method: 'POST',
+      body: JSON.stringify({ role: 'send' })
+    });
+    if (progressTimers.has(requestId)) {
+      clearInterval(progressTimers.get(requestId));
+      progressTimers.delete(requestId);
+    }
+    updateTransferItem(requestId, { status: 'cancelled', statusText: '🚫 Dibatalkan' });
+    // Hapus dari activeTransfers segera → pollSendStatus/pollProgress yang masih jalan langsung stop
+    activeTransfers.delete(requestId);
+  } catch (err) {
+    showToast('❌ Gagal membatalkan: ' + err.message, 'error');
+    btn.disabled = false;
+  }
+});
 
 // ===== Start =====
 init();
