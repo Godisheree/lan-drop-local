@@ -486,7 +486,18 @@ function startRawReceive(requestId, req) {
                 if (fileType === 'photo' || fileType === 'video') {
                   exec(`termux-media-scan "${targetPath}"`, (err) => {
                     if (err) {
-                      console.warn(`[Transfer] termux-media-scan gagal (mungkin termux-api belum terinstall): ${err.message}`);
+                      // Fallback: am broadcast bawaan Android, gak butuh termux-api
+                      console.warn(`[Transfer] termux-media-scan gagal (termux-api belum terinstall?), coba am broadcast: ${err.message}`);
+                      const target = targetPath.replace(/^~\//, `${os.homedir()}/`).replace(/\\/g, '/');
+                      exec(`am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://${target}`, (err2) => {
+                        if (err2) {
+                          console.warn(`[Transfer] am broadcast scan gagal: ${err2.message}`);
+                        } else {
+                          console.log(`[Transfer] Media scan via am broadcast: ${target}`);
+                        }
+                      });
+                    } else {
+                      console.log(`[Transfer] Media scan: ${targetPath}`);
                     }
                   });
                 }
