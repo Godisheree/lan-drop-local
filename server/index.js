@@ -190,12 +190,20 @@ function getLANIPs() {
         && !name.toLowerCase().includes('virtualbox')
         && !name.toLowerCase().includes('docker')
         && !name.toLowerCase().includes('vethernet')
-        && !name.toLowerCase().includes('warp')) {
+        && !name.toLowerCase().includes('warp')
+        && !name.toLowerCase().includes('tailscale')
+        && !isLinkLocalIPv4(net.address)) {
         ips.push({ name, address: net.address });
       }
     }
   }
   return ips;
+}
+
+// 169.254.0.0/16 = link-local / APIPA (self-assigned, gak reachable device lain)
+function isLinkLocalIPv4(addr) {
+  const parts = addr.split('.').map(Number);
+  return parts[0] === 169 && parts[1] === 254;
 }
 
 const server = app.listen(PORT, '0.0.0.0', () => {

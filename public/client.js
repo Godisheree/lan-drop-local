@@ -482,31 +482,12 @@ function isOverlayIdle() {
   return overlay.classList.contains('hidden');
 }
 
-function calculateTextOverlayHeight(textLength) {
-  // Rough estimate: ~40 chars per line at typical width
-  const estimatedLines = Math.ceil(textLength / 40);
-  const lineHeight = 22; // px
-  const padding = 100; // header + button + padding + borders
-  const contentHeight = estimatedLines * lineHeight + padding;
-  
-  // min: 120px, max: 60vh desktop / 70vh mobile
-  const maxHeight = window.innerWidth < 700 ? window.innerHeight * 0.7 : window.innerHeight * 0.6;
-  return Math.min(Math.max(contentHeight, 120), maxHeight);
-}
-
 function showTextOverlay(t) {
   currentText = t;
   document.getElementById('textOverlaySender').textContent = t.senderName || '?';
   const body = document.getElementById('textOverlayBody');
   body.textContent = t.text;
-  
-  // Calculate and set initial height
-  const content = document.getElementById('textOverlayContent');
-  if (content) {
-    const height = calculateTextOverlayHeight(t.text.length);
-    content.style.height = height + 'px';
-  }
-  
+
   document.getElementById('btnCopyText').textContent = '📋 Salin';
   document.getElementById('textOverlay').classList.remove('hidden');
 }

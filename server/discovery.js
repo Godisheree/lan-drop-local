@@ -10,7 +10,7 @@ const CLEANUP_INTERVAL = 3000;
 // ===================== Identitas Device =====================
 const LAN_PORT = process.env.PORT || 3000;
 const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
-const DEVICE_NAME = 'Godhumanv2';
+const DEVICE_NAME = process.env.DEVICE_NAME || os.hostname() || 'LAN-Device';
 const deviceId = `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`;
 const deviceName = DEVICE_NAME;
 
@@ -30,12 +30,20 @@ function getLANIP() {
         && !name.toLowerCase().includes('virtualbox')
         && !name.toLowerCase().includes('docker')
         && !name.toLowerCase().includes('vethernet')
-        && !name.toLowerCase().includes('warp')) {
+        && !name.toLowerCase().includes('warp')
+        && !name.toLowerCase().includes('tailscale')
+        && !isLinkLocalIPv4(net.address)) {
         return net.address;
       }
     }
   }
   return 'localhost';
+}
+
+// 169.254.0.0/16 = link-local / APIPA (self-assigned, gak reachable device lain)
+function isLinkLocalIPv4(addr) {
+  const parts = addr.split('.').map(Number);
+  return parts[0] === 169 && parts[1] === 254;
 }
 
 // ===================== Broadcaster =====================
