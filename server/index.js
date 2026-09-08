@@ -5,6 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const discovery = require('./discovery');
 const transfer = require('./transfer');
+const tailscale = require('./tailscale');
 
 // Generate device name from hostname atau environment variable
 const DEVICE_NAME = process.env.DEVICE_NAME || os.hostname() || 'LAN-Device';
@@ -232,10 +233,13 @@ const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`📡 ${name} → http://${address}:${PORT}`);
     });
   }
-  console.log();
 
   discovery.startDiscovery();
   transfer.startTransferServer();
+
+  const tsIP = tailscale.getSelfTailscaleIP();
+  if (tsIP) console.log(`🔒 Tailscale → http://${tsIP}:${PORT}`);
+  console.log();
 });
 
 // ===================== Graceful Shutdown =====================

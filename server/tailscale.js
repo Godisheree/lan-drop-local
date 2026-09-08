@@ -1,15 +1,38 @@
 const { execFile } = require('child_process');
+const os = require('os');
 
 // ===================== Konstanta =====================
 const CACHE_TTL = 10000; // ms — jangan spam `tailscale status` tiap announce cycle
 
 // ===================== State =====================
 let cachedPeers = [];
-let cachedSelfIP = null;
 let lastFetch = 0;
-let tailscaleMissingWarned = false;
+let cliMissingWarned = false;
 
-// ===================== Jalanin `tailscale status --json` =====================
+// Tailscale's IPv4 CGNAT range: 100.64.0.0 – 100.127.255.255
+function isTailscaleIPv4(addr) {
+  const parts = addr.split('.').map(Number);
+  return parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127;
+}
+
+// ===================== IP tailscale sendiri — TANPA CLI =====================
+// Gak semua platform punya `tailscale` CLI (misal Tailscale app resmi di
+// Android/Termux cuma kasih VPN interface, gak ada binary CLI). Tapi begitu
+// tailscaled/app-nya nyala, device SELALU dapet alamat CGNAT 100.64.0.0/10
+// di salah satu network interface-nya — jadi cukup scan, gak perlu shell out.
+function getSelfTailscaleIP() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && isTailscaleIPv4(net.address)) return net.address;
+    }
+  }
+  return null;
+}
+
+// ===================== Peer list — best-effort lewat CLI =====================
+// Ini opsional: device yang gak punya CLI (HP/Termux) gak bisa proaktif nyari
+// peer duluan, tapi tetep BISA ditemuin lewat mekanisme reply-back di discovery.js.
 function runTailscaleStatus() {
   return new Promise((resolve) => {
     execFile('tailscale', ['status', '--json'], { timeout: 3000 }, (err, stdout) => {
@@ -38,17 +61,14 @@ async function refreshTailscaleState() {
 
   const status = await runTailscaleStatus();
   if (!status) {
-    if (!tailscaleMissingWarned) {
-      console.log('[Tailscale] CLI gak ketemu / tailscaled gak jalan — skip tailnet discovery');
-      tailscaleMissingWarned = true;
+    if (!cliMissingWarned) {
+      console.log('[Tailscale] CLI `tailscale` gak ketemu di device ini — gak bisa proaktif nyari peer, tapi tetep bisa DIKETEMUin peer lain lewat reply-back');
+      cliMissingWarned = true;
     }
     cachedPeers = [];
-    cachedSelfIP = null;
     return;
   }
-  tailscaleMissingWarned = false;
-
-  cachedSelfIP = pickIPv4(status.Self && status.Self.TailscaleIPs);
+  cliMissingWarned = false;
 
   const peers = [];
   const peerMap = status.Peer || {};
@@ -66,8 +86,4 @@ function getTailscalePeers() {
   return cachedPeers;
 }
 
-function getSelfTailscaleIP() {
-  return cachedSelfIP;
-}
-
-module.exports = { refreshTailscaleState, getTailscalePeers, getSelfTailscaleIP };
+module.exports = { refreshTailscaleState, getTailscalePeers, getSelfTailscaleIP, isTailscaleIPv4 };
