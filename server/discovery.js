@@ -6,6 +6,7 @@ const tailscale = require('./tailscale');
 const DISCOVERY_PORT = 41234;
 const BROADCAST_INTERVAL = 2000;
 const TAILSCALE_ANNOUNCE_INTERVAL = 3000;
+const REPLY_DEDUPE_TTL = 5000; // jangan reply ke IP yang sama dalam 5 detik terakhir
 const DEVICE_TIMEOUT = 10000;
 const CLEANUP_INTERVAL = 3000;
 
@@ -18,10 +19,12 @@ const deviceName = DEVICE_NAME;
 
 // ===================== State =====================
 const knownDevices = new Map();
+const recentReplies = new Map(); // ip -> timestamp terakhir kita reply-back
 let broadcastInterval = null;
 let tailscaleInterval = null;
 let cleanupInterval = null;
 let sockets = [];
+let tailscaleSock = null; // socket khusus buat unicast (announce ke peer & reply-back)
 
 // ===================== Helper: Dapetin IP LAN =====================
 function getLANIP() {
@@ -83,32 +86,38 @@ function startBroadcaster() {
 // jadi kita kirim paket announce yang sama tapi unicast ke tiap peer tailnet.
 // `ip` di paket ini WAJIB IP tailscale sendiri — bukan LAN IP — soalnya
 // peer tailnet cuma bisa connect balik lewat situ.
-function startTailscaleAnnounce() {
-  const sock = dgram.createSocket('udp4');
+function buildTailscaleMessage(selfIP) {
+  return Buffer.from(JSON.stringify({
+    type: 'announce', deviceId, deviceName, ip: selfIP, port: LAN_PORT, transferPort: TRANSFER_PORT, via: 'tailscale'
+  }));
+}
 
-  sock.on('error', (err) => {
+function sendTailscaleAnnounceTo(ip) {
+  const selfIP = tailscale.getSelfTailscaleIP();
+  if (!selfIP || !tailscaleSock) return;
+  const buffer = buildTailscaleMessage(selfIP);
+  tailscaleSock.send(buffer, 0, buffer.length, DISCOVERY_PORT, ip, (err) => {
+    if (err) console.error(`[Discovery] Tailscale send to ${ip} failed:`, err.message);
+  });
+}
+
+function startTailscaleAnnounce() {
+  tailscaleSock = dgram.createSocket('udp4');
+
+  tailscaleSock.on('error', (err) => {
     if (err.code !== 'EADDRINUSE') console.error('[Discovery] Tailscale announcer:', err.message);
   });
 
-  sock.bind(() => sock.unref());
-  sockets.push(sock);
+  tailscaleSock.bind(() => tailscaleSock.unref());
+  sockets.push(tailscaleSock);
 
+  // Proaktif: kalau CLI `tailscale` ada di device ini, kirim announce ke
+  // semua peer yang kekonfirmasi online. Device yang gak punya CLI (mis.
+  // Android/Termux) bakal peers-nya kosong terus — gapapa, dia tetep bisa
+  // KETEMU lewat reply-back di listener pas ada peer lain yang nyapa duluan.
   tailscaleInterval = setInterval(async () => {
     await tailscale.refreshTailscaleState();
-    const selfIP = tailscale.getSelfTailscaleIP();
-    const peers = tailscale.getTailscalePeers();
-    if (!selfIP || peers.length === 0) return;
-
-    const message = JSON.stringify({
-      type: 'announce', deviceId, deviceName, ip: selfIP, port: LAN_PORT, transferPort: TRANSFER_PORT, via: 'tailscale'
-    });
-    const buffer = Buffer.from(message);
-
-    peers.forEach(({ ip }) => {
-      sock.send(buffer, 0, buffer.length, DISCOVERY_PORT, ip, (err) => {
-        if (err) console.error(`[Discovery] Tailscale send to ${ip} failed:`, err.message);
-      });
-    });
+    tailscale.getTailscalePeers().forEach(({ ip }) => sendTailscaleAnnounceTo(ip));
   }, TAILSCALE_ANNOUNCE_INTERVAL);
 
   console.log('[Discovery] Tailscale unicast announcer started');
@@ -118,7 +127,7 @@ function startTailscaleAnnounce() {
 function startListener() {
   const sock = dgram.createSocket('udp4');
 
-  sock.on('message', (msg) => {
+  sock.on('message', (msg, rinfo) => {
     try {
       const data = JSON.parse(msg.toString());
       if (data.deviceId === deviceId) return;
@@ -132,6 +141,18 @@ function startListener() {
         via: data.via || 'lan',
         lastSeen: Date.now()
       });
+
+      // Reply-back: kalau paket dateng dari alamat tailscale (CGNAT
+      // 100.64.0.0/10), langsung balas announce kita juga ke situ. Ini bikin
+      // device yang gak punya CLI `tailscale` (mis. Android/Termux) tetep
+      // bisa KETEMU — asal ada peer lain yang proaktif nyapa duluan.
+      if (tailscale.isTailscaleIPv4(rinfo.address)) {
+        const lastReplied = recentReplies.get(rinfo.address) || 0;
+        if (Date.now() - lastReplied > REPLY_DEDUPE_TTL) {
+          recentReplies.set(rinfo.address, Date.now());
+          sendTailscaleAnnounceTo(rinfo.address);
+        }
+      }
     } catch (_) {}
   });
 
@@ -180,6 +201,8 @@ function stopDiscovery() {
   if (cleanupInterval) clearInterval(cleanupInterval);
   sockets.forEach(s => s.close());
   sockets = [];
+  tailscaleSock = null;
+  recentReplies.clear();
 }
 
 function getDevices() {
