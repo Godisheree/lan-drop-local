@@ -1,9 +1,11 @@
 const dgram = require('dgram');
 const os = require('os');
+const tailscale = require('./tailscale');
 
 // ===================== Konstanta =====================
 const DISCOVERY_PORT = 41234;
 const BROADCAST_INTERVAL = 2000;
+const TAILSCALE_ANNOUNCE_INTERVAL = 3000;
 const DEVICE_TIMEOUT = 10000;
 const CLEANUP_INTERVAL = 3000;
 
@@ -17,6 +19,7 @@ const deviceName = DEVICE_NAME;
 // ===================== State =====================
 const knownDevices = new Map();
 let broadcastInterval = null;
+let tailscaleInterval = null;
 let cleanupInterval = null;
 let sockets = [];
 
@@ -75,6 +78,42 @@ function startBroadcaster() {
   console.log(`[Discovery] Broadcasting as "${deviceName}" (${deviceId})`);
 }
 
+// ===================== Tailscale Unicast Announce =====================
+// Broadcast UDP gak nembus tailnet (WireGuard mesh, bukan broadcast domain),
+// jadi kita kirim paket announce yang sama tapi unicast ke tiap peer tailnet.
+// `ip` di paket ini WAJIB IP tailscale sendiri — bukan LAN IP — soalnya
+// peer tailnet cuma bisa connect balik lewat situ.
+function startTailscaleAnnounce() {
+  const sock = dgram.createSocket('udp4');
+
+  sock.on('error', (err) => {
+    if (err.code !== 'EADDRINUSE') console.error('[Discovery] Tailscale announcer:', err.message);
+  });
+
+  sock.bind(() => sock.unref());
+  sockets.push(sock);
+
+  tailscaleInterval = setInterval(async () => {
+    await tailscale.refreshTailscaleState();
+    const selfIP = tailscale.getSelfTailscaleIP();
+    const peers = tailscale.getTailscalePeers();
+    if (!selfIP || peers.length === 0) return;
+
+    const message = JSON.stringify({
+      type: 'announce', deviceId, deviceName, ip: selfIP, port: LAN_PORT, transferPort: TRANSFER_PORT, via: 'tailscale'
+    });
+    const buffer = Buffer.from(message);
+
+    peers.forEach(({ ip }) => {
+      sock.send(buffer, 0, buffer.length, DISCOVERY_PORT, ip, (err) => {
+        if (err) console.error(`[Discovery] Tailscale send to ${ip} failed:`, err.message);
+      });
+    });
+  }, TAILSCALE_ANNOUNCE_INTERVAL);
+
+  console.log('[Discovery] Tailscale unicast announcer started');
+}
+
 // ===================== Listener =====================
 function startListener() {
   const sock = dgram.createSocket('udp4');
@@ -90,6 +129,7 @@ function startListener() {
         ip: data.ip,
         port: data.port,
         transferPort: data.transferPort || (data.port + 1),
+        via: data.via || 'lan',
         lastSeen: Date.now()
       });
     } catch (_) {}
@@ -129,12 +169,14 @@ function startCleanup() {
 // ===================== Public API =====================
 function startDiscovery() {
   startBroadcaster();
+  startTailscaleAnnounce();
   startListener();
   startCleanup();
 }
 
 function stopDiscovery() {
   if (broadcastInterval) clearInterval(broadcastInterval);
+  if (tailscaleInterval) clearInterval(tailscaleInterval);
   if (cleanupInterval) clearInterval(cleanupInterval);
   sockets.forEach(s => s.close());
   sockets = [];

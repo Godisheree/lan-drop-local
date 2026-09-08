@@ -1,0 +1,162 @@
+diff --git a/server/discovery.js b/server/discovery.js
+index 23efe01..2cf3caf 100644
+--- a/server/discovery.js
++++ b/server/discovery.js
+@@ -1,9 +1,11 @@
+ const dgram = require('dgram');
+ const os = require('os');
++const tailscale = require('./tailscale');
+ 
+ // ===================== Konstanta =====================
+ const DISCOVERY_PORT = 41234;
+ const BROADCAST_INTERVAL = 2000;
++const TAILSCALE_ANNOUNCE_INTERVAL = 3000;
+ const DEVICE_TIMEOUT = 10000;
+ const CLEANUP_INTERVAL = 3000;
+ 
+@@ -17,6 +19,7 @@ const deviceName = DEVICE_NAME;
+ // ===================== State =====================
+ const knownDevices = new Map();
+ let broadcastInterval = null;
++let tailscaleInterval = null;
+ let cleanupInterval = null;
+ let sockets = [];
+ 
+@@ -75,6 +78,42 @@ function startBroadcaster() {
+   console.log(`[Discovery] Broadcasting as "${deviceName}" (${deviceId})`);
+ }
+ 
++// ===================== Tailscale Unicast Announce =====================
++// Broadcast UDP gak nembus tailnet (WireGuard mesh, bukan broadcast domain),
++// jadi kita kirim paket announce yang sama tapi unicast ke tiap peer tailnet.
++// `ip` di paket ini WAJIB IP tailscale sendiri — bukan LAN IP — soalnya
++// peer tailnet cuma bisa connect balik lewat situ.
++function startTailscaleAnnounce() {
++  const sock = dgram.createSocket('udp4');
++
++  sock.on('error', (err) => {
++    if (err.code !== 'EADDRINUSE') console.error('[Discovery] Tailscale announcer:', err.message);
++  });
++
++  sock.bind(() => sock.unref());
++  sockets.push(sock);
++
++  tailscaleInterval = setInterval(async () => {
++    await tailscale.refreshTailscaleState();
++    const selfIP = tailscale.getSelfTailscaleIP();
++    const peers = tailscale.getTailscalePeers();
++    if (!selfIP || peers.length === 0) return;
++
++    const message = JSON.stringify({
++      type: 'announce', deviceId, deviceName, ip: selfIP, port: LAN_PORT, transferPort: TRANSFER_PORT, via: 'tailscale'
++    });
++    const buffer = Buffer.from(message);
++
++    peers.forEach(({ ip }) => {
++      sock.send(buffer, 0, buffer.length, DISCOVERY_PORT, ip, (err) => {
++        if (err) console.error(`[Discovery] Tailscale send to ${ip} failed:`, err.message);
++      });
++    });
++  }, TAILSCALE_ANNOUNCE_INTERVAL);
++
++  console.log('[Discovery] Tailscale unicast announcer started');
++}
++
+ // ===================== Listener =====================
+ function startListener() {
+   const sock = dgram.createSocket('udp4');
+@@ -90,6 +129,7 @@ function startListener() {
+         ip: data.ip,
+         port: data.port,
+         transferPort: data.transferPort || (data.port + 1),
++        via: data.via || 'lan',
+         lastSeen: Date.now()
+       });
+     } catch (_) {}
+@@ -129,12 +169,14 @@ function startCleanup() {
+ // ===================== Public API =====================
+ function startDiscovery() {
+   startBroadcaster();
++  startTailscaleAnnounce();
+   startListener();
+   startCleanup();
+ }
+ 
+ function stopDiscovery() {
+   if (broadcastInterval) clearInterval(broadcastInterval);
++  if (tailscaleInterval) clearInterval(tailscaleInterval);
+   if (cleanupInterval) clearInterval(cleanupInterval);
+   sockets.forEach(s => s.close());
+   sockets = [];
+diff --git a/server/tailscale.js b/server/tailscale.js
+new file mode 100644
+index 0000000..8a10c16
+--- /dev/null
++++ b/server/tailscale.js
+@@ -0,0 +1,66 @@
++const { execFile } = require('child_process');
++
++// ===================== Konstanta =====================
++const CACHE_TTL = 10000; // ms — jangan spam `tailscale status` tiap announce cycle
++
++// ===================== State =====================
++let cachedPeers = [];
++let cachedSelfIP = null;
++let lastFetch = 0;
++let tailscaleMissingWarned = false;
++
++// ===================== Jalanin `tailscale status --json` =====================
++function runTailscaleStatus() {
++  return new Promise((resolve) => {
++    execFile('tailscale', ['status', '--json'], { timeout: 3000 }, (err, stdout) => {
++      if (err) return resolve(null);
++      try {
++        resolve(JSON.parse(stdout));
++      } catch (_) {
++        resolve(null);
++      }
++    });
++  });
++}
++
++// ===================== Refresh cache (dipanggil tiap announce cycle, tapi throttled) =====================
++async function refreshTailscaleState() {
++  const now = Date.now();
++  if (now - lastFetch < CACHE_TTL) return;
++  lastFetch = now;
++
++  const status = await runTailscaleStatus();
++  if (!status) {
++    if (!tailscaleMissingWarned) {
++      console.log('[Tailscale] CLI gak ketemu / tailscaled gak jalan — skip tailnet discovery');
++      tailscaleMissingWarned = true;
++    }
++    cachedPeers = [];
++    cachedSelfIP = null;
++    return;
++  }
++  tailscaleMissingWarned = false;
++
++  cachedSelfIP = (status.Self && status.Self.TailscaleIPs && status.Self.TailscaleIPs[0]) || null;
++
++  const peers = [];
++  const peerMap = status.Peer || {};
++  for (const key of Object.keys(peerMap)) {
++    const p = peerMap[key];
++    if (!p || !p.Online) continue;
++    const ip = (p.TailscaleIPs || [])[0];
++    if (!ip) continue;
++    peers.push({ ip, hostname: p.HostName || p.DNSName || 'tailnet-device' });
++  }
++  cachedPeers = peers;
++}
++
++function getTailscalePeers() {
++  return cachedPeers;
++}
++
++function getSelfTailscaleIP() {
++  return cachedSelfIP;
++}
++
++module.exports = { refreshTailscaleState, getTailscalePeers, getSelfTailscaleIP };
