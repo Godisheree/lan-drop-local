@@ -534,21 +534,27 @@ async function copyText() {
   if (!text) return;
   const btn = document.getElementById('btnCopyText');
   try {
-    // Harus dipicu klik langsung — syarat Clipboard API di browser mobile
     await navigator.clipboard.writeText(text);
     btn.textContent = '✅ Disalin!';
     setTimeout(() => { btn.textContent = '📋 Salin'; }, 1500);
+    return;
+  } catch (_) {}
+  // Fallback: execCommand('copy') — works tanpa HTTPS/localhost
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    btn.textContent = '✅ Disalin!';
+    setTimeout(() => { btn.textContent = '📋 Salin'; }, 1500);
   } catch (_) {
-    // Fallback: pilih teks agar user bisa salin manual
-    const body = document.getElementById('textOverlayBody');
-    const range = document.createRange();
-    range.selectNodeContents(body);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-    btn.textContent = '⚠️ Pilih teks lalu salin manual';
+    btn.textContent = '⚠️ Gagal copy';
     setTimeout(() => { btn.textContent = '📋 Salin'; }, 3000);
   }
+  document.body.removeChild(ta);
 }
 
 // Setup text overlay event handlers
