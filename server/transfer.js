@@ -556,6 +556,7 @@ function startRawReceive(requestId, req) {
 // ===================== TCP Server (Penerima) =====================
 function startTransferServer() {
   tcpServer = net.createServer((socket) => {
+    console.log(`[Transfer] 📥 Incoming TCP connection from ${socket.remoteAddress}:${socket.remotePort}`);
     const parser = new FrameParser((msg) => {
       if (msg.type === 'transfer-request') {
         const requestId = crypto.randomBytes(4).toString('hex');
@@ -609,7 +610,14 @@ function startTransferServer() {
 // ===================== TCP Client (Pengirim) =====================
 function sendTransferRequest(targetIp, targetPort, metadata) {
   const requestId = crypto.randomBytes(4).toString('hex');
+  console.log(`[Transfer] 🔌 Connecting to ${targetIp}:${targetPort} (requestId=${requestId}, file="${metadata.fileName}")`);
+  let connectTimer = setTimeout(() => {
+    console.error(`[Transfer] ⏰ TIMEOUT connecting to ${targetIp}:${targetPort} (requestId=${requestId}) — port unreachable?`);
+    socket.destroy();
+  }, 5000);
   const socket = net.createConnection({ host: targetIp, port: targetPort }, () => {
+    console.log(`[Transfer] ✅ TCP connected to ${targetIp}:${targetPort} (requestId=${requestId})`);
+    if (connectTimer) clearTimeout(connectTimer);
     sendFramedMessage(socket, {
       type: 'transfer-request',
       fileName: metadata.fileName,
@@ -639,7 +647,11 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
   const dataHandler = (data) => parser.feed(data);
   socket._parserHandler = dataHandler;
   socket.on('data', dataHandler);
-  socket.on('error', () => cleanupOutgoing(requestId));
+  socket.on('error', (err) => {
+    if (connectTimer) clearTimeout(connectTimer);
+    console.error(`[Transfer] ❌ TCP error connecting to ${targetIp}:${targetPort} (requestId=${requestId}): ${err.code} — ${err.message}`);
+    cleanupOutgoing(requestId);
+  });
   socket.on('close', () => {
     const req = outgoingRequests.get(requestId);
     if (req && req.status === 'pending') {
