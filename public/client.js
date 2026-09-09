@@ -243,6 +243,14 @@ function setupTextSend() {
       targetName: btn.dataset.deviceName
     };
     document.getElementById('textTargetName').textContent = 'ke ' + (btn.dataset.deviceName || '?');
+    // Kalau overlay teks lagi tampil, simpan balik ke antrian biar gak nutup composer
+    if (!isOverlayIdle()) {
+      if (currentText) {
+        textOverlayQueue.unshift(currentText);
+        currentText = null;
+      }
+      document.getElementById('textOverlay').classList.add('hidden');
+    }
     const textarea = document.getElementById('textInput');
     textarea.value = '';
     updateCharCount();
@@ -487,15 +495,18 @@ function renderModalGroup(group) {
 let textOverlayQueue = []; // teks yang belum ditampilkan, biar tidak menimpa yang sedang dibaca
 let currentText = null;    // teks yang sedang tampil
 
+function isComposerActive() {
+  const modal = document.getElementById('textComposerModal');
+  return !modal.classList.contains('hidden');
+}
+
 async function pollReceivedTexts() {
   try {
     const texts = await api('/transfer/text');
     for (const t of texts) {
       if (textOverlayQueue.some(q => q.id === t.id) || (currentText && currentText.id === t.id)) continue;
       if (!t.text || !t.text.trim()) continue;
-      // Kalau composer lagi aktif, jangan tampilin overlay — queue aja dulu
-      const composerOpen = !document.getElementById('textComposerModal').classList.contains('hidden');
-      if (composerOpen) {
+      if (isComposerActive()) {
         textOverlayQueue.push(t);
         showToast(`💬 Teks dari ${t.senderName || '?'} — ditampilkan setelah selesai mengetik`, 'info');
       } else if (textOverlayQueue.length === 0 && !currentText && isOverlayIdle()) {
