@@ -270,6 +270,10 @@ function updateCharCount() {
 function hideTextComposer() {
   document.getElementById('textComposerModal').classList.add('hidden');
   textTarget = null;
+  // Tampilkan teks antrian kalau ada
+  if (!currentText && isOverlayIdle() && textOverlayQueue.length > 0) {
+    showTextOverlay(textOverlayQueue.shift());
+  }
 }
 
 async function sendText() {
@@ -488,8 +492,13 @@ async function pollReceivedTexts() {
     const texts = await api('/transfer/text');
     for (const t of texts) {
       if (textOverlayQueue.some(q => q.id === t.id) || (currentText && currentText.id === t.id)) continue;
-      if (!t.text || !t.text.trim()) continue; // string kosong → abaikan
-      if (textOverlayQueue.length === 0 && !currentText && isOverlayIdle()) {
+      if (!t.text || !t.text.trim()) continue;
+      // Kalau composer lagi aktif, jangan tampilin overlay — queue aja dulu
+      const composerOpen = !document.getElementById('textComposerModal').classList.contains('hidden');
+      if (composerOpen) {
+        textOverlayQueue.push(t);
+        showToast(`💬 Teks dari ${t.senderName || '?'} — ditampilkan setelah selesai mengetik`, 'info');
+      } else if (textOverlayQueue.length === 0 && !currentText && isOverlayIdle()) {
         showTextOverlay(t);
       } else {
         textOverlayQueue.push(t);
