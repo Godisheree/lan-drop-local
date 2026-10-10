@@ -777,6 +777,19 @@ async function startFileSend(requestId, filePath) {
     }
     req.status = p ? p.status : 'disconnected';
     console.log(`[Transfer] ${p && p.status === 'completed' ? '✅' : '⚠️'} ${requestId} — transfer ${p ? p.status : 'disconnected'} (${p ? p.bytesTransferred + '/' + p.fileSize : 0} bytes)`);
+
+    // Bersihkan file upload — baik yang asli maupun output transcode.
+    // Tanpa ini uploads-temp tumbuh tanpa batas (2.5GB dari 15 file).
+    // Kalau output transcode == input asli (tidak ada konversi), unlink
+    // dua kali; error ENOENT diabaikan.
+    for (const f of new Set([filePath, sendFilePath])) {
+      if (!f) continue;
+      fs.unlink(f, (err) => {
+        if (err && err.code !== 'ENOENT') {
+          console.warn(`[Transfer] Gagal hapus file upload ${f}: ${err.message}`);
+        }
+      });
+    }
   });
 
   return { requestId, fileSize: actualSize };
