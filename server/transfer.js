@@ -431,12 +431,15 @@ function startRawReceive(requestId, req) {
           if (p) p.bytesTransferred = written;
         }
 
-        // Manual data handler — stop pas ukuran tercapai
+        // Manual data handler — stop pas ukuran tercapai.
+        // WAJIB handle backpressure: kalau writeStream buffer penuh, socket di-pause.
+        // Tanpa ini socket tetap flowing → semua byte di-queue di RAM receiver,
+        // bukan throttled sama disk. Transfer besar mati ECONNRESET di tengah jalan.
         const dataHandler = (chunk) => {
           const need = totalSize - written;
           if (need <= 0) return;
           const toWrite = chunk.length > need ? chunk.slice(0, need) : chunk;
-          writeStream.write(toWrite);
+          const canContinue = writeStream.write(toWrite);
           written += toWrite.length;
           const p = transferProgress.get(requestId);
           if (p) p.bytesTransferred = written;
@@ -445,6 +448,11 @@ function startRawReceive(requestId, req) {
             // File selesai
             socket.removeListener('data', dataHandler);
             writeStream.end();
+            return;
+          }
+          if (!canContinue) {
+            socket.pause();
+            writeStream.once('drain', () => socket.resume());
           }
         };
         socket.on('data', dataHandler);
