@@ -27,30 +27,9 @@ let sockets = [];
 let tailscaleSock = null; // socket khusus buat unicast (announce ke peer & reply-back)
 
 // ===================== Helper: Dapetin IP LAN =====================
-function getLANIP() {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal
-        && !name.toLowerCase().includes('vmware')
-        && !name.toLowerCase().includes('virtualbox')
-        && !name.toLowerCase().includes('docker')
-        && !name.toLowerCase().includes('vethernet')
-        && !name.toLowerCase().includes('warp')
-        && !name.toLowerCase().includes('tailscale')
-        && !isLinkLocalIPv4(net.address)) {
-        return net.address;
-      }
-    }
-  }
-  return 'localhost';
-}
-
-// 169.254.0.0/16 = link-local / APIPA (self-assigned, gak reachable device lain)
-function isLinkLocalIPv4(addr) {
-  const parts = addr.split('.').map(Number);
-  return parts[0] === 169 && parts[1] === 254;
-}
+// Dipindah ke platform.js supaya sinkron dengan index.js — sebelumnya
+// dua duplikat bisa memilih IP berbeda untuk device yang sama.
+const { getLANIP } = require('./platform');
 
 // ===================== Broadcaster =====================
 function startBroadcaster() {

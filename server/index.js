@@ -197,34 +197,11 @@ app.post('/transfer/upload', upload.array('file', 50), (req, res) => {
 
 // ===================== Server Startup =====================
 
-function getLANIPs() {
-  const nets = os.networkInterfaces();
-  const ips = [];
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal
-        && !name.toLowerCase().includes('vmware')
-        && !name.toLowerCase().includes('virtualbox')
-        && !name.toLowerCase().includes('docker')
-        && !name.toLowerCase().includes('vethernet')
-        && !name.toLowerCase().includes('warp')
-        && !name.toLowerCase().includes('tailscale')
-        && !isLinkLocalIPv4(net.address)) {
-        ips.push({ name, address: net.address });
-      }
-    }
-  }
-  return ips;
-}
-
-// 169.254.0.0/16 = link-local / APIPA (self-assigned, gak reachable device lain)
-function isLinkLocalIPv4(addr) {
-  const parts = addr.split('.').map(Number);
-  return parts[0] === 169 && parts[1] === 254;
-}
+// Dipindah ke platform.js supaya sinkron dengan discovery.js.
+const { listLANIPv4 } = require('./platform');
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  const ips = getLANIPs();
+  const ips = listLANIPv4();
   console.log(`LAN DROP server — Express on http://localhost:${PORT}`);
   if (ips.length === 0) {
     console.log('⚠️  No LAN IP found — check your WiFi connection');
