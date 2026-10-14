@@ -2,6 +2,7 @@
 // Mendeteksi environment runtime: Windows vs Termux (Android)
 
 const os = require('os');
+const path = require('path');
 
 function isTermux() {
   // Termux selalu set PREFIX ke /data/data/com.termux/files/usr
@@ -10,6 +11,29 @@ function isTermux() {
 
 function isWindows() {
   return process.platform === 'win32';
+}
+
+// ===================== Data Dir (history, part-meta) =====================
+// WAJIB di luar folder install (Program Files read-only untuk non-admin).
+function getDataDir() {
+  if (process.env.LANDROP_DATA_DIR) return process.env.LANDROP_DATA_DIR;
+  if (isWindows()) {
+    return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'lan-drop');
+  }
+  return path.join(os.homedir(), '.lan-drop');
+}
+
+// ===================== Save Dir (file diterima) =====================
+// Windows: file masuk ke D:\LAN-DROP dengan subfolder per kategori:
+//   Pictures (foto) · Videos · Documents · Music · sisanya di root.
+// Bisa dioverride lewat env LANDROP_SAVE_DIR (langsung ke folder itu, flat).
+const WINDOWS_SAVE_DIR = 'D:\\LAN-DROP';
+const WINDOWS_SAVE_CATEGORIES = { photo: 'Pictures', video: 'Videos', doc: 'Documents', audio: 'Music' };
+
+function getWindowsSaveDir(category) {
+  if (process.env.LANDROP_SAVE_DIR) return process.env.LANDROP_SAVE_DIR;
+  const sub = WINDOWS_SAVE_CATEGORIES[category];
+  return sub ? path.join(WINDOWS_SAVE_DIR, sub) : WINDOWS_SAVE_DIR;
 }
 
 // ===================== LAN IP Selection =====================
@@ -70,4 +94,4 @@ function getLANIP() {
   return ips.length > 0 ? ips[0].address : 'localhost';
 }
 
-module.exports = { isTermux, isWindows, listLANIPv4, getLANIP, isLinkLocalIPv4, isPointToPoint };
+module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, getLANIP, isLinkLocalIPv4, isPointToPoint };

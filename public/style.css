@@ -288,6 +288,69 @@ h2 {
   opacity: 0.5;
   cursor: default;
 }
+.transfer-item .btn-retry {
+  flex-shrink: 0;
+  margin-left: 8px;
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+}
+.transfer-item .btn-retry:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ===== History Panel ===== */
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 22px 0 14px;
+}
+.history-head h2 { margin-bottom: 0; }
+.btn-history-clear {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.btn-history-clear:hover {
+  background: rgba(255, 59, 48, 0.1);
+  border-color: var(--failure);
+  color: var(--failure);
+}
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+.history-item .h-name {
+  font-weight: 500;
+  word-break: break-all;
+}
+.history-item .h-meta {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+.history-list .empty-msg { padding: 20px 16px; }
 
 /* ===== Progress Bar ===== */
 .progress-bar {

@@ -38,11 +38,17 @@ UDP broadcast on port 41234. Sends JSON `announce` packet every 2s `{deviceId, d
 ### Transfer (`server/transfer.js`)
 TCP protocol over `net` module on port 3001. Custom **length-prefixed frame protocol**: 4-byte big-endian uint32 length prefix + UTF-8 JSON payload. Key states tracked in `pendingRequests` (incoming), `outgoingRequests` (outgoing), `transferProgress` (current transfer) — all in-memory Maps.
 
-**File streaming:** after accept, sender sends `{type: "file-start", fileName, fileSize}` frame then raw bytes. Receiver writes to `./downloads/`. Uses `readStream.pipe(socket, {end: false})` — receiver closes socket to confirm completion.
+**File streaming:** after accept, sender sends `{type: "file-start", fileName, fileSize}` frame then raw bytes. Receiver streams **directly to the final save folder** (no intermediate `./downloads/`). Uses `readStream.pipe(socket, {end: false})` — receiver closes socket to confirm completion.
 
-**Auto-save:** after write completes, moves file to platform folder. Windows → `D:\Downloads\Download - Lan Drop\` (falls back to `<home>\Downloads\Download - Lan Drop\`). Termux → `~/storage/pictures/|movies/|downloads/`. File classification by extension. Cross-filesystem `fs.rename()` fallback to copy+unlink.
+**Auto-save (direct streaming):** file is written as <name>.landrop-part in the target folder, then atomically renamed on completion - no cross-filesystem copy, no `EXDEV`. Targets: Windows → `D:\LAN-DROP` with subfolders by type (`Pictures`, `Videos`, `Documents`, `Music`; other file types go to the root; override everything with `\$LANDROP_SAVE_DIR\` = flat folder), Termux → Android shared storage (`~/storage/pictures|movies|music|downloads` (+ `shared/Documents` for docs)) - requires `termux-setup-storage` permission first. All Windows subfolders are pre-created at server startup (`ensureSaveDirExists()`); if the drive is unavailable, falls back to `\$LANDROP_DATA_DIR/downloads`. Files with colliding names get ` (1)`, ` (2)` suffix - never overwrite.
 
-**Auto-transcode:** formats that Android may not natively support (.mpeg, .mpg, .avi, .mkv, .webm, .mov, .3gp, .flv, .ts) → H.264 .mp4 via ffmpeg. Audio-only files with cover art → MP3 container remux. Requires ffmpeg installed (auto-detected from common Windows paths + PATH). Non-fatal: fallback to original file if ffmpeg unavailable or conversion fails.
+**Resume transfer:** resume key = `sha1(senderName|batchId|fileName|fileSize)` — stable across retries because the frontend reuses the same `batchId`. Receiver checks `parts/` meta in data dir; if a partial exists, `transfer-response` frame carries `resumeOffset`, and sender's read stream starts at that offset. On unexpected disconnect the partial file + meta are kept (retry via "Coba Lagi" button); on explicit cancel both are deleted. Partial/meta older than 7 days cleaned on startup (`cleanupStale()`), same for stale uploads.
+
+**History (`server/history.js`):** completed/failed/cancelled transfers recorded to `history.json` in data dir (debounced atomic write, max 200 entries). Endpoints `GET /history`, `POST /history/clear`. Rendered in UI "Riwayat" panel.
+
+**Data dir:** `%APPDATA%/lan-drop` (Windows) or `~/.lan-drop` (Termux/Linux), override with `$LANDROP_DATA_DIR`. Never write data inside the install dir — Program Files is read-only for non-admin users.
+
+**Auto-transcode:** formats that Android may not natively support (.mpeg, .mpg, .avi, .mkv, .webm, .mov, .3gp, .flv, .ts) → H.264 .mp4 via ffmpeg. Audio-only files with cover art → MP3 container remux. Requires ffmpeg installed (auto-detected from common Windows paths + PATH). Non-fatal: fallback to original file if ffmpeg unavailable or conversion fails. Upload files are kept after a failed/interrupted transfer so resume can work; deleted only on completion or explicit cancel.
 
 ### Platform (`server/platform.js`)
 Detects Termux via `process.env.PREFIX` (more reliable than `os.platform()` on Android) and Windows via `process.platform === 'win32'`.
@@ -66,6 +72,8 @@ Single-page app: polls devices every 2.5s, polls pending requests every 2s, poll
 | `/transfer/status/:id` | GET | Poll outgoing request status |
 | `/transfer/send-file` | POST | Start streaming after accepted |
 | `/transfer/progress/:id` | GET | Poll transfer progress (both sides) |
+| `/history` | GET | Transfer history (newest first) |
+| `/history/clear` | POST | Delete all history |
 
 ## Critical Implementation Details
 
@@ -74,6 +82,8 @@ Single-page app: polls devices every 2.5s, polls pending requests every 2s, poll
 - **Upload-then-send:** browser can't provide `filePath`, so frontend uploads to own server first via multer, then uses the returned server-side path for TCP streaming.
 - **Cached ffmpeg detection:** `checkFfmpeg()` runs once, caches result in `_ffmpegPath` module variable (undefined=unchecked, false=not found, string=path).
 - **Hardlink/symlink fallback:** multer saves files without extension, so transcoding creates temp link with correct extension before passing to ffmpeg.
+- **requestId is per-side:** sender and receiver generate their own requestIds for the same transfer — never sync them across devices. Match incoming requests on the receiver via `batchId` + `fileName`.
+- **`{ end: false }`** pipe + resume: on resume, sender pipes a partial read stream (`{start: offset}`) of the full-size file; receiver appends to `.landrop-part` at the same offset.
 
 ## Common Issues
 

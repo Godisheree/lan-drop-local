@@ -6,6 +6,7 @@ const multer = require('multer');
 const discovery = require('./discovery');
 const transfer = require('./transfer');
 const tailscale = require('./tailscale');
+const history = require('./history');
 
 // Generate device name from hostname atau environment variable
 const DEVICE_NAME = process.env.DEVICE_NAME || os.hostname() || 'LAN-Device';
@@ -37,7 +38,7 @@ app.get('/devices', (req, res) => {
 
 // POST /transfer/request — kirim permintaan transfer ke device lain
 app.post('/transfer/request', (req, res) => {
-  const { targetIp, targetPort, fileName, fileSize, batchId } = req.body;
+  const { targetIp, targetPort, fileName, fileSize, batchId, targetName } = req.body;
 
   if (!targetIp || !targetPort || !fileName || fileSize === undefined) {
     return res.status(400).json({ error: 'Missing fields: targetIp, targetPort, fileName, fileSize' });
@@ -48,6 +49,7 @@ app.post('/transfer/request', (req, res) => {
       fileName,
       fileSize,
       batchId, // optional: grouping request multi-file
+      peerName: targetName, // untuk history
       senderName: DEVICE_NAME,
       senderId: `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`
     });
@@ -193,6 +195,19 @@ app.post('/transfer/upload', upload.array('file', 50), (req, res) => {
     fileSize: f.size
   }));
   res.json({ files });
+});
+
+// ===================== History =====================
+
+// GET /history — riwayat transfer (terbaru di depan)
+app.get('/history', (req, res) => {
+  res.json(history.list());
+});
+
+// POST /history/clear — hapus semua riwayat
+app.post('/history/clear', (req, res) => {
+  history.clear();
+  res.json({ ok: true });
 });
 
 // ===================== Server Startup =====================

@@ -1,6 +1,7 @@
 // ===== State =====
 const knownRequestIds = new Set();
 const activeTransfers = new Map(); // requestId -> { el, timer, type, requestId }
+const transferMeta = new Map(); // requestId -> { filePath, fileName, fileSize, batchId, ip, port, targetName } — buat retry
 let currentModalRequestId = null;
 let currentGroup = null; // group batch yang lagi tampil di modal
 let requestQueue = []; // antrian GROUP request masuk (tampil satu-satu)
@@ -71,24 +72,66 @@ async function init() {
 let devicesTimer = null;
 let pendingTimer = null;
 let textTimer = null;
+let historyTimer = null;
 let progressTimers = new Map();
 
 function startPolling() {
   devicesTimer = setInterval(fetchDevices, 2500);
   pendingTimer = setInterval(fetchPending, 2000);
   textTimer = setInterval(pollReceivedTexts, 2000);
+  historyTimer = setInterval(fetchHistory, 5000);
   fetchDevices();
   fetchPending();
   pollReceivedTexts();
+  fetchHistory();
 }
 
 function stopPolling() {
   if (devicesTimer) { clearInterval(devicesTimer); devicesTimer = null; }
   if (pendingTimer) { clearInterval(pendingTimer); pendingTimer = null; }
   if (textTimer) { clearInterval(textTimer); textTimer = null; }
+  if (historyTimer) { clearInterval(historyTimer); historyTimer = null; }
   for (const t of progressTimers.values()) clearInterval(t);
   progressTimers.clear();
 }
+
+// ===== History =====
+async function fetchHistory() {
+  try {
+    renderHistory(await api('/history'));
+  } catch (_) {}
+}
+
+function renderHistory(items) {
+  const container = document.getElementById('historyList');
+  if (!container) return;
+
+  if (!items || items.length === 0) {
+    container.innerHTML = '<p class="empty-msg">Belum ada riwayat.</p>';
+    return;
+  }
+
+  container.innerHTML = items.slice(0, 30).map((h) => {
+    const statusIcon = h.status === 'completed' ? '✅' : h.status === 'cancelled' ? '🚫' : '❌';
+    const dirIcon = h.direction === 'send' ? '📤' : '📥';
+    const when = new Date(h.ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="history-item">
+      <span>${statusIcon}</span>
+      <span class="h-name">${escapeHtml(h.fileName)}</span>
+      <span class="h-meta">${dirIcon} ${escapeHtml(h.peer || '?')} · ${formatBytes(h.fileSize)} · ${when}${h.resumed ? ' · dilanjutkan' : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('btnClearHistory').addEventListener('click', async () => {
+  try {
+    await api('/history/clear', { method: 'POST' });
+    showToast('🗑 Riwayat dihapus', '');
+    fetchHistory();
+  } catch (err) {
+    showToast('❌ Gagal hapus riwayat: ' + err.message, 'error');
+  }
+});
 
 // ===== Devices =====
 async function fetchDevices() {
@@ -360,6 +403,15 @@ async function sendBatch(ip, port, targetName, files) {
 
     // Step 3: tambah item + polling status semua
     for (const s of sent) {
+      transferMeta.set(s.requestId, {
+        filePath: s.filePath,
+        fileName: s.fileName,
+        fileSize: s.fileSize,
+        batchId, // batchId SAMA saat retry → penerima bisa resume partial
+        ip,
+        port,
+        targetName
+      });
       addTransferItem(s.requestId, {
         direction: 'send',
         fileName: s.fileName,
@@ -368,14 +420,14 @@ async function sendBatch(ip, port, targetName, files) {
         status: 'waiting',
         statusText: '⏳ Menunggu diterima...'
       });
-      await pollSendStatus(s.requestId, s.filePath);
+      await pollSendStatus(s.requestId, s.filePath, s.fileSize);
     }
   } catch (err) {
     showToast('❌ Gagal: ' + err.message, 'error');
   }
 }
 
-async function pollSendStatus(requestId, filePath) {
+async function pollSendStatus(requestId, filePath, fileSize) {
   return new Promise((resolve) => {
     const timer = setInterval(async () => {
       // Item udah dihapus/dibatalkan → stop, jangan lempar 404 terus-menerus
@@ -390,7 +442,13 @@ async function pollSendStatus(requestId, filePath) {
 
         if (st.status === 'accepted') {
           clearInterval(timer);
-          updateTransferItem(requestId, { status: 'transferring', statusText: '📤 Mengirim file...' });
+          // Resume: penerima masih punya partial → lanjut dari situ
+          if (st.resumeOffset > 0) {
+            const pct = fileSize > 0 ? Math.round((st.resumeOffset / fileSize) * 100) : 0;
+            updateTransferItem(requestId, { status: 'transferring', statusText: `↻ Melanjutkan dari ${pct}%...` });
+          } else {
+            updateTransferItem(requestId, { status: 'transferring', statusText: '📤 Mengirim file...' });
+          }
 
           // Step 5: Start file send
           try {
@@ -422,6 +480,46 @@ async function pollSendStatus(requestId, filePath) {
       } catch (_) {}
     }, 1000);
   });
+}
+
+// ===== Retry (kirim ulang file yang gagal/putus) =====
+// batchId sengaja dipakai ulang → penerima nyocokin partial lama dan
+// otomatis resume dari byte terakhir (kalau file yang sama).
+async function retryTransfer(requestId) {
+  const meta = transferMeta.get(requestId);
+  if (!meta) return;
+  try {
+    const reqRes = await api('/transfer/request', {
+      method: 'POST',
+      body: JSON.stringify({
+        targetIp: meta.ip,
+        targetPort: meta.port,
+        fileName: meta.fileName,
+        fileSize: meta.fileSize,
+        batchId: meta.batchId,
+        targetName: meta.targetName
+      })
+    });
+
+    // Ganti item lama dengan item baru (requestId baru)
+    const old = activeTransfers.get(requestId);
+    if (old && old.el) old.el.remove();
+    activeTransfers.delete(requestId);
+
+    transferMeta.set(reqRes.requestId, meta);
+    addTransferItem(reqRes.requestId, {
+      direction: 'send',
+      fileName: meta.fileName,
+      fileSize: meta.fileSize,
+      targetName: meta.targetName,
+      status: 'waiting',
+      statusText: '⏳ Menunggu diterima...'
+    });
+    showToast('↻ Mengirim ulang...', '');
+    await pollSendStatus(reqRes.requestId, meta.filePath, meta.fileSize);
+  } catch (err) {
+    showToast('❌ Gagal mengirim ulang: ' + err.message, 'error');
+  }
 }
 
 // ===== Pending Requests (Receiver) =====
@@ -708,6 +806,7 @@ function pollProgress(requestId, type) {
           total
         });
         showToast(`✅ ${prog.fileName} — ${label}`, 'success');
+        fetchHistory(); // refresh panel riwayat
         return;
       }
 
@@ -821,6 +920,18 @@ function updateTransferItem(requestId, data) {
     if (btn) btn.remove();
   }
 
+  // Transfer gagal/putus → kasih tombol Coba Lagi (reset resume dari partial)
+  if ((data.status === 'failed' || data.status === 'disconnected')) {
+    const header = el.querySelector('.tf-header');
+    if (header && !header.querySelector('.btn-retry')) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-retry';
+      btn.dataset.rid = requestId;
+      btn.textContent = '↻ Coba Lagi';
+      header.appendChild(btn);
+    }
+  }
+
   // Clean up completed/failed/cancelled from activeTransfers after a delay
   if (data.status === 'completed' || data.status === 'failed' || data.status === 'rejected' || data.status === 'cancelled') {
     setTimeout(() => {
@@ -835,9 +946,17 @@ document.getElementById('btnReject').addEventListener('click', rejectRequest);
 
 // Cancel transfer (pengirim) — event delegation biar button dinamis kebaca
 document.getElementById('transferList').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.btn-cancel');
+  const btn = e.target.closest('.btn-cancel, .btn-retry');
   if (!btn) return;
   const requestId = btn.dataset.rid;
+
+  // Retry: kirim ulang file pakai batchId yang sama → auto-resume di server
+  if (btn.classList.contains('btn-retry')) {
+    btn.disabled = true;
+    retryTransfer(requestId);
+    return;
+  }
+
   btn.disabled = true;
   try {
     await api(`/transfer/cancel/${requestId}`, {
