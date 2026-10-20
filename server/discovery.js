@@ -3,7 +3,9 @@ const os = require('os');
 const tailscale = require('./tailscale');
 
 // ===================== Konstanta =====================
-const DISCOVERY_PORT = 41234;
+// Port UDP discovery. Bisa diubah lewat env supaya dua instance bisa jalan
+// di satu host (mis. untuk pengujian) tanpa saling berebut listener.
+const DISCOVERY_PORT = parseInt(process.env.DISCOVERY_PORT) || 41234;
 const BROADCAST_INTERVAL = 2000;
 const TAILSCALE_ANNOUNCE_INTERVAL = 3000;
 const REPLY_DEDUPE_TTL = 5000; // jangan reply ke IP yang sama dalam 5 detik terakhir
@@ -156,6 +158,8 @@ function startCleanup() {
   cleanupInterval = setInterval(() => {
     const now = Date.now();
     for (const [id, device] of knownDevices) {
+      // Peer statis (didaftarkan manual) tidak pernah expire.
+      if (device.static) continue;
       if (now - device.lastSeen > DEVICE_TIMEOUT) {
         console.log(`[Discovery] Device offline: ${device.deviceName} (${id})`);
         knownDevices.delete(id);
@@ -172,6 +176,59 @@ function startDiscovery() {
   startTailscaleAnnounce();
   startListener();
   startCleanup();
+  seedStaticPeers();
+}
+
+/**
+ * Peer statis lewat env `LANDROP_PEERS`.
+ *
+ * Format: "Nama@ip:port@transferPort,Nama2@ip:port@transferPort"
+ *
+ * Contoh: "Laptop@192.168.1.5:3000@3001"
+ *
+ * Berguna untuk dua hal:
+ *   1. Jaringan yang memblokir UDP broadcast — peer bisa didaftarkan manual.
+ *   2. Pengujian otomatis: dua instance di satu host tidak bisa saling
+ *      menemukan lewat broadcast (satu listener UDP per port).
+ *
+ * Peer statis tidak pernah expire.
+ */
+function seedStaticPeers() {
+  const raw = process.env.LANDROP_PEERS;
+  if (!raw) return;
+
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+
+    // Nama@ip:port@transferPort → 3 bagian terpecah '@'
+    const parts = trimmed.split('@');
+    const namePart = parts[0];
+    const addrPart = parts[1];
+    const transferPortPart = parts[2];
+    if (!namePart || !addrPart) continue;
+
+    // Pisahkan ip dan port dari "ip:port"
+    const colon = addrPart.lastIndexOf(':');
+    if (colon === -1) continue;
+    const ipPart = addrPart.slice(0, colon);
+    const port = parseInt(addrPart.slice(colon + 1), 10) || 3000;
+    if (!ipPart) continue;
+
+    const transferPort = parseInt(transferPortPart, 10) || port + 1;
+
+    knownDevices.set(`static-${ipPart}-${port}`, {
+      deviceName: namePart,
+      ip: ipPart,
+      port,
+      transferPort,
+      via: 'lan',
+      lastSeen: Date.now(),
+      static: true,
+    });
+
+    console.log(`[Discovery] Peer statis terdaftar: ${namePart} (${ipPart}:${port}, transfer ${transferPort})`);
+  }
 }
 
 function stopDiscovery() {

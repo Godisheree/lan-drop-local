@@ -7,7 +7,12 @@
     "start": "node server/index.js",
     "electron-dev": "electron .",
     "build-win": "electron-builder --win",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "check": "node scripts/check-js.js",
+    "audit": "node scripts/audit-charset.js",
+    "smoke": "node scripts/smoke.js --url http://localhost:3000",
+    "verify:qr": "node scripts/verify-qr.js --url http://localhost:3000",
+    "e2e": "node scripts/e2e.js",
+    "test": "node scripts/check-js.js && node scripts/audit-charset.js"
   },
   "keywords": [],
   "author": "",

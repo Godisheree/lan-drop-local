@@ -2,93 +2,187 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F7F7F9">
+  <meta name="description" content="Kirim file antar perangkat di WiFi yang sama. Tanpa cloud, tanpa akun.">
   <title>LAN DROP</title>
-  <link rel="stylesheet" href="style.css">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%235B8DEF'/><path d='M50 28v34m0 0-13-13m13 13 13-13' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%235B8DEF'/><path d='M50 28v34m0 0-13-13m13 13 13-13' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/views.css">
 </head>
 <body>
-  <div id="app" style="position:relative;z-index:1">
-    <!-- Header -->
+  <div id="app">
+    <!-- ===== Header ===== -->
     <header id="header">
-      <div class="logo">📡 LAN DROP</div>
-      <div class="device-name" id="deviceName">—</div>
+      <div class="header-left">
+        <span class="logo">
+          <span aria-hidden="true">📡</span>
+          <span class="logo-text">LAN DROP</span>
+        </span>
+      </div>
+
+      <div class="header-right">
+        <button id="btnConnect" class="connect-trigger" type="button"
+                aria-haspopup="dialog" aria-controls="connectModal">
+          <span aria-hidden="true">📱</span>
+          <span>Sambung</span>
+        </button>
+
+        <button id="btnTheme" class="icon-btn" type="button" aria-label="Ganti tema terang/gelap">
+          <span class="theme-icon-light" aria-hidden="true">🌙</span>
+          <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+        </button>
+
+        <div class="device-name" id="deviceName" title="Nama perangkat ini">—</div>
+      </div>
     </header>
 
-    <!-- Main Layout -->
+    <!-- ===== Tab mobile ===== -->
+    <nav id="mobileTabs" class="mobile-tabs" role="tablist" aria-label="Tampilan utama">
+      <button class="tab" type="button" role="tab" data-tab="devices"
+              id="tabDevices" aria-controls="devicesSection" aria-selected="true">
+        <span aria-hidden="true">📱</span> Perangkat
+      </button>
+      <button class="tab" type="button" role="tab" data-tab="activity"
+              id="tabActivity" aria-controls="activitySection" aria-selected="false">
+        <span aria-hidden="true">📦</span> Aktivitas
+        <span class="tab-badge" id="tabActivityBadge" aria-hidden="true"></span>
+      </button>
+    </nav>
+
+    <!-- ===== Konten utama ===== -->
     <div id="main">
-      <!-- Left: Device List -->
-      <section id="devices-section">
-        <h2>Perangkat Online</h2>
+      <!-- Perangkat -->
+      <section id="devicesSection" aria-labelledby="devicesHeading">
+        <div class="section-heading">
+          <h2 id="devicesHeading">Perangkat Online</h2>
+        </div>
         <div id="deviceList" class="device-list">
-          <p class="empty-msg" id="emptyDevices">🔍 Mencari perangkat lain di jaringan...</p>
+          <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">🔍</span>
+            <span class="empty-title">Mencari perangkat lain…</span>
+            <span class="empty-hint">Pastikan perangkat lain terhubung ke WiFi yang sama.</span>
+          </div>
         </div>
       </section>
 
-      <!-- Right: Activity -->
-      <section id="activity-section">
-        <h2>Aktivitas Transfer</h2>
+      <!-- Aktivitas + riwayat -->
+      <section id="activitySection" aria-labelledby="activityHeading">
+        <div class="section-heading">
+          <h2 id="activityHeading">Aktivitas Transfer</h2>
+        </div>
         <div id="transferList" class="transfer-list">
-          <p class="empty-msg">Belum ada transfer.</p>
+          <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">📦</span>
+            <span class="empty-title">Belum ada transfer</span>
+            <span class="empty-hint">Pilih perangkat di sebelah, lalu kirim file, foto, video, atau teks.</span>
+          </div>
         </div>
 
         <div class="history-head">
-          <h2>Riwayat</h2>
-          <button id="btnClearHistory" class="btn-history-clear" title="Hapus riwayat">🗑 Hapus</button>
+          <h2 id="historyHeading">Riwayat</h2>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="btnToggleHistory" class="history-toggle" type="button"
+                    aria-expanded="true" aria-controls="historyList">
+              <span class="chevron" aria-hidden="true">▾</span> Lipat
+            </button>
+            <button id="btnClearHistory" class="icon-btn" type="button"
+                    aria-label="Hapus semua riwayat" title="Hapus riwayat">🗑</button>
+          </div>
         </div>
-        <div id="historyList" class="history-list">
-          <p class="empty-msg">Belum ada riwayat.</p>
-        </div>
+        <div id="historyList" class="history-list"></div>
       </section>
     </div>
   </div>
 
-  <!-- Modal Incoming Request -->
-  <div id="requestModal" class="modal hidden">
+  <!-- ===== Sticky progress bar (mobile) ===== -->
+  <div id="stickyProgress" class="sticky-progress" role="status" aria-live="polite">
+    <span class="sp-icon" aria-hidden="true">📤</span>
+    <div class="sp-body">
+      <span class="sp-label">Transfer berjalan…</span>
+      <div class="sp-bar"><div style="width: 0%"></div></div>
+    </div>
+    <span class="sp-count">0%</span>
+  </div>
+
+  <!-- ===== Modal: Permintaan masuk ===== -->
+  <div id="requestModal" class="modal hidden" role="dialog" aria-modal="true"
+       aria-labelledby="requestModalTitle" aria-hidden="true">
     <div class="modal-content">
-      <h3>📥 Permintaan Masuk</h3>
-      <p id="modalInfo"></p>
+      <div class="modal-header">
+        <h3 id="requestModalTitle">📥 Permintaan Masuk</h3>
+      </div>
+      <div id="modalInfo"></div>
       <div class="modal-actions">
-        <button id="btnAccept" class="btn btn-accept">✅ Terima</button>
-        <button id="btnReject" class="btn btn-reject">❌ Tolak</button>
+        <button id="btnReject" class="btn btn-reject" type="button">❌ Tolak</button>
+        <button id="btnAccept" class="btn btn-accept" type="button" autofocus>✅ Terima</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal Tulis Teks -->
-  <div id="textComposerModal" class="modal hidden">
+  <!-- ===== Modal: Kirim teks ===== -->
+  <div id="textComposerModal" class="modal hidden" role="dialog" aria-modal="true"
+       aria-labelledby="textComposerTitle" aria-hidden="true">
     <div class="modal-content text-composer">
       <div class="modal-header">
-        <h3>✏️ Kirim Teks</h3>
-        <button class="modal-x" id="btnCloseTextComposer">✕</button>
+        <h3 id="textComposerTitle">✏️ Kirim Teks</h3>
+        <button id="btnCloseTextComposer" class="modal-x" type="button" aria-label="Tutup">✕</button>
       </div>
       <p class="composer-target" id="textTargetName">ke —</p>
-      <textarea id="textInput" rows="5" placeholder="Tulis pesan atau tempel tautan..." autocorrect="off"></textarea>
-      <div class="char-count" id="charCount"></div>
+      <label class="visually-hidden" for="textInput">Isi pesan</label>
+      <textarea id="textInput" rows="5" placeholder="Tulis pesan atau tempel tautan..."
+                autocorrect="off" spellcheck="false"></textarea>
+      <span class="char-count" id="charCount" aria-live="polite"></span>
       <div class="modal-actions">
-        <button id="btnCancelText" class="btn btn-reject">Batal</button>
-        <button id="btnSendText" class="btn btn-accept">📤 Kirim</button>
+        <button id="btnCancelText" class="btn btn-reject" type="button">Batal</button>
+        <button id="btnSendText" class="btn btn-accept" type="button">📤 Kirim</button>
       </div>
     </div>
   </div>
 
-  <!-- Overlay Teks Masuk — Auto-sizing dengan copy button pinned di bawah -->
-  <div id="textOverlay" class="modal hidden">
+  <!-- ===== Modal: Teks masuk ===== -->
+  <div id="textOverlay" class="modal hidden" role="dialog" aria-modal="true"
+       aria-labelledby="textOverlayTitle" aria-hidden="true">
     <div class="modal-content text-overlay" id="textOverlayContent">
       <div class="modal-header">
-        <h3>💬 Teks dari <span id="textOverlaySender">—</span></h3>
-        <button class="modal-x" id="btnCloseTextOverlay">✕</button>
+        <h3 id="textOverlayTitle">💬 Teks dari <span id="textOverlaySender">—</span></h3>
+        <button id="btnCloseTextOverlay" class="modal-x" type="button" aria-label="Tutup">✕</button>
       </div>
       <div id="textOverlayBody" class="text-body"></div>
       <div class="modal-actions">
-        <button id="btnCopyText" class="btn btn-accept">📋 Salin</button>
+        <button id="btnCopyText" class="btn btn-accept" type="button">📋 Salin</button>
       </div>
     </div>
   </div>
 
-  <!-- Hidden file inputs untuk file picker -->
+  <!-- ===== Modal: Sambung (URL + QR) ===== -->
+  <div id="connectModal" class="modal hidden connect-modal" role="dialog" aria-modal="true"
+       aria-labelledby="connectTitle" aria-hidden="true">
+    <div class="modal-content connect-panel">
+      <div class="modal-header">
+        <h3 id="connectTitle">📱 Sambung Perangkat</h3>
+        <button id="btnCloseConnect" class="modal-x" type="button" aria-label="Tutup">✕</button>
+      </div>
+      <p class="connect-intro">
+        Pindai QR ini dengan kamera HP, atau buka alamat di bawah. Pastikan kedua
+        perangkat di WiFi yang sama.
+      </p>
+      <div id="qrFrame" class="qr-frame"></div>
+      <ul id="urlList" class="url-list"></ul>
+    </div>
+  </div>
+
+  <!-- ===== Input file tersembunyi ===== -->
   <input type="file" id="mediaInput" accept="image/*,video/*" multiple style="display:none">
   <input type="file" id="fileInput" multiple style="display:none">
 
-  <script src="client.js"></script>
+  <!-- Library QR (MIT, vendored — tanpa CDN) -->
+  <script src="js/vendor/qrcode.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

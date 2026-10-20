@@ -7,6 +7,7 @@ const discovery = require('./discovery');
 const transfer = require('./transfer');
 const tailscale = require('./tailscale');
 const history = require('./history');
+const { listLANIPv4 } = require('./platform');
 
 // Generate device name from hostname atau environment variable
 const DEVICE_NAME = process.env.DEVICE_NAME || os.hostname() || 'LAN-Device';
@@ -25,8 +26,18 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // ===================== Discovery Routes =====================
 
+// URL LAN yang bisa dipakai perangkat lain untuk membuka halaman ini.
+// Dipakai panel "Sambung" di frontend untuk QR + teks salin.
+function getLanUrls() {
+  return listLANIPv4().map(({ name, address }) => ({
+    ip: address,
+    url: `http://${address}:${PORT}`,
+    label: name,
+  }));
+}
+
 app.get('/me', (req, res) => {
-  res.json({ deviceName: DEVICE_NAME });
+  res.json({ deviceName: DEVICE_NAME, urls: getLanUrls() });
 });
 
 app.get('/devices', (req, res) => {
@@ -211,9 +222,6 @@ app.post('/history/clear', (req, res) => {
 });
 
 // ===================== Server Startup =====================
-
-// Dipindah ke platform.js supaya sinkron dengan discovery.js.
-const { listLANIPv4 } = require('./platform');
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   const ips = listLANIPv4();

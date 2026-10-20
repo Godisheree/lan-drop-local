@@ -10,9 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Runtime:** Node.js (CommonJS)
 - **Server:** Express 5.x (static + REST API)
-- **Frontend:** Vanilla JS, HTML, CSS (no frameworks)
+- **Frontend:** Vanilla JS (ES modules, no build step), HTML, CSS (no frameworks)
 - **File upload (browser→server):** multer 2.x
-- **Discovery:** UDP broadcast (dgram) port 41234
+- **Discovery:** UDP broadcast (dgram) port 41234 (override: `DISCOVERY_PORT`)
 - **Transfer:** Raw TCP (net module) port 3001, custom length-prefixed frame protocol
 - **UI language:** Bahasa Indonesia
 - **Desktop packaging:** Electron + electron-builder (NSIS)
@@ -26,6 +26,32 @@ PORT=4000 TRANSFER_PORT=4001 node server/index.js   # second instance for testin
 npm run electron-dev               # desktop app via Electron
 npm run build-win                  # build NSIS installer -> dist/*.exe
 ```
+
+## Testing & QA
+
+```bash
+npm run check          # syntax check semua file JS (ESM-aware)
+npm run audit          # deteksi karakter asing yang tidak disengaja
+npm run smoke          # 3 viewport + cek error console (butuh server jalan)
+npm run verify:qr      # decode QR dengan OpenCV, cocokkan dengan URL di UI
+npm run e2e            # 2 instance, transfer file nyata dua arah
+```
+
+Detail tiap skrip ada di [docs/guides/qa-checklist.md](docs/guides/qa-checklist.md).
+
+## Documentation
+
+- [docs/README.md](docs/README.md) — peta dokumentasi
+- [docs/product/overview.md](docs/product/overview.md) — produk & pengguna
+- [docs/product/ux-principles.md](docs/product/ux-principles.md) — prinsip UI/UX yang mengikat
+- [docs/adr/](docs/adr/) — Architecture Decision Records
+- [docs/guides/frontend-architecture.md](docs/guides/frontend-architecture.md) — struktur frontend
+- [docs/guides/qa-checklist.md](docs/guides/qa-checklist.md) — checklist rilis UI
+- [CHANGELOG.md](CHANGELOG.md) — catatan perubahan per rilis
+- [NOTES-OPERATOR.md](NOTES-OPERATOR.md) — permintaan berulang dari owner
+
+**Aturan:** setiap perubahan UI menulis entri di CHANGELOG. Keputusan
+arsitektur yang sulit dibalik ditulis sebagai ADR baru.
 
 ## Architecture
 
@@ -54,7 +80,33 @@ TCP protocol over `net` module on port 3001. Custom **length-prefixed frame prot
 Detects Termux via `process.env.PREFIX` (more reliable than `os.platform()` on Android) and Windows via `process.platform === 'win32'`.
 
 ### Frontend (`public/`)
-Single-page app: polls devices every 2.5s, polls pending requests every 2s, polls transfer progress every 800ms. **Upload flow:** drag file to device card (or file picker button) → upload via multer `/transfer/upload` → request `/transfer/request` → poll `/transfer/status/:id` until accepted → trigger `/transfer/send-file` → poll `/transfer/progress/:id`. Receiver polls `/transfer/pending`, shows modal on new request, accept/reject via `/transfer/respond`.
+
+Single-page app, **ES modules tanpa build step** (`<script type="module">`).
+Struktur lengkap: [docs/guides/frontend-architecture.md](docs/guides/frontend-architecture.md).
+
+- `public/js/core/` — `api.js` (fetch wrapper), `state.js` (store tunggal),
+  `format.js` (format angka/waktu), `dom.js` (helper `el()`).
+- `public/js/features/` — satu berkas per fitur: `devices`, `transfers`, `send`,
+  `receive`, `text`, `history`, `connect` (panel Sambung/QR), `notify`, `theme`, `a11y`.
+- `public/css/` — `tokens.css` (design token + dark mode), `base.css`,
+  `components.css`, `views.css`.
+- `public/js/vendor/qrcode.js` — MIT, vendored untuk QR offline (ADR-0002).
+
+**Aturan penting:**
+- **Jangan** membangun HTML dari string berisi data dinamis. Render via `el()`
+  di `core/dom.js` — data peer (nama perangkat, IP) adalah input tak tepercaya.
+- Semua warna dari `tokens.css`. Warna literal di luar file itu = dark mode rusak.
+- Polling: devices 2,5s · pending 2s · texts 2s · history 5s · progress 800ms.
+  Berhenti saat tab disembunyikan.
+
+**Upload flow:** drag file ke device card (atau tombol file picker) → upload via
+multer `/transfer/upload` (XHR, ada progres) → request `/transfer/request` → poll
+`/transfer/status/:id` sampai accepted → trigger `/transfer/send-file` → poll
+`/transfer/progress/:id`. Receiver polls `/transfer/pending`, shows modal on new
+request, accept/reject via `/transfer/respond`.
+
+**Panel Sambung:** `GET /me` mengembalikan `{ deviceName, urls[] }`. Frontend
+merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 
 ### Electron Wrapper (`main.js` + `preload.js`)
 `main.js` requires Express server directly in the main process (not child process). Sets `LANDROP_UPLOAD_DIR` to `app.getPath('temp')/landrop-uploads/` before requiring server — critical for ASAR compatibility. `preload.js` is intentionally empty (UI communicates via HTTP fetch, same as browser). On close, `app.quit()` prevents orphan node.exe.
@@ -64,7 +116,7 @@ Single-page app: polls devices every 2.5s, polls pending requests every 2s, poll
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/devices` | GET | List discovered peers |
-| `/me` | GET | Own hostname |
+| `/me` | GET | Own hostname + LAN URLs (untuk panel Sambung/QR) |
 | `/transfer/upload` | POST | Browser file upload via multer |
 | `/transfer/request` | POST | Send transfer request (sender) |
 | `/transfer/pending` | GET | Incoming requests (receiver) |
@@ -84,6 +136,8 @@ Single-page app: polls devices every 2.5s, polls pending requests every 2s, poll
 - **Hardlink/symlink fallback:** multer saves files without extension, so transcoding creates temp link with correct extension before passing to ffmpeg.
 - **requestId is per-side:** sender and receiver generate their own requestIds for the same transfer — never sync them across devices. Match incoming requests on the receiver via `batchId` + `fileName`.
 - **`{ end: false }`** pipe + resume: on resume, sender pipes a partial read stream (`{start: offset}`) of the full-size file; receiver appends to `.landrop-part` at the same offset.
+- **Progress 404 is transient, not fatal.** Entri `transferProgress` baru dibuat saat frame `file-start` tiba. Di sisi penerima ada jendela antara "diterima" dan "file mulai mengalir" yang progresnya belum ada. Frontend membedakan lewat `state.sawProgress`: 404 sebelum progres pernah terlihat = tunggu; 404 sesudahnya = transfer benar-benar hilang.
+- **Discovery port bisa diubah** lewat `DISCOVERY_PORT` (default 41234), dan peer bisa didaftarkan manual lewat `LANDROP_PEERS` (format `Nama@ip:port@transferPort` dipisah koma). Dipakai untuk uji dua instance di satu host, dan untuk jaringan yang memblokir UDP broadcast.
 
 ## Common Issues
 

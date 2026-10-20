@@ -10,5 +10,7 @@ dist/
 dist-*/
 out/
 
+# Artifact test (screenshot, report, QR render) — hasil sementara, bukan sumber.
+.tmp/
 
 electron.zip

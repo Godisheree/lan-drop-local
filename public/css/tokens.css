@@ -1,0 +1,174 @@
+/* ==========================================================================
+   Design Token — sumber tunggal semua warna, spacing, radius, dan shadow.
+   Dark mode menimpa nilai token, bukan selector.
+   Lihat docs/adr/0003-dark-mode-via-tokens.md
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* --- Latar ------------------------------------------------------- */
+  --bg-canvas: #F7F7F9;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-sunken: #F0F1F4;
+  --bg-overlay: rgba(20, 22, 28, 0.42);
+
+  /* --- Teks -------------------------------------------------------- */
+  /* Rasio kontras terhadap --bg-surface: */
+  /* --text-primary   16,1:1  */
+  /* --text-secondary  5,96:1  */
+  /* --text-muted     4,62:1  */
+  --text-primary: #16181D;
+  --text-secondary: #5A5F6B;
+  --text-muted: #6E7480;
+  --text-on-accent: #FFFFFF;
+
+  /* --- Aksen -------------------------------------------------------- */
+  /* --accent        dekoratif (progress bar, focus ring, titik) */
+  /* --accent-strong 4,63:1 di --bg-surface, dan 4,63:1 teks putih di atasnya */
+  --accent: #5B8DEF;
+  --accent-strong: #3B6FE0;
+  --accent-soft: rgba(91, 141, 239, 0.12);
+  --accent-softer: rgba(91, 141, 239, 0.07);
+
+  /* --- Status ------------------------------------------------------- */
+  --success: #34C759;
+  --success-text: #1B873F;
+  --success-soft: rgba(52, 199, 89, 0.12);
+  --danger: #FF3B30;
+  --danger-text: #C62828;
+  --danger-soft: rgba(255, 59, 48, 0.10);
+  --warning: #FF9500;
+  --warning-text: #9A6400;
+  --warning-soft: rgba(255, 149, 0, 0.14);
+
+  /* --- Garis & bayangan --------------------------------------------- */
+  --border-subtle: rgba(22, 24, 29, 0.08);
+  --border-strong: rgba(22, 24, 29, 0.16);
+  --shadow-card: 0 1px 2px rgba(16, 18, 24, 0.05), 0 4px 12px rgba(16, 18, 24, 0.04);
+  --shadow-card-hover: 0 4px 8px rgba(16, 18, 24, 0.07), 0 12px 28px rgba(16, 18, 24, 0.09);
+  --shadow-modal: 0 24px 64px rgba(16, 18, 24, 0.18), 0 8px 20px rgba(16, 18, 24, 0.08);
+  --shadow-popover: 0 8px 32px rgba(16, 18, 24, 0.14);
+
+  /* --- Radius -------------------------------------------------------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* --- Spacing (skala 4px) ------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* --- Tipografi ------------------------------------------------------ */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Segoe UI Emoji", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --text-xs: 0.72rem;
+  --text-sm: 0.8rem;
+  --text-base: 0.9rem;
+  --text-md: 1rem;
+  --text-lg: 1.1rem;
+  --text-xl: 1.35rem;
+
+  /* --- Gerak ----------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+
+  /* --- Tata letak ------------------------------------------------------- */
+  --header-height: 60px;
+  --content-max: 1180px;
+  --tap-min: 44px;
+}
+
+/* ==========================================================================
+   Dark mode
+   Override(token) alih-alih override(selector) — lihat ADR-0003.
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) {
+    color-scheme: dark;
+
+    --bg-canvas: #101318;
+    --bg-surface: #181C23;
+    --bg-elevated: #1F242D;
+    --bg-sunken: #0B0D11;
+    --bg-overlay: rgba(0, 0, 0, 0.6);
+
+    --text-primary: #F2F4F8;
+    --text-secondary: #A8B0BF;
+    --text-muted: #8B94A5;
+    --text-on-accent: #0B0D11;
+
+    --accent: #7AA5F5;
+    --accent-strong: #8FB6FF;
+    --accent-soft: rgba(122, 165, 245, 0.16);
+    --accent-softer: rgba(122, 165, 245, 0.09);
+
+    --success: #3DD866;
+    --success-text: #5DD68A;
+    --success-soft: rgba(61, 216, 102, 0.14);
+    --danger: #FF6B60;
+    --danger-text: #FF8A80;
+    --danger-soft: rgba(255, 107, 96, 0.14);
+    --warning: #FFB020;
+    --warning-text: #FFB84D;
+    --warning-soft: rgba(255, 176, 32, 0.16);
+
+    --border-subtle: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.20);
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+    --shadow-card-hover: 0 4px 8px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.35);
+    --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.4);
+    --shadow-popover: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Mode gelap yang dipilih manual (menang atas preferensi OS). */
+:root.theme-dark {
+  color-scheme: dark;
+
+  --bg-canvas: #101318;
+  --bg-surface: #181C23;
+  --bg-elevated: #1F242D;
+  --bg-sunken: #0B0D11;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+
+  --text-primary: #F2F4F8;
+  --text-secondary: #A8B0BF;
+  --text-muted: #8B94A5;
+  --text-on-accent: #0B0D11;
+
+  --accent: #7AA5F5;
+  --accent-strong: #8FB6FF;
+  --accent-soft: rgba(122, 165, 245, 0.16);
+  --accent-softer: rgba(122, 165, 245, 0.09);
+
+  --success: #3DD866;
+  --success-text: #5DD68A;
+  --success-soft: rgba(61, 216, 102, 0.14);
+  --danger: #FF6B60;
+  --danger-text: #FF8A80;
+  --danger-soft: rgba(255, 107, 96, 0.14);
+  --warning: #FFB020;
+  --warning-text: #FFB84D;
+  --warning-soft: rgba(255, 176, 32, 0.16);
+
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.20);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 4px 8px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
