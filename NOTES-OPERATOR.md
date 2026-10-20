@@ -57,12 +57,24 @@ minta persetujuan, tidak perlu interaksi tambahan.
 
 ## Status/task terakhir
 
-LAN DROP UI/UX overhaul Fase 0-3 — selesai, ter-commit (`428249f`),
-laporan terkonfirmasi `delivery-ack`.
+LAN DROP **Fase 4 selesai** — shortcut keyboard, thumbnail & galeri, PWA, dan
+hardening mobile. Ter-commit (`8f99540` + `bd212a8`), laporan terkonfirmasi
+`delivery-ack`.
+
+Fase 0-3 (UI/UX overhaul) juga sudah selesai sebelumnya (`428249f`).
+
+**Yang sengaja ditunda ke Fase 5:** SSE untuk progres transfer. Alasannya
+(biaya vs manfaat, dan risiko event hilang pada list endpoint) ditulis di
+`docs/adr/0006-sse-progress-dengan-fallback-polling.md` — ADR-nya belum
+dibuat, tapi keputusannya sudah diambil.
 
 Referensi tes LAN DROP:
 - `npm run check` — sintaks semua file JS
 - `npm run audit` — karakter asing
 - `npm run smoke` — 3 viewport, cek error console
 - `npm run verify:qr` — QR di-decode OpenCV
-- `npm run e2e` — 2 instance, transfer nyata (17/17 lolos)
+- `npm run verify:pwa` — manifest, ikon, service worker
+- `npm run e2e` — 2 instance, transfer nyata
+- `npm run icons` — regenerate ikon PWA
+
+Panduan pasang ke layar utama: `docs/guides/install-pwa.md`
