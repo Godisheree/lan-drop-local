@@ -374,6 +374,149 @@ async function main() {
     }
     check('Teks: terkirim & tampil di penerima', textReceived);
 
+    // --- Shortcut keyboard ---
+    // 1. Enter menerima permintaan masuk.
+    await pageA.cdp.eval(`(async () => {
+      const mod = await import('/js/features/send.js');
+      const devices = await (await fetch('/devices')).json();
+      const peer = devices[0];
+      const chunk = new Uint8Array(256 * 1024);
+      await mod.sendBatch(
+        { ip: peer.ip, port: peer.transferPort, targetName: peer.deviceName },
+        [new File([chunk], 'e2e-enter.bin')]
+      );
+    })()`);
+
+    let enterAccepted = false;
+    for (let i = 0; i < 40; i++) {
+      const open = await pageB.cdp.eval(
+        `!document.getElementById('requestModal').classList.contains('hidden')`
+      );
+      if (open) {
+        // Enter pada elemen non-tombol di dalam modal → terima.
+        await pageB.cdp.eval(`(() => {
+          const modal = document.getElementById('requestModal');
+          const target = document.getElementById('modalInfo');
+          target.focus();
+          target.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Enter', code: 'Enter', bubbles: true, cancelable: true
+          }));
+        })()`);
+        enterAccepted = true;
+        break;
+      }
+      await sleep(300);
+    }
+    check('Shortcut: Enter menerima permintaan', enterAccepted);
+
+    // Tunggu status transferring/completed di sisi penerima.
+    let enterProgressed = false;
+    for (let i = 0; i < 30; i++) {
+      const status = await pageB.cdp.eval(
+        `(() => {
+          const item = Array.from(document.querySelectorAll('#transferList .transfer-item'))
+            .find(el => el.textContent.includes('e2e-enter'));
+          return item ? item.dataset.status : null;
+        })()`
+      );
+      if (status && status !== 'waiting') { enterProgressed = true; break; }
+      await sleep(400);
+    }
+    check('Shortcut: Enter memulai transfer di penerima', enterProgressed);
+
+    // 2. Esc menolak permintaan.
+    await pageA.cdp.eval(`(async () => {
+      const mod = await import('/js/features/send.js');
+      const devices = await (await fetch('/devices')).json();
+      const peer = devices[0];
+      const chunk = new Uint8Array(256 * 1024);
+      await mod.sendBatch(
+        { ip: peer.ip, port: peer.transferPort, targetName: peer.deviceName },
+        [new File([chunk], 'e2e-esc.bin')]
+      );
+    })()`);
+
+    let escRejected = false;
+    for (let i = 0; i < 40; i++) {
+      const open = await pageB.cdp.eval(
+        `!document.getElementById('requestModal').classList.contains('hidden')`
+      );
+      if (open) {
+        await pageB.cdp.eval(`(() => {
+          document.getElementById('requestModal').dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Escape', code: 'Escape', bubbles: true, cancelable: true
+          }));
+        })()`);
+        escRejected = true;
+        break;
+      }
+      await sleep(300);
+    }
+
+    // Tunggu status di sisi pengirim jadi "ditolak".
+    let rejectSeen = false;
+    for (let i = 0; i < 30; i++) {
+      const status = await pageA.cdp.eval(
+        `(() => {
+          const item = Array.from(document.querySelectorAll('#transferList .transfer-item'))
+            .find(el => el.textContent.includes('e2e-esc'));
+          return item ? item.dataset.status : null;
+        })()`
+      );
+      if (status === 'rejected') { rejectSeen = true; break; }
+      await sleep(400);
+    }
+    check('Shortcut: Esc menolak permintaan', escRejected && rejectSeen);
+
+    // 3. Ctrl+Enter mengirim teks.
+    // Tutup dulu overlay teks yang masih terbuka dari pengujian sebelumnya.
+    // Kalau tidak, teks baru masuk antrian (perilaku yang benar — teks yang
+    // sedang dibaca tidak boleh tertimpa) dan tidak langsung tampil.
+    await pageB.cdp.eval(`(() => {
+      const o = document.getElementById('textOverlay');
+      if (!o.classList.contains('hidden')) {
+        document.getElementById('btnCloseTextOverlay').click();
+      }
+      return 'closed';
+    })()`);
+    await sleep(600);
+
+    await pageA.cdp.eval(`(() => {
+      const btn = document.querySelector('.btn-text-pick');
+      if (btn) btn.click();
+    })()`);
+    await sleep(500);
+
+    const composerOpen = await pageA.cdp.eval(
+      `!document.getElementById('textComposerModal').classList.contains('hidden')`
+    );
+
+    let ctrlEnterSent = false;
+    if (composerOpen) {
+      await pageA.cdp.eval(`(() => {
+        const ta = document.getElementById('textInput');
+        ta.value = 'Teks via Ctrl+Enter';
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Enter', code: 'Enter', ctrlKey: true, bubbles: true, cancelable: true
+        }));
+      })()`);
+      await sleep(500);
+
+      for (let i = 0; i < 30; i++) {
+        const shown = await pageB.cdp.eval(
+          `(() => {
+            const o = document.getElementById('textOverlay');
+            if (o.classList.contains('hidden')) return null;
+            return document.getElementById('textOverlayBody').textContent;
+          })()`
+        );
+        if (shown === 'Teks via Ctrl+Enter') { ctrlEnterSent = true; break; }
+        await sleep(500);
+      }
+    }
+    check('Shortcut: Ctrl+Enter mengirim teks', ctrlEnterSent);
+
     // --- Skenario cancel: kirim file besar, batalkan dari sisi penerima ---
     await pageA.cdp.eval(`(async () => {
       const mod = await import('/js/features/send.js');

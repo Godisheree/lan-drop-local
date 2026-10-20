@@ -4,34 +4,35 @@
  * Menggantikan setupTextSend() / pollReceivedTexts() / showTextOverlay() dari client.js lama.
  */
 
-import { el, clear, byId } from '../core/dom.js';
+import { el, byId } from '../core/dom.js';
 import { getState, setState } from '../core/state.js';
 import { showToast, notify } from './notify.js';
 import { openModal, closeModal } from './a11y.js';
 
-/** @type {(() => void)[]} */
-const closeHandlers = [];
-
-/**
- * Daftarkan fungsi yang dipanggil saat modal ditutup.
- * @param {() => void} fn
- */
-function onClose(fn) {
-  closeHandlers.push(fn);
-}
-
-function runCloseHandlers() {
-  while (closeHandlers.length) {
-    const fn = closeHandlers.pop();
-    try {
-      fn();
-    } catch (_) {}
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Composer
 // ---------------------------------------------------------------------------
+
+/** @type {((target: Object, text: string) => void) | null} */
+let textSendHandler = null;
+
+/**
+ * Kirim isi composer.
+ *
+ * Dipakai baik oleh tombol "Kirim" maupun shortcut global Ctrl+Enter —
+ * satu jalur, supaya tidak mungkin kirim dua kali.
+ */
+export function submitComposer() {
+  const textarea = byId('textInput');
+  const text = textarea.value;
+  const target = getState().textTarget;
+  if (!text.trim() || !target) return false;
+  if (!textSendHandler) return false;
+
+  textSendHandler(target, text);
+  hideComposer();
+  return true;
+}
 
 /**
  * Setup composer teks.
@@ -40,7 +41,8 @@ function runCloseHandlers() {
 export function setupTextComposer(handlers) {
   const textarea = byId('textInput');
   const charCount = byId('charCount');
-  const targetName = byId('textTargetName');
+
+  textSendHandler = handlers.onSend;
 
   const updateCount = () => {
     const count = textarea.value.length;
@@ -49,32 +51,10 @@ export function setupTextComposer(handlers) {
 
   textarea.addEventListener('input', updateCount);
 
-  // Ctrl+Enter / Cmd+Enter untuk kirim cepat.
-  textarea.addEventListener('keydown', (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault();
-      submit();
-    }
-  });
-
-  const submit = () => {
-    const text = textarea.value;
-    const target = getState().textTarget;
-    if (!text.trim() || !target) return;
-
-    handlers.onSend(target, text);
-    hideComposer();
-  };
-
-  byId('btnSendText').addEventListener('click', submit);
+  byId('btnSendText').addEventListener('click', submitComposer);
   byId('btnCancelText').addEventListener('click', hideComposer);
   byId('btnCloseTextComposer').addEventListener('click', hideComposer);
-  onClose(() => {
-    setState({ textTarget: null });
-  });
 }
-
-let composerClose = null;
 
 /**
  * Buka composer untuk target tertentu.
@@ -99,7 +79,7 @@ export function openComposer(target) {
   textarea.value = '';
   byId('charCount').textContent = '';
 
-  composerClose = openModal('textComposerModal', {
+  openModal('textComposerModal', {
     onEscape: () => {
       hideComposer();
     },
@@ -113,7 +93,6 @@ export function openComposer(target) {
  */
 export function hideComposer() {
   closeModal('textComposerModal');
-  runCloseHandlers();
   setState({ textTarget: null });
 
   const state = getState();

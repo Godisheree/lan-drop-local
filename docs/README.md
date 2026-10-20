@@ -36,5 +36,6 @@ keputusan penting punya **ADR**, tiap alur punya **panduan**, dan perubahan puny
 | Area | Status |
 |---|---|
 | Fungsionalitas inti (transfer, resume, riwayat, teks) | stabil |
-| UI/UX overhaul (Fase 0–3) | sedang dikerjakan |
-| PWA / dark-mode-aware notifikasi native | belum |
+| UI/UX overhaul (Fase 0–3) | selesai |
+| Fase 4: shortcut keyboard, thumbnail, PWA, hardening mobile | sedang dikerjakan |
+| SSE untuk progres transfer (pengganti polling) | rencana — lihat [ADR-0006](adr/0006-sse-progress-dengan-fallback-polling.md) |

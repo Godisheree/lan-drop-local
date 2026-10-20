@@ -13,20 +13,20 @@ import {
   fetchDevices, fetchMe, fetchHistory, fetchPending, fetchReceivedTexts,
 } from './core/api.js';
 
-import { renderDevices, setupDragDrop, setupFileInputs, openFilePicker } from './features/devices.js';
+import { renderDevices, setupDragDrop, setupFileInputs, openFilePicker, toTransferTarget } from './features/devices.js';
 import { setLanUrls, openConnectPanel, closeConnectPanel } from './features/connect.js';
 import {
   addTransferItem, updateTransferItem, cancelTransfer, retryTransfer, stopProgress,
 } from './features/transfers.js';
 import { sendBatch, sendText } from './features/send.js';
 import {
-  setupTextComposer, openComposer, setupTextOverlay, pollReceivedTexts,
+  setupTextComposer, openComposer, setupTextOverlay, pollReceivedTexts, submitComposer,
 } from './features/text.js';
 import { setupRequestModal, pollPending } from './features/receive.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
 import { initLiveRegion, showToast, clearBadge } from './features/notify.js';
-import { initShortcuts, registerShortcut } from './features/a11y.js';
+import { initShortcuts, registerShortcut, closeTopModal, hasOpenModal } from './features/a11y.js';
 
 // ---------------------------------------------------------------------------
 // Polling
@@ -85,8 +85,10 @@ async function pollDevices() {
 const deviceHandlers = {
   onPickMedia: (device) => openFilePicker(device, 'media'),
   onPickFile: (device) => openFilePicker(device, 'file'),
-  onPickText: (device) => openComposer(device),
+  // Composer teks juga harus pakai port TRANSFER, bukan port HTTP.
+  onPickText: (device) => openComposer(toTransferTarget(device)),
   onDrop: (dataset, files) => {
+    // dataset.port sudah berisi port transfer (di-set saat kartu dibangun).
     sendBatch(
       {
         ip: dataset.ip,
@@ -342,12 +344,23 @@ async function init() {
   setupDragDrop(deviceHandlers);
   setupFileInputs(deviceHandlers);
 
-  // Shortcut: Escape menutup overlay, Ctrl+Shift+? bukan apa-apa — placeholder.
+  // Shortcut global. Satu sumber kebenaran: a11y.js menangani Escape
+  // (menutup modal teratas) dan Enter/Ctrl+Enter per konteks.
+  //
+  // - Escape  : tutup modal teratas (kalau ada), kalau tidak, tutup overlay teks
+  // - Ctrl+Enter : kirim teks dari composer
   registerShortcut('escape', () => {
+    if (closeTopModal()) return;
+    // Tanpa modal terbuka, Escape menutup overlay teks yang sedang dibaca.
     const overlay = maybeById('textOverlay');
     if (overlay && !overlay.classList.contains('hidden')) {
       import('./features/text.js').then((m) => m.hideTextOverlay());
     }
+  });
+
+  registerShortcut('ctrl+enter', () => {
+    if (!hasOpenModal()) return;
+    submitComposer();
   });
 
   initRippleBackground();

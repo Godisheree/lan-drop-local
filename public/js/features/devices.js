@@ -16,6 +16,25 @@ function viaLabel(via) {
 }
 
 /**
+ * Normalisasi objek perangkat menjadi "target transfer".
+ *
+ * PENTING: `device.port` adalah port HTTP server (3000), sedangkan transfer
+ * file/teks lewat TCP memakai `device.transferPort` (3001). Karena itu setiap
+ * tempat yang mau mengirim ke peer WAJIB lewat helper ini — kalau tidak,
+ * koneksi nyasar ke port HTTP dan transfer menggantung.
+ *
+ * @param {Object} device
+ * @returns {{ip: string, port: number, targetName: string}}
+ */
+export function toTransferTarget(device) {
+  return {
+    ip: device.ip,
+    port: device.transferPort || device.port + 1,
+    targetName: device.deviceName || '',
+  };
+}
+
+/**
  * Bangun elemen kartu perangkat.
  * @param {Object} device
  * @param {Object} handlers
@@ -23,6 +42,7 @@ function viaLabel(via) {
  */
 function buildCard(device, handlers) {
   const key = `${device.ip}:${device.port}`;
+  const target = toTransferTarget(device);
 
   const header = el('div', { class: 'device-header' }, [
     el('span', { class: 'indicator', 'aria-hidden': 'true' }),
@@ -41,19 +61,19 @@ function buildCard(device, handlers) {
     el('button', {
       class: 'btn-file-pick btn-media-pick',
       type: 'button',
-      dataset: { action: 'media', ip: device.ip, port: device.transferPort, name: device.deviceName },
+      dataset: { action: 'media', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickMedia(device),
     }, '📷 Foto/Video'),
     el('button', {
       class: 'btn-file-pick',
       type: 'button',
-      dataset: { action: 'file', ip: device.ip, port: device.transferPort, name: device.deviceName },
+      dataset: { action: 'file', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickFile(device),
     }, '📁 File Lain'),
     el('button', {
       class: 'btn-file-pick btn-text-pick',
       type: 'button',
-      dataset: { action: 'text', ip: device.ip, port: device.transferPort, name: device.deviceName },
+      dataset: { action: 'text', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickText(device),
     }, '✏️ Teks'),
   ]);
@@ -62,9 +82,9 @@ function buildCard(device, handlers) {
     class: 'device-card',
     dataset: {
       deviceId: key,
-      ip: device.ip,
-      port: device.transferPort,
-      deviceName: device.deviceName || '',
+      ip: target.ip,
+      port: target.port,
+      deviceName: target.targetName,
     },
   }, [header, meta, dropHint, actions]);
 }
@@ -214,7 +234,7 @@ export function setupFileInputs(handlers) {
  * @param {'media'|'file'} kind
  */
 export function openFilePicker(device, kind) {
-  setState({ pendingTarget: device });
+  setState({ pendingTarget: toTransferTarget(device) });
   const input = byId(kind === 'media' ? 'mediaInput' : 'fileInput');
   input.click();
 }

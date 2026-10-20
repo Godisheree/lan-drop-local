@@ -26,27 +26,22 @@ export function getFocusable(container) {
 }
 
 /**
- * Pasang focus trap + Escape handler pada sebuah dialog.
+ * Pasang focus trap pada sebuah dialog.
  *
  * Fokus dipindah ke dalam dialog saat dibuka, dikembalikan ke elemen pemicu
  * saat ditutup, dan Tab memutar di dalam dialog (tidak keluar ke background).
  *
+ * Escape TIDAK ditangani di sini — itu urusan satu sumber kebenaran global
+ * (`closeTopModal`), supaya tidak ada dua penangan Escape yang saling
+ * berebut event.
+ *
  * @param {HTMLElement} dialog - elemen `.modal-content`
- * @param {Object} [opts]
- * @param {() => void} [opts.onEscape] - callback saat user menekan Escape
  * @returns {() => void} fungsi untuk melepas trap
  */
-export function trapFocus(dialog, opts = {}) {
-  const { onEscape } = opts;
+export function trapFocus(dialog) {
   const previouslyFocused = document.activeElement;
 
   const onKeydown = (event) => {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      if (onEscape) onEscape();
-      return;
-    }
-
     if (event.key !== 'Tab') return;
 
     const focusable = getFocusable(dialog);
@@ -83,6 +78,63 @@ export function trapFocus(dialog, opts = {}) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Stack modal
+// ---------------------------------------------------------------------------
+
+/**
+ * Modal yang sedang terbuka, dari yang paling bawah ke yang paling atas.
+ * Satu sumber kebenaran untuk "modal mana yang harus kena Escape".
+ * @type {Array<{modal: HTMLElement, onEscape: (() => void)|null, release: () => void}>}
+ */
+const modalStack = [];
+
+/**
+ * Lepaskan satu modal dari stack + kembalikan fokus.
+ * @param {HTMLElement} modal
+ */
+function hideModalElement(modal) {
+  if (!modal) return;
+
+  const index = modalStack.findIndex((entry) => entry.modal === modal);
+  if (index !== -1) {
+    const [entry] = modalStack.splice(index, 1);
+    entry.release();
+  }
+
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+
+  if (!document.querySelector('.modal:not(.hidden)')) {
+    document.body.classList.remove('modal-open');
+  }
+}
+
+/**
+ * Tutup modal teratas. Dipakai oleh shortcut Escape global.
+ * @returns {boolean} true kalau ada modal yang ditutup
+ */
+export function closeTopModal() {
+  const top = modalStack[modalStack.length - 1];
+  if (!top) return false;
+
+  if (top.onEscape) {
+    //=onEscape biasanya sudah menutup modalnya sendiri.
+    top.onEscape();
+  } else {
+    hideModalElement(top.modal);
+  }
+  return true;
+}
+
+/**
+ * Ada modal yang sedang terbuka?
+ * @returns {boolean}
+ */
+export function hasOpenModal() {
+  return modalStack.length > 0;
+}
+
 /**
  * Buka modal: tampilkan, pasang focus trap, tandai pemicu.
  *
@@ -100,21 +152,15 @@ export function openModal(modalId, opts = {}) {
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
 
-  const release = trapFocus(content, { onEscape: opts.onEscape });
+  const release = trapFocus(content);
+  modalStack.push({ modal, onEscape: opts.onEscape || null, release });
 
   if (opts.initialFocus) {
     const target = opts.initialFocus;
     if (target) target.focus();
   }
 
-  return () => {
-    release();
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
-    if (!document.querySelector('.modal:not(.hidden)')) {
-      document.body.classList.remove('modal-open');
-    }
-  };
+  return () => hideModalElement(modal);
 }
 
 /**
@@ -122,13 +168,7 @@ export function openModal(modalId, opts = {}) {
  * @param {string} modalId
  */
 export function closeModal(modalId) {
-  const modal = maybeById(modalId);
-  if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
-  if (!document.querySelector('.modal:not(.hidden)')) {
-    document.body.classList.remove('modal-open');
-  }
+  hideModalElement(maybeById(modalId));
 }
 
 /**
@@ -148,13 +188,42 @@ export function registerShortcut(combo, handler) {
 }
 
 /**
+ * Apakah event ini originates dari pengetikan teks?
+ *
+ * Hanya kunci printable biasa (mis. "a", "1", " ") yang diabaikan di dalam
+ * field input. Escape dan Ctrl+Enter tetap boleh lewat — justru di situlah
+ * pengguna meng-harapkan keduanya bekerja.
+ *
+ * @param {KeyboardEvent} event
+ * @returns {boolean}
+ */
+function isTypingInField(event) {
+  const target = event.target;
+  if (!target) return false;
+
+  const isField =
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.isContentEditable === true;
+  if (!isField) return false;
+
+  // Kunci printable biasa tanpa modifier = ketik.
+  const isPrintable = event.key.length === 1;
+  const hasModifier = event.ctrlKey || event.metaKey || event.altKey;
+
+  return isPrintable && !hasModifier;
+}
+
+/**
  * Pasang listener shortcut global. Panggil sekali saat boot.
  */
 export function initShortcuts() {
   document.addEventListener('keydown', (event) => {
-    // Jangan memicu shortcut saat mengetik di input.
-    const tag = document.activeElement?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    // Saat sedang mengetik, abaikan kunci printable biasa saja.
+    if (isTypingInField(event)) return;
+
+    // Jangan ganggu IME ( sedang composing ).
+    if (event.isComposing) return;
 
     const parts = [];
     if (event.ctrlKey || event.metaKey) parts.push('ctrl');

@@ -117,6 +117,9 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 |---|---|---|
 | `/devices` | GET | List discovered peers |
 | `/me` | GET | Own hostname + LAN URLs (untuk panel Sambung/QR) |
+| `/manifest.webmanifest` | GET | PWA manifest |
+| `/sw.js` | GET | Service worker (hanya dipakai di secure context) |
+| `/thumbnail/:id` | GET | Thumbnail foto/video dari file yang sudah diterima |
 | `/transfer/upload` | POST | Browser file upload via multer |
 | `/transfer/request` | POST | Send transfer request (sender) |
 | `/transfer/pending` | GET | Incoming requests (receiver) |
@@ -135,6 +138,7 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 - **Cached ffmpeg detection:** `checkFfmpeg()` runs once, caches result in `_ffmpegPath` module variable (undefined=unchecked, false=not found, string=path).
 - **Hardlink/symlink fallback:** multer saves files without extension, so transcoding creates temp link with correct extension before passing to ffmpeg.
 - **requestId is per-side:** sender and receiver generate their own requestIds for the same transfer — never sync them across devices. Match incoming requests on the receiver via `batchId` + `fileName`.
+- **`device.port` = port HTTP, `device.transferPort` = port TCP.** Semua jalur kirim wajib lewat `toTransferTarget()` di `public/js/features/devices.js` — kalau tidak, koneksi nyasar ke port HTTP (3000) dan transfer menggantung.
 - **`{ end: false }`** pipe + resume: on resume, sender pipes a partial read stream (`{start: offset}`) of the full-size file; receiver appends to `.landrop-part` at the same offset.
 - **Progress 404 is transient, not fatal.** Entri `transferProgress` baru dibuat saat frame `file-start` tiba. Di sisi penerima ada jendela antara "diterima" dan "file mulai mengalir" yang progresnya belum ada. Frontend membedakan lewat `state.sawProgress`: 404 sebelum progres pernah terlihat = tunggu; 404 sesudahnya = transfer benar-benar hilang.
 - **Discovery port bisa diubah** lewat `DISCOVERY_PORT` (default 41234), dan peer bisa didaftarkan manual lewat `LANDROP_PEERS` (format `Nama@ip:port@transferPort` dipisah koma). Dipakai untuk uji dua instance di satu host, dan untuk jaringan yang memblokir UDP broadcast.

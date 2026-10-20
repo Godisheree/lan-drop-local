@@ -132,18 +132,43 @@ function copyUrl(url, button) {
 }
 
 /**
+ * Daftar shortcut keyboard yang tersedia.
+ * Dipakai untuk panel Sambung — supaya pengguna tahu apa yang bisa dipakai,
+ * bukan harus menebak.
+ */
+const SHORTCUTS = [
+  { keys: 'Enter', label: 'Terima permintaan masuk' },
+  { keys: 'Esc', label: 'Tolak / tutup jendela' },
+  { keys: 'Ctrl+Enter', label: 'Kirim teks' },
+];
+
+/**
+ * Render daftar shortcut di panel Sambung.
+ */
+function renderShortcuts() {
+  const list = document.getElementById('shortcutList');
+  if (!list) return;
+
+  clear(list);
+  for (const shortcut of SHORTCUTS) {
+    list.appendChild(el('li', { class: 'shortcut-row' }, [
+      el('kbd', { class: 'shortcut-key', text: shortcut.keys }),
+      el('span', { class: 'shortcut-label', text: shortcut.label }),
+    ]));
+  }
+}
+
+/**
  * Buka panel Sambung.
  */
 export function openConnectPanel() {
   renderConnectPanel();
-  const close = openModal('connectModal', {
+  renderShortcuts();
+  return openModal('connectModal', {
     onEscape: () => {
-      close();
-      closeModal('connectModal');
+      closeConnectPanel();
     },
   });
-  byId('connectModal').dataset.onClose = '1';
-  return close;
 }
 
 /**

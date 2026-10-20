@@ -233,9 +233,25 @@ export async function rejectCurrent() {
 }
 
 /**
- * Setup tombol modal.
+ * Setup tombol modal + shortcut keyboard.
  */
 export function setupRequestModal() {
   byId('btnAccept').addEventListener('click', acceptCurrent);
   byId('btnReject').addEventListener('click', rejectCurrent);
+
+  // Enter menerima permintaan — tapi jangan menabrak perilaku native tombol.
+  //
+  // Kalau fokus sudah di tombol "Terima"/"Tolak", Enter akan memicu klik
+  // native browser. Kita biarkan itu terjadi: Enter di "Tolak" harus menolak,
+  // bukan menerima. Handler di sini hanya menangani kasus fokusnya di
+  // elemen non-tombol (mis. teks di dalam modal).
+  const modal = byId('requestModal');
+  modal.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    if (event.isComposing) return;
+    if (event.target && event.target.closest('button')) return;
+
+    event.preventDefault();
+    acceptCurrent();
+  });
 }

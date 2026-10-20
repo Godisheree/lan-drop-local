@@ -7,6 +7,63 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Added — Fase 4 (shortcut keyboard, thumbnail, PWA, hardening mobile)
+
+#### Fixed
+
+- **Tombol "Foto/Video", "File Lain", dan "Teks" kirim ke port yang salah.**
+  `device.port` adalah port HTTP server (3000), sedangkan transfer lewat TCP
+  memakai `device.transferPort` (3001). Semua jalur kirim kini lewat
+  `toTransferTarget()` sehingga port yang dipakai selalu port transfer.
+  Dampulnya: kirim file lewat tombol file-picker dan kirim teks lewat UI
+  sebelumnya bisa nyasar ke port HTTP dan menggantung. (Hanya drag-and-drop
+  yang sebelumnya benar.)
+- **Escape punya dua penangan.** Focus trap dan shortcut global sama-sama
+  listened ke Escape; yang global tidak pernah terpakai karena focus trap
+  memblokir propagasi. Sekarang satu sumber kebenaran: stack modal di
+  `a11y.js`, `closeTopModal()` menutup modal teratas.
+- **Escape & Ctrl+Enter mati di textarea.** `initShortcuts()` dulu mengabaikan
+  semua shortcut saat fokus di input. Sekarang hanya kunci printable biasa yang
+  diabaikan — Escape dan Ctrl+Enter tetap bekerja.
+- **Mekanisme `onClose` di text.js rapuh.** Handler-nya di-pop saat dipanggil,
+  jadi hanya berjalan sekali. Diganti `submitComposer()` yang eksplisit.
+
+#### Added
+
+- **Shortcut keyboard.** `Enter` menerima permintaan masuk, `Esc` menolak atau
+  menutup jendela, `Ctrl+Enter` mengirim teks. Daftar shortcut tampil di panel
+  Sambung, dan tombol terkait punya `aria-keyshortcuts`.
+- **Pratinjau foto & video.** Thumbnail dibuat di server dari file yang sudah
+  tersimpan memakai ffmpeg yang sudah ada (tanpa dependency baru), di-cache,
+  lalu disajikan lewat `GET /thumbnail/:id`.
+- **Galeri media.** Grid foto/video terbaru yang diterima.
+- **Manifest + ikon aplikasi.** `manifest.webmanifest`, ikon 192/512/maskable,
+  `apple-touch-icon` PNG, dan meta untuk iOS.
+- **Hardening mobile.** Layar tidak mati saat transfer berjalan
+  (`navigator.wakeLock`), peringatan sebelum menutup tab saat transfer aktif,
+  dan pemeriksaan ruang disk sebelum menerima file besar.
+- **Dokumentasi baru:** ADR-0004 (PWA di konteks HTTP LAN) + panduan
+  install-PWA.
+
+#### Changed
+
+- **Service worker hanya di secure context.** Di `http://192.168.x.x:3000`
+  service worker tidak diregistrasi — browser mengabaikannya di sana. Manifest,
+  ikon, dan tombol tambah-ke-layar-utama tetap berfungsi. Service worker
+  aktif di `localhost` dan di deployment HTTPS.
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm run check` | 30/30 file lolos |
+| `npm run audit` | bersih |
+| `npm run smoke` | 3 viewport, 0 error console |
+| `npm run verify:pwa` | manifest + ikon + service worker valid |
+| `npm run e2e` | 25/25 pemeriksaan lolos |
+
+---
+
 ### Changed — UI/UX overhaul (Fase 0–3)
 
 #### Fixed
