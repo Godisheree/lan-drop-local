@@ -25,7 +25,9 @@ import {
 import { setupRequestModal, pollPending } from './features/receive.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
+import { initPwa, renderInstallSection, applyUpdate } from './features/pwa.js';
 import { initLiveRegion, showToast, clearBadge } from './features/notify.js';
+import { initMobileHardening } from './features/mobile.js';
 import { initShortcuts, registerShortcut, closeTopModal, hasOpenModal } from './features/a11y.js';
 
 // ---------------------------------------------------------------------------
@@ -215,6 +217,12 @@ function setupHeader() {
 
   setupThemeToggle(byId('btnTheme'));
 
+  // PWA: registrasi service worker (hanya di secure context) + UI install.
+  initPwa();
+
+  // Hardening mobile: wake lock, peringatan tab ditutup, cek ruang disk.
+  initMobileHardening();
+
   // Badge judul tab kembali normal saat window regain focus.
   window.addEventListener('focus', () => {
     clearBadge();
@@ -361,6 +369,12 @@ async function init() {
   registerShortcut('ctrl+enter', () => {
     if (!hasOpenModal()) return;
     submitComposer();
+  });
+
+  // Shortcut "r" untuk muat ulang saat ada versi baru service worker.
+  registerShortcut('r', () => {
+    if (!getState().swUpdateAvailable) return;
+    applyUpdate();
   });
 
   initRippleBackground();

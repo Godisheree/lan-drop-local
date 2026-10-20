@@ -175,6 +175,19 @@ export async function acceptCurrent() {
 
   dismissModal();
 
+  // Cek ruang disk dulu. Menolak file yang tidak muat lebih baik daripada
+  // gagal di tengah transfer — user tahu desde awal, tidak setelah 90%.
+  const totalSize = group.requests.reduce((sum, r) => sum + (r.fileSize || 0), 0);
+  if (totalSize > 0) {
+    const { checkDiskSpace, warnDiskSpace } = await import('./mobile.js');
+    const check = await checkDiskSpace(totalSize);
+    if (check && !check.ok) {
+      warnDiskSpace(check.free, check.needed);
+      showNextRequest();
+      return;
+    }
+  }
+
   const { postJson } = await import('../core/api.js');
 
   for (const request of group.requests) {

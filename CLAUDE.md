@@ -87,9 +87,12 @@ Struktur lengkap: [docs/guides/frontend-architecture.md](docs/guides/frontend-ar
 - `public/js/core/` — `api.js` (fetch wrapper), `state.js` (store tunggal),
   `format.js` (format angka/waktu), `dom.js` (helper `el()`).
 - `public/js/features/` — satu berkas per fitur: `devices`, `transfers`, `send`,
-  `receive`, `text`, `history`, `connect` (panel Sambung/QR), `notify`, `theme`, `a11y`.
+  `receive`, `text`, `history`, `gallery`, `thumbnail`, `connect` (panel
+  Sambung/QR), `pwa`, `mobile` (wake lock/disk/beforeunload), `notify`,
+  `theme`, `a11y`.
 - `public/css/` — `tokens.css` (design token + dark mode), `base.css`,
   `components.css`, `views.css`.
+- `public/manifest.webmanifest`, `public/sw.js`, `public/icons/` — PWA.
 - `public/js/vendor/qrcode.js` — MIT, vendored untuk QR offline (ADR-0002).
 
 **Aturan penting:**
@@ -98,6 +101,11 @@ Struktur lengkap: [docs/guides/frontend-architecture.md](docs/guides/frontend-ar
 - Semua warna dari `tokens.css`. Warna literal di luar file itu = dark mode rusak.
 - Polling: devices 2,5s · pending 2s · texts 2s · history 5s · progress 800ms.
   Berhenti saat tab disembunyikan.
+- **Naikkan `CACHE_VERSION` di `public/sw.js` setiap kali shell berubah.**
+  Kalau tidak, user bisa melihat UI versi lama setelah update.
+
+**Service worker** hanya diregistrasi di secure context (HTTPS/localhost) —
+di LAN HTTP browser mengabaikannya. Lihat ADR-0004.
 
 **Upload flow:** drag file ke device card (atau tombol file picker) → upload via
 multer `/transfer/upload` (XHR, ada progres) → request `/transfer/request` → poll
@@ -120,6 +128,7 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 | `/manifest.webmanifest` | GET | PWA manifest |
 | `/sw.js` | GET | Service worker (hanya dipakai di secure context) |
 | `/thumbnail/:id` | GET | Thumbnail foto/video dari file yang sudah diterima |
+| `/system/disk` | GET | Ruang disk bebas di folder simpan |
 | `/transfer/upload` | POST | Browser file upload via multer |
 | `/transfer/request` | POST | Send transfer request (sender) |
 | `/transfer/pending` | GET | Incoming requests (receiver) |

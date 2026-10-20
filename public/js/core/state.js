@@ -53,6 +53,12 @@ const state = {
   // --- Notifikasi ---
   /** Jumlah notifikasi yang belum dibaca (untuk badge). */
   unreadCount: 0,
+
+  // --- PWA ---
+  /** @type {BeforeInstallPromptEvent|null} event install prompt yang tertahan */
+  installPrompt: null,
+  /** Service worker versi baru tersedia dan menunggu aktif. */
+  swUpdateAvailable: false,
 };
 
 /** @type {Set<(state: Object, changed: Set<string>) => void>} */

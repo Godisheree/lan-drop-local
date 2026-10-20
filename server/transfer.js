@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { exec, spawn } = require('child_process');
 const { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES } = require('./platform');
+const thumbnail = require('./thumbnail');
 const history = require('./history');
 
 // ===================== Konstanta =====================
@@ -701,12 +702,23 @@ function startRawReceive(requestId, req) {
             }
 
             if (p) p.savedTo = finalPath;
+
+            // Daftarkan file ini supaya bisa di-thumbnail (foto/video).
+            // Thumbnail dihitung server-side karena file-nya ada di
+            // filesystem server, bukan di browser perangkat penerima.
+            let thumbnailId = null;
+            if (thumbnail.isThumbnailable(displayName)) {
+              thumbnailId = thumbnail.registerFile(finalPath);
+              if (p) p.thumbnailId = thumbnailId;
+            }
+
             history.add({
               direction: 'receive',
               fileName: displayName,
               fileSize: actualSize,
               peer: req.senderName,
               savedTo: finalPath,
+              thumbnailId,
               resumed: startBytes > 0
             });
             console.log(`[Transfer] ✅ ${requestId} — ${displayName} diterima (${actualSize} bytes) → ${finalPath}`);
@@ -1084,7 +1096,6 @@ function respondToRequest(requestId, accepted) {
 function getTransferProgress(requestId) {
   const p = transferProgress.get(requestId);
   if (!p) return null;
-
   const percent = p.fileSize > 0 ? Math.round((p.bytesTransferred / p.fileSize) * 100) : 0;
 
   return {
@@ -1095,7 +1106,8 @@ function getTransferProgress(requestId) {
     percent,
     status: p.status,
     savePath: p.savePath,
-    savedTo: p.savedTo
+    savedTo: p.savedTo,
+    thumbnailId: p.thumbnailId || null
   };
 }
 

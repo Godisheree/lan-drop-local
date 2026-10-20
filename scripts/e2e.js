@@ -578,6 +578,115 @@ async function main() {
     }
     check('Cancel: status akhir = cancelled', cancelStatus === 'cancelled', String(cancelStatus));
 
+    // --- Thumbnail: kirim file PNG, receiver harus dapat pratinjau ---
+    // Fixture PNG dibuat server-side (scripts/generate-icons.js sudah
+    // menghasilkan yang valid) lalu dikirim sebagai file biasa.
+    const pngFixture = path.join(__dirname, '..', 'public', 'icons', 'icon-192.png');
+    const pngBytes = fs.readFileSync(pngFixture);
+
+    await pageA.cdp.eval(`(async () => {
+      const mod = await import('/js/features/send.js');
+      const devices = await (await fetch('/devices')).json();
+      const peer = devices[0];
+      const bytes = new Uint8Array(${JSON.stringify(Array.from(pngBytes))});
+      await mod.sendBatch(
+        { ip: peer.ip, port: peer.transferPort, targetName: peer.deviceName },
+        [new File([bytes], 'e2e-gambar.png', { type: 'image/png' })]
+      );
+    })()`);
+
+    // File harus di-accept dulu oleh penerima (teks auto-accept, file tidak).
+    let thumbAccepted = false;
+    for (let i = 0; i < 40; i++) {
+      const open = await pageB.cdp.eval(
+        `!document.getElementById('requestModal').classList.contains('hidden')`
+      );
+      if (open) {
+        await pageB.cdp.eval(`document.getElementById('btnAccept').click()`);
+        thumbAccepted = true;
+        break;
+      }
+      await sleep(300);
+    }
+    check('Thumbnail: permintaan gambar diterima', thumbAccepted);
+
+    // Tunggu item transfer selesai di sisi penerima.
+    let thumbItem = null;
+    for (let i = 0; i < 40; i++) {
+      const found = await pageB.cdp.eval(
+        `(() => {
+          const all = Array.from(document.querySelectorAll('#transferList .transfer-item'));
+          const item = all.find(el => el.textContent.includes('e2e-gambar'));
+          const img = item ? item.querySelector('img.tf-thumb') : null;
+          return JSON.stringify({
+            itemCount: all.length,
+            found: !!item,
+            status: item ? item.dataset.status : null,
+            hasThumb: !!img,
+            src: img ? img.getAttribute('src') : null,
+          });
+        })()`
+      );
+      if (found) {
+        const data = JSON.parse(found);
+        if (data.status === 'completed') { thumbItem = data; break; }
+        if (i === 39) console.log('    [diag] thumbnail:', found);
+      }
+      await sleep(500);
+    }
+
+    check('Thumbnail: item receiver punya pratinjau', Boolean(thumbItem && thumbItem.hasThumb),
+      thumbItem ? thumbItem.src : 'tidak ada item');
+    check('Thumbnail: src menunjuk endpoint /thumbnail/',
+      Boolean(thumbItem && thumbItem.src && thumbItem.src.startsWith('/thumbnail/')),
+      thumbItem ? String(thumbItem.src) : '-');
+
+    // Endpoint thumbnail harus benar-benar mengembalikan gambar.
+    if (thumbItem && thumbItem.src) {
+      const thumbStatus = await pageB.cdp.eval(
+        `(async () => {
+          try {
+            const res = await fetch(${JSON.stringify(thumbItem.src)});
+            const buf = await res.arrayBuffer();
+            return JSON.stringify({
+              status: res.status,
+              type: res.headers.get('content-type'),
+              bytes: buf.byteLength,
+            });
+          } catch (err) {
+            return JSON.stringify({ error: err.message });
+          }
+        })()`
+      );
+      const thumb = JSON.parse(thumbStatus);
+      check('Thumbnail: endpoint mengembalikan gambar',
+        thumb.status === 200 && thumb.bytes > 0 && String(thumb.type).startsWith('image/'),
+        JSON.stringify(thumb));
+    } else {
+      check('Thumbnail: endpoint mengembalikan gambar', false, 'tidak ada src');
+    }
+
+    // Galeri harus memuat media yang diterima.
+    // Galeri dibangun dari riwayat, yang di-poll tiap 5 detik — jadi tunggu.
+    let galleryCount = 0;
+    for (let i = 0; i < 30; i++) {
+      galleryCount = await pageB.cdp.eval(
+        `document.querySelectorAll('#galleryGrid .gallery-item').length`
+      );
+      if (galleryCount > 0) break;
+      await sleep(500);
+    }
+    check('Galeri: media diterima tampil di grid', galleryCount > 0, `${galleryCount} item`);
+
+    // Path traversal harus ditolak.
+    const traversal = await pageB.cdp.eval(
+      `(async () => {
+        const res = await fetch('/thumbnail/0000000000000000');
+        return res.status;
+      })()`
+    );
+    check('Thumbnail: id asing ditolak', traversal === 404 || traversal === 400, `status ${traversal}`);
+
     // --- Error console ---
     const allErrors = [...pageA.cdp.consoleErrors, ...pageB.cdp.consoleErrors];
     const allPageErrors = [...pageA.cdp.pageErrors, ...pageB.cdp.pageErrors];

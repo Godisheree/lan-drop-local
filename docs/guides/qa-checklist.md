@@ -11,6 +11,7 @@ node scripts/check-js.js        # sintaks semua file JS (ESM-aware)
 node scripts/audit-charset.js   # deteksi karakter asing yang tidak sengaja
 node scripts/smoke.js --url http://localhost:3000   # 3 viewport, cek error console
 node scripts/verify-qr.js --url http://localhost:3000  # QR di-decode OpenCV
+node scripts/verify-pwa.js --url http://localhost:3000 # manifest, ikon, service worker
 node scripts/e2e.js             # 2 instance, transfer nyata dua arah
 ```
 
@@ -20,7 +21,8 @@ node scripts/e2e.js             # 2 instance, transfer nyata dua arah
 | `audit-charset.js` | Artefak generasi (Cyrillic/CJK) di teks & komentar |
 | `smoke.js` | Error console, uncaught exception, request 404/500, elemen hilang |
 | `verify-qr.js` | QR tidak valid / tidak cocok dengan URL yang ditampilkan |
-| `e2e.js` | Alur transfer rusak, batch tidak terkelompok, cancel gagal |
+| `verify-pwa.js` | Manifest rusak, ikon salah ukuran, SW cache API, URL CDN |
+| `e2e.js` | Alur transfer rusak, batch tidak terkelompok, cancel gagal, shortcut mati, thumbnail hilang |
 
 **Prasyarat `verify-qr.js`:** `pip install opencv-python-headless pillow`
 
@@ -33,6 +35,8 @@ node scripts/e2e.js             # 2 instance, transfer nyata dua arah
 - [ ] Kirim 3 file sekaligus → **satu kartu batch** dengan 3 baris, bukan 3 kartu
 - [ ] Selama transfer: kecepatan & sisa waktu tampil, progress bar bergerak
 - [ ] Setelah selesai: **folder tujuan tampil** dan bisa disalin
+- [ ] File foto/video yang diterima → **thumbnail** tampil di kartu transfer
+- [ ] Galeri menampilkan media terbaru; klik thumbnail → path tersalin
 - [ ] Transfer selesai → kartu otomatis melipat setelah ~6 detik
 - [ ] Tombol "Batal" hilang setelah status terminal
 - [ ] Kirim teks → muncul di peer, tombol "Salin" berhasil
@@ -44,10 +48,30 @@ node scripts/e2e.js             # 2 instance, transfer nyata dua arah
 - [ ] Header muat dalam satu baris: logo, tombol Sambung, tombol tema, nama perangkat
 - [ ] Tab **Perangkat | Aktivitas** ada dan bisa diganti
 - [ ] Transfer berjalan → **sticky progress bar** terlihat di bawah
+- [ ] Layar **tidak mati** selama transfer (wake lock aktif)
+- [ ] Menutup tab saat transfer aktif → muncul peringatan
+- [ ] Menerima file besar dengan ruang disk kurang → ditolak dengan pesan jelas
 - [ ] Tombol di device card bisa ditekan (target sentuh ≥ 44px)
 - [ ] Modal memenuhi layar, tombol di bawah tidak tertutup keyboard
 - [ ] Textarea composer bisa diketik, counter karakter jalan
 - [ ] Tidak ada scroll horizontal di halaman mana pun
+
+## PWA & shortcut
+
+- [ ] Panel Sambung menampilkan bagian "Aplikasi" + daftar pintasan
+- [ ] Di desktop (`localhost`): tombol install Chrome muncul, service worker
+      terdaftar (`navigator.serviceWorker.getRegistration()` tidak null)
+- [ ] Di HP via `http://192.168.x.x:3000`: muncul **petunjuk manual**
+      (Android `⋮` / iOS Bagikan), bukan tombol install yang tidak berfungsi
+- [ ] "Tambahkan ke Layar Utama" di iOS Safari → ikon LAN DROP muncul, dibuka
+      tanpa address bar
+- [ ] Service worker **tidak** menyajikan `/devices`, `/history`, `/transfer/*`
+      dari cache (device & transfer harus selalu segar)
+- [ ] Setelah file frontend berubah → `CACHE_VERSION` di `public/sw.js`
+      dinaikkan, toast "Versi baru tersedia" muncul, tekan `r` untuk reload
+- [ ] `Enter` di modal permintaan menerima · `Esc` menolak · `Ctrl+Enter`
+      mengirim teks
+- [ ] Enter di tombol "Tolak" menolak (perilaku native tombol, tidak ditimpa)
 
 ## Aksesibilitas (WCAG 2.2 AA)
 
@@ -83,6 +107,7 @@ nilai modus terang tidak bisa diasumsikan berlaku di modus gelap.
 - [ ] `node scripts/check-js.js` — 0 failure
 - [ ] `node scripts/audit-charset.js` — OK
 - [ ] `node scripts/smoke.js` — "SEMUA BERSIH"
+- [ ] `node scripts/verify-pwa.js` — semua PASS
 - [ ] `node scripts/e2e.js` — semua PASS
 - [ ] `git diff` dibaca: tidak ada `console.log`, tidak ada hardcoded URL/CDN
 - [ ] [CHANGELOG.md](../../CHANGELOG.md) diperbarui

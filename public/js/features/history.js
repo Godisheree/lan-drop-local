@@ -7,6 +7,8 @@
 import { el, clear, byId } from '../core/dom.js';
 import { formatBytes, formatTime } from '../core/format.js';
 import { showToast } from './notify.js';
+import { attachThumbnail } from './thumbnail.js';
+import { renderGallery } from './gallery.js';
 
 /**
  * Render daftar riwayat.
@@ -19,6 +21,9 @@ export function renderHistory(items) {
   clear(container);
 
   const list = Array.isArray(items) ? items : [];
+
+  // Galeri memakai entri yang sama — tidak menambah request.
+  renderGallery(list);
 
   if (list.length === 0) {
     container.appendChild(el('div', { class: 'empty-state' }, [
@@ -45,13 +50,19 @@ export function renderHistory(items) {
     ];
     if (item.resumed) metaParts.push('dilanjutkan');
 
-    container.appendChild(el('div', { class: 'history-item' }, [
+    const row = el('div', { class: 'history-item' }, [
       el('span', { class: 'h-icon', 'aria-hidden': 'true', text: icon }),
       el('div', { class: 'h-body' }, [
         el('span', { class: 'h-name', text: item.fileName || '?' }),
         el('span', { class: 'h-meta', text: metaParts.join(' · ') }),
       ]),
-    ]));
+    ]);
+
+    if (item.thumbnailId) {
+      attachThumbnail(row, item.thumbnailId, { className: 'h-thumb' });
+    }
+
+    container.appendChild(row);
   }
 }
 

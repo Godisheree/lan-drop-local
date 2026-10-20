@@ -175,6 +175,115 @@
   margin-bottom: 1px;
 }
 
+/* Thumbnail di kartu transfer & riwayat */
+.tf-thumb {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--bg-sunken);
+}
+
+.h-thumb {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--bg-sunken);
+}
+
+/* Galeri media */
+.gallery-section {
+  margin-top: var(--space-6);
+}
+
+.gallery-heading {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-3);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: var(--space-2);
+}
+
+.gallery-item {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  cursor: pointer;
+  overflow: hidden;
+  aspect-ratio: 1;
+  transition: border-color var(--duration-fast) ease,
+              transform var(--duration-fast) var(--ease-out);
+}
+
+.gallery-item:hover {
+  border-color: var(--accent);
+  transform: scale(1.04);
+}
+
+.gallery-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Section install aplikasi */
+.install-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.install-button {
+  width: 100%;
+  min-height: var(--tap-min);
+}
+
+.install-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.install-status.is-installed {
+  color: var(--success-text);
+}
+
+.install-note {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.install-note-muted {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.install-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 /* Daftar pintasan keyboard */
 .connect-subtitle {
   margin: var(--space-4) 0 var(--space-2);

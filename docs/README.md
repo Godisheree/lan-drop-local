@@ -13,6 +13,7 @@ keputusan penting punya **ADR**, tiap alur punya **panduan**, dan perubahan puny
 | [adr/](adr/) | Architecture Decision Records — keputusan yang mengikat dan alasannya | engineering |
 | [guides/frontend-architecture.md](guides/frontend-architecture.md) | Struktur frontend, modul, alur data | engineering |
 | [guides/qa-checklist.md](guides/qa-checklist.md) | Checklist QA manual untuk rilis UI | QA + engineering |
+| [guides/install-pwa.md](guides/install-pwa.md) | Cara memasang LAN DROP ke layar utama | semua orang |
 | [../CHANGELOG.md](../CHANGELOG.md) | Catatan perubahan yang bisa dilihat user | semua orang |
 
 ## Cara kerja dokumentasi
@@ -37,5 +38,5 @@ keputusan penting punya **ADR**, tiap alur punya **panduan**, dan perubahan puny
 |---|---|
 | Fungsionalitas inti (transfer, resume, riwayat, teks) | stabil |
 | UI/UX overhaul (Fase 0–3) | selesai |
-| Fase 4: shortcut keyboard, thumbnail, PWA, hardening mobile | sedang dikerjakan |
+| Fase 4: shortcut keyboard, thumbnail, PWA, hardening mobile | selesai |
 | SSE untuk progres transfer (pengganti polling) | rencana — lihat [ADR-0006](adr/0006-sse-progress-dengan-fallback-polling.md) |

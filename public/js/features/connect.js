@@ -10,6 +10,7 @@ import { el, clear, byId, maybeById } from '../core/dom.js';
 import { getState, setState } from '../core/state.js';
 import { showToast } from './notify.js';
 import { openModal, closeModal } from './a11y.js';
+import { renderInstallSection } from './pwa.js';
 
 /**
  * Buat SVG QR code dari teks.
@@ -164,6 +165,7 @@ function renderShortcuts() {
 export function openConnectPanel() {
   renderConnectPanel();
   renderShortcuts();
+  renderInstallSection();
   return openModal('connectModal', {
     onEscape: () => {
       closeConnectPanel();

@@ -35,32 +35,40 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
   Sambung, dan tombol terkait punya `aria-keyshortcuts`.
 - **Pratinjau foto & video.** Thumbnail dibuat di server dari file yang sudah
   tersimpan memakai ffmpeg yang sudah ada (tanpa dependency baru), di-cache,
-  lalu disajikan lewat `GET /thumbnail/:id`.
-- **Galeri media.** Grid foto/video terbaru yang diterima.
+  lalu disajikan lewat `GET /thumbnail/:id`. Kalau ffmpeg tidak ada, gambar
+  tetap tampil (file asli), video tanpa thumbnail.
+- **Galeri media.** Grid foto/video terbaru yang diterima. Klik thumbnail
+  untuk menyalin lokasi file.
 - **Manifest + ikon aplikasi.** `manifest.webmanifest`, ikon 192/512/maskable,
-  `apple-touch-icon` PNG, dan meta untuk iOS.
+  `apple-touch-icon` PNG, dan meta untuk iOS. Ikon dibuat oleh
+  `scripts/generate-icons.js` — encoder PNG sendiri, nol dependency.
+- **Panel "Aplikasi"** di Sambung: tombol pasang aplikasi, atau petunjuk
+  manual per platform (Android/iOS/Desktop) plus catatan jujur soal batas
+  HTTPS.
 - **Hardening mobile.** Layar tidak mati saat transfer berjalan
   (`navigator.wakeLock`), peringatan sebelum menutup tab saat transfer aktif,
-  dan pemeriksaan ruang disk sebelum menerima file besar.
-- **Dokumentasi baru:** ADR-0004 (PWA di konteks HTTP LAN) + panduan
-  install-PWA.
+  dan pemeriksaan ruang disk sebelum menerima file besar (`GET /system/disk`).
+- **Dokumentasi baru:** ADR-0004 (PWA di konteks HTTP LAN), ADR-0005
+  (thumbnail server-side), panduan install-PWA.
 
 #### Changed
 
 - **Service worker hanya di secure context.** Di `http://192.168.x.x:3000`
   service worker tidak diregistrasi — browser mengabaikannya di sana. Manifest,
   ikon, dan tombol tambah-ke-layar-utama tetap berfungsi. Service worker
-  aktif di `localhost` dan di deployment HTTPS.
+  aktif di `localhost` dan di deployment HTTPS. Service worker tidak pernah
+  meng-cache response API (dicek oleh `verify-pwa.js`).
 
 #### Verification
 
 | Skrip | Hasil |
 |---|---|
-| `npm run check` | 30/30 file lolos |
+| `npm run check` | 37/37 file lolos |
 | `npm run audit` | bersih |
 | `npm run smoke` | 3 viewport, 0 error console |
-| `npm run verify:pwa` | manifest + ikon + service worker valid |
-| `npm run e2e` | 25/25 pemeriksaan lolos |
+| `npm run verify:pwa` | 16/16 pemeriksaan lolos |
+| `npm run verify:qr` | QR ter-decode OpenCV, cocok dengan URL |
+| `npm run e2e` | 27/27 pemeriksaan lolos |
 
 ---
 

@@ -48,6 +48,7 @@ function add(entry) {
     peer: entry.peer || '?',
     status: entry.status || 'completed',
     savedTo: entry.savedTo || null,
+    thumbnailId: entry.thumbnailId || null,
     resumed: !!entry.resumed
   });
   if (list.length > MAX_ENTRIES) list.length = MAX_ENTRIES;

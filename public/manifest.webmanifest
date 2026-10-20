@@ -1,0 +1,37 @@
+{
+  "name": "LAN DROP — Kirim File di WiFi yang Sama",
+  "short_name": "LAN DROP",
+  "description": "Kirim file, foto, video, dan teks antar perangkat di WiFi yang sama. Tanpa cloud, tanpa akun.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#F7F7F9",
+  "theme_color": "#F7F7F9",
+  "color_scheme": "light dark",
+  "lang": "id",
+  "dir": "ltr",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

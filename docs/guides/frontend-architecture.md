@@ -12,6 +12,9 @@ mengapa `client.js` monolit dipecah.
 ```
 public/
 ├── index.html              — satu halaman, semua anchor
+├── manifest.webmanifest    — PWA manifest
+├── sw.js                   — service worker (hanya di secure context)
+├── icons/                  — ikon PWA (dihasilkan scripts/generate-icons.js)
 ├── css/
 │   ├── tokens.css          — design token + dark mode
 │   ├── base.css            — reset, tipografi, layout dasar, tombol dasar
@@ -31,12 +34,30 @@ public/
     │   ├── receive.js      — permintaan masuk, modal, terima/tolak
     │   ├── text.js         — composer & overlay teks
     │   ├── history.js      — panel riwayat
+    │   ├── gallery.js      — grid media diterima
+    │   ├── thumbnail.js    — thumbnail di kartu transfer & riwayat
     │   ├── connect.js      — panel Sambung (URL + QR)
+    │   ├── pwa.js          — registrasi service worker + UI install
+    │   ├── mobile.js       — wake lock, beforeunload, cek ruang disk
     │   ├── notify.js       — toast, badge judul tab, favicon badge, bunyi
     │   ├── theme.js        — light/dark, localStorage, ikuti OS
     │   └── a11y.js         — focus trap, live region, shortcut keyboard
     └── vendor/
         └── qrcode.js       — MIT, vendored (ADR-0002)
+```
+
+## Server
+
+```
+server/
+├── index.js       — Express app, route, startup
+├── transfer.js    — protokol TCP, streaming, resume
+├── discovery.js   — UDP broadcast, peer statis
+├── ffmpeg.js      — deteksi & pemanggilan ffmpeg (ekstraksi)
+├── thumbnail.js   — thumbnail foto/video dari file tersimpan
+├── history.js     — riwayat transfer (JSON)
+├── platform.js    — deteksi Windows/Termux, folder simpan
+└── tailscale.js   — integrasi Tailscale
 ```
 
 ## Aturan import

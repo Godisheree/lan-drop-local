@@ -9,6 +9,7 @@ import { el, clear, byId } from '../core/dom.js';
 import { formatBytes, formatSpeed, formatDuration, fileEmoji, formatPath } from '../core/format.js';
 import { getState, setState, updateSpeed, getSpeed } from '../core/state.js';
 import { showToast, announce } from './notify.js';
+import { attachThumbnail } from './thumbnail.js';
 
 /** @type {Map<string, HTMLElement>} batchId -> elemen batch */
 const batchElements = new Map();
@@ -272,6 +273,10 @@ export function updateTransferItem(requestId, data) {
     }
   }
 
+  if (data.thumbnailId) {
+    attachThumbnail(item, data.thumbnailId);
+  }
+
   if (data.savedTo) {
     let pathRow = item.querySelector('.tf-path');
     if (!pathRow) {
@@ -477,6 +482,7 @@ export function pollProgress(requestId, direction, onComplete) {
           transferred,
           total,
           savedTo: prog.savedTo || prog.savePath || null,
+          thumbnailId: prog.thumbnailId || null,
         });
         showToast(
           `${prog.fileName} — ${direction === 'send' ? 'terkirim' : 'diterima'}`,

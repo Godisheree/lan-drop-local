@@ -11,6 +11,8 @@
     "audit": "node scripts/audit-charset.js",
     "smoke": "node scripts/smoke.js --url http://localhost:3000",
     "verify:qr": "node scripts/verify-qr.js --url http://localhost:3000",
+    "verify:pwa": "node scripts/verify-pwa.js --url http://localhost:3000",
+    "icons": "node scripts/generate-icons.js",
     "e2e": "node scripts/e2e.js",
     "test": "node scripts/check-js.js && node scripts/audit-charset.js"
   },

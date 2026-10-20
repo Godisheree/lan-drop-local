@@ -7,6 +7,7 @@ const discovery = require('./discovery');
 const transfer = require('./transfer');
 const tailscale = require('./tailscale');
 const history = require('./history');
+const thumbnail = require('./thumbnail');
 const { listLANIPv4 } = require('./platform');
 
 // Generate device name from hostname atau environment variable
@@ -22,6 +23,23 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
+
+// Manifest & service worker butuh Content-Type & Cache-Control khusus.
+// Diletakkan SEBELUM express.static supaya header-nya kita kendalikan.
+app.get('/manifest.webmanifest', (req, res) => {
+  res.type('application/manifest+json');
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, '../public/manifest.webmanifest'));
+});
+
+app.get('/sw.js', (req, res) => {
+  res.type('application/javascript');
+  // no-cache supaya versi baru service worker cepat diterima browser.
+  res.set('Cache-Control', 'no-cache');
+  res.set('Service-Worker-Allowed', '/');
+  res.sendFile(path.join(__dirname, '../public/sw.js'));
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ===================== Discovery Routes =====================
@@ -191,6 +209,71 @@ app.get('/transfer/progress/:requestId', (req, res) => {
     return res.status(404).json({ error: 'Progress not found' });
   }
   res.json(progress);
+});
+
+// GET /thumbnail/:id — thumbnail foto/video dari file yang sudah diterima.
+//
+// Path file TIDAK pernah datang dari URL: id dipetakan server ke daftar
+// file yang sudah dia terima. Jadi tidak ada path traversal.
+app.get('/thumbnail/:id', async (req, res) => {
+  const id = String(req.params.id || '');
+
+  // Id harus hex 16 karakter — tolak yang lain tanpa menyentuh filesystem.
+  if (!/^[0-9a-f]{16}$/.test(id)) {
+    return res.status(400).json({ error: 'Invalid thumbnail id' });
+  }
+
+  try {
+    const result = await thumbnail.getThumbnailById(id);
+    if (!result) {
+      return res.status(404).json({ error: 'Thumbnail not found' });
+    }
+
+    res.set('Content-Type', result.contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(result.buffer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /system/disk — ruang disk bebas di folder simpan.
+//
+// Dipakai receiver untuk menolak file besar yang tidak muat, dengan pesan
+// yang jelas — lebih baik ditolak di awal daripada gagal di tengah transfer.
+app.get('/system/disk', (req, res) => {
+  try {
+    const { getWindowsSaveDir } = require('./platform');
+    const { isTermux } = require('./platform');
+
+    // Folder tujuan: Windows pakai D:\LAN-DROP, Termux pakai shared storage,
+    // sisanya data dir.
+    let targetDir;
+    if (isTermux()) {
+      targetDir = path.join(os.homedir(), 'storage', 'pictures');
+    } else {
+      targetDir = getWindowsSaveDir('photo');
+    }
+
+    // Kalau foldernya belum ada, cek parent-nya.
+    let probe = targetDir;
+    while (probe && !fs.existsSync(probe)) {
+      const parent = path.dirname(probe);
+      if (parent === probe) break;
+      probe = parent;
+    }
+
+    const stat = fs.statfsSync(probe);
+    return res.json({
+      free: stat.bavail * stat.bsize,
+      total: stat.blocks * stat.bsize,
+      path: targetDir,
+    });
+  } catch (err) {
+    // Tidak bisa diukur (mis. filesystem virtual) — biarkan client yang
+    // menentukan sendiri apakah perlu memeriksa.
+    res.status(501).json({ error: 'Disk space unavailable' });
+  }
 });
 
 // ===================== Upload Route (Hari 5) =====================
