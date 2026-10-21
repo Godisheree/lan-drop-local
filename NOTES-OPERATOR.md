@@ -57,24 +57,29 @@ minta persetujuan, tidak perlu interaksi tambahan.
 
 ## Status/task terakhir
 
-LAN DROP **Fase 4 selesai** — shortcut keyboard, thumbnail & galeri, PWA, dan
-hardening mobile. Ter-commit (`8f99540` + `bd212a8`), laporan terkonfirmasi
-`delivery-ack`.
+LAN DROP **Fase 4 selesai** + **alamat Tailscale di panel Sambung**.
+Ter-commit (`8f99540` · `bd212a8` · `28e613b` · `348c273` · `c5f1188`),
+laporan terkonfirmasi `read`.
 
 Fase 0-3 (UI/UX overhaul) juga sudah selesai sebelumnya (`428249f`).
 
+**Tailscale:** transfer sudah didukung sejak awal (announce unicast ke peer
+tailnet). Yang ditambahkan: alamat Tailscale muncul di panel Sambung dan bisa
+dipilih untuk QR, jadi file bisa dikirim ke perangkat yang tidak di WiFi yang
+sama. Lihat `docs/adr/0006-tailscale-di-panel-sambung.md`.
+
 **Yang sengaja ditunda ke Fase 5:** SSE untuk progres transfer. Alasannya
-(biaya vs manfaat, dan risiko event hilang pada list endpoint) ditulis di
-`docs/adr/0006-sse-progress-dengan-fallback-polling.md` — ADR-nya belum
-dibuat, tapi keputusannya sudah diambil.
+(biaya vs manfaat, dan risiko event hilang pada list endpoint) sudah
+dipertimbangkan; keputusannya diambil, tinggal dikerjakan.
 
 Referensi tes LAN DROP:
 - `npm run check` — sintaks semua file JS
 - `npm run audit` — karakter asing
-- `npm run smoke` — 3 viewport, cek error console
+- `npm run check:unused` — import mati
+- `npm run smoke` — 3 viewport, cek error console, selector QR
 - `npm run verify:qr` — QR di-decode OpenCV
 - `npm run verify:pwa` — manifest, ikon, service worker
-- `npm run e2e` — 2 instance, transfer nyata
+- `npm run e2e` — 2 instance, transfer nyata (port dinamis)
 - `npm run icons` — regenerate ikon PWA
 
 Panduan pasang ke layar utama: `docs/guides/install-pwa.md`
