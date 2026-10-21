@@ -44,11 +44,55 @@ export function postJson(url, body) {
 }
 
 /**
+ * Jalur koneksi yang sedang dipakai user, berdasarkan link yang dibuka.
+ *
+ * - Tailscale (100.64.0.0/10 atau IPv6 fd7a) → peer dijangkau via Tailscale
+ * - localhost / 127.x → 'local': peer lebih masuk akal dijangkau via
+ *   Tailscale dulu (HP yang lagi di data seluler), karena loopback cuma
+ *   berarti "mesin ini sendiri"
+ * - selain itu → LAN
+ *
+ * Ini bikin rute konsisten: user nggak perlu ganti-ganti, dan peer yang
+ * punya dua alamat tidak lagi "berganti-ganti" tiap detik.
+ *
+ * @returns {'lan'|'tailscale'|'local'}
+ */
+export function currentVia() {
+  const host = (window.location.hostname || '').toLowerCase();
+
+  if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]') {
+    return 'local';
+  }
+  if (host.startsWith('127.')) return 'local';
+
+  const parts = host.split('.').map(Number);
+  if (parts.length === 4 && parts.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+    const isCgnat = parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127;
+    return isCgnat ? 'tailscale' : 'lan';
+  }
+
+  // IPv6 Tailscale (fd7a:...) & unique-local (fc00::/7)
+  if (/^f[cd][0-9a-f]*:/.test(host)) return 'tailscale';
+
+  return 'lan';
+}
+
+/**
  * GET daftar perangkat.
+ * @param {'lan'|'tailscale'} [via] jalur alamat peer yang dipakai
  * @returns {Promise<Array>}
  */
-export function fetchDevices() {
-  return api('/devices');
+export function fetchDevices(via) {
+  const suffix = via ? `?via=${encodeURIComponent(via)}` : '';
+  return api(`/devices${suffix}`);
+}
+
+/**
+ * GET status discovery (diagnostik).
+ * @returns {Promise<Object>}
+ */
+export function fetchDiscoveryStatus() {
+  return api('/discovery/status');
 }
 
 /**

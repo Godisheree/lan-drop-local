@@ -34,6 +34,9 @@ npm run check          # syntax check semua file JS (ESM-aware)
 npm run audit          # deteksi karakter asing yang tidak disengaja
 npm run check:unused   # deteksi import yang tak terpakai
 npm run check:security # regression check keamanan (path allowlist, header, rate limit, anti shell)
+npm run check:identity # regression check nama device
+npm run check:routing  # regression check routing peer (LAN vs Tailscale)
+npm run check:routes   # 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
 npm run smoke          # 3 viewport + cek error console (butuh server jalan)
 npm run verify:qr      # decode QR dengan OpenCV, cocokkan dengan URL di UI
 npm run verify:pwa     # manifest + ikon + service worker
@@ -71,10 +74,23 @@ paket ikut default route, dan begitu Tailscale/VPN mengambil alih default
 route, broadcast gagal (`EHOSTUNREACH`) → peer di WiFi yang sama tidak pernah
 ditemukan.
 
+**Alamat peer disimpan per jalur** (`addresses.lan` / `addresses.tailscale`),
+bukan satu field `ip` — kalau satu field, alamat yang terakhir tiba menimpa
+yang sebelumnya dan IP peer "berganti-ganti" tiap detik. `GET /devices?via=`
+memilih jalurnya; jalur ditentukan dari **alamat sumber** paket (bukan field
+`via` di payload). Alamat palsu (`localhost`, `169.254.x`, kosong) tidak
+pernah tersimpan — dipakai alamat sumber sebagai gantinya.
+
 **Peer tanpa CLI Tailscale** (HP/Termux) tidak bisa mencari peer duluan, tapi
 **tetep bisa ditemukan**: peer yang punya CLI mengirim announce unicast ke
 alamat tailnet-nya, dan si penerima membalas dengan alamat Tailscale-nya
-sendiri (reply-back di `server/discovery.js`).
+sendiri (reply-back di `server/discovery.js`). Kalau alamat Tailscale sendiri
+belum terdeteksi, peer tidak bisa membalas — itu yang dicek log startup.
+
+**Diagnostik:** `GET /discovery/status` (read-only) — status broadcast per
+interface, listener, jumlah peer, status Tailscale. Error broadcast tidak
+diemkan (dulu `EHOSTUNREACH` disembunyikan → user cuma lihat "device gak
+muncul" tanpa tahu kenapa).
 
 ### Transfer (`server/transfer.js`)
 TCP protocol over `net` module on port 3001. Custom **length-prefixed frame protocol**: 4-byte big-endian uint32 length prefix + UTF-8 JSON payload. Key states tracked in `pendingRequests` (incoming), `outgoingRequests` (outgoing), `transferProgress` (current transfer) — all in-memory Maps.
@@ -98,6 +114,12 @@ Alamat Tailscale dikenali dari **rentang CGNAT 100.64.0.0/10**, bukan dari
 nama interface — di Android aplikasinya bikin interface VPN `tun0`, bukan
 "Tailscale". Alamat Tailscale tidak boleh masuk daftar alamat LAN
 (`listLANIPv4`), else HP Android nampilin alamat tailnet sebagai "Wi-Fi".
+
+**Nama device** (`getDeviceName()`): `$DEVICE_NAME` → `os.hostname()` →
+model HP dari `getprop` (Android/Termux hostname default-nya "localhost").
+Satu sumber kebenaran — `server/index.js` dan `server/discovery.js` dua-duanya
+memakai `getDeviceName()` dari `platform.js`, tidak memanggil `os.hostname()`
+sendiri.
 
 ### Tailscale (`server/tailscale.js`)
 - **Alamat sendiri** dibaca dari network interface (tanpa CLI) → HP/Termux
@@ -160,7 +182,8 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/devices` | GET | List discovered peers |
+| `/devices` | GET | List discovered peers (`?via=lan\|tailscale\|local` memilih jalur alamat) |
+| `/discovery/status` | GET | Diagnostik discovery: broadcast per interface, listener, peer, Tailscale |
 | `/me` | GET | Own hostname + LAN URLs (Wi-Fi & Tailscale, untuk panel Sambung/QR) |
 | `/manifest.webmanifest` | GET | PWA manifest |
 | `/sw.js` | GET | Service worker (hanya dipakai di secure context) |

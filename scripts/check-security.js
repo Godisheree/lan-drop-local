@@ -24,6 +24,8 @@ const transferSource = read('server/transfer.js');
 const indexSource = read('server/index.js');
 const securitySource = read('server/security.js');
 const thumbnailSource = read('server/thumbnail.js');
+const platformSource = read('server/platform.js');
+const discoverySource = read('server/discovery.js');
 
 // Semua file server — untuk cek "tidak ada shell interpolation".
 const serverFiles = fs
@@ -174,6 +176,19 @@ expectTrue(isAllowedTargetIp('nas.lan'), 'hostname dari LANDROP_PEERS diterima')
 expectTrue(!isAllowedTargetIp('lain.example'), 'hostname di luar LANDROP_PEERS tetap ditolak');
 delete process.env.LANDROP_PEERS;
 
+// ===== Target yang menunjuk ke diri sendiri =====
+// Peer beralamat 'localhost' bikin kiriman mendarat di server pengirim —
+// bug nyata yang membuat user mengira "kirimnya nyasar".
+const { isSelfTarget } = require(path.join(ROOT, 'server', 'security.js'));
+expectTrue(isSelfTarget('localhost'), 'target localhost ditolak sebagai self-target');
+expectTrue(isSelfTarget('127.0.0.1'), 'target 127.0.0.1 ditolak sebagai self-target');
+expectTrue(isSelfTarget('127.0.0.5'), 'target 127.x ditolak sebagai self-target');
+expectTrue(!isSelfTarget('192.168.1.5'), 'peer LAN lain bukan self-target');
+expectTrue(!isSelfTarget('100.100.131.65'), 'peer Tailscale bukan self-target');
+process.env.LANDROP_ALLOW_SELF_TARGET = '1';
+expectTrue(!isSelfTarget('127.0.0.1'), 'escape hatch LANDROP_ALLOW_SELF_TARGET bekerja');
+delete process.env.LANDROP_ALLOW_SELF_TARGET;
+
 // ===================== 3. Perilaku middleware =====================
 console.log('\n[3] Middleware keamanan');
 
@@ -294,6 +309,29 @@ for (const { name, source } of serverFiles) {
 expectTrue(
   transferSource.includes('execFile('),
   'media scan pakai execFile (argumen terpisah, tanpa shell)'
+);
+
+// Nama device diambil tanpa shell juga (getprop).
+expectTrue(
+  platformSource.includes("execFileSync('getprop'") || platformSource.includes('execFileSync("getprop"'),
+  'nama device Android diambil via execFileSync (tanpa shell)'
+);
+
+// Endpoint status discovery harus read-only (GET) dan tidak membocorkan path.
+expectTrue(
+  /app\.get\('\/discovery\/status'/.test(indexSource),
+  '/discovery/status adalah endpoint GET read-only'
+);
+expectTrue(
+  !/app\.post\('\/discovery\/status'/.test(indexSource),
+  '/discovery/status tidak punya handler POST'
+);
+
+// Kegagalan broadcast tidak boleh didiamkan (dulu EHOSTUNREACH diemkan
+// → user cuma lihat "device gak muncul" tanpa tahu kenapa).
+expectTrue(
+  discoverySource.includes('lastError') && discoverySource.includes('logBroadcastError'),
+  'error broadcast dicatat (tidak diemkan)'
 );
 
 // ===================== 5. ffmpeg dibatasi protokol file =====================

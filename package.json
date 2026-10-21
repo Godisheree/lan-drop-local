@@ -11,13 +11,16 @@
     "audit": "node scripts/audit-charset.js",
     "check:unused": "node scripts/check-unused-imports.js",
     "check:security": "node scripts/check-security.js",
+    "check:identity": "node scripts/check-identity.js",
+    "check:routing": "node scripts/check-routing.js",
+    "check:routes": "node scripts/check-routes.js",
     "check:transcode": "node scripts/check-transcode.js",
     "smoke": "node scripts/smoke.js --url http://localhost:3000",
     "verify:qr": "node scripts/verify-qr.js --url http://localhost:3000",
     "verify:pwa": "node scripts/verify-pwa.js --url http://localhost:3000",
     "icons": "node scripts/generate-icons.js",
     "e2e": "node scripts/e2e.js",
-    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js && node scripts/check-security.js"
+    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js && node scripts/check-security.js && node scripts/check-identity.js && node scripts/check-routing.js"
   },
   "keywords": [],
   "author": "",

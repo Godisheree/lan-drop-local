@@ -9,7 +9,7 @@
 
 import { byId, maybeById } from './core/dom.js';
 import { getState, setState } from './core/state.js';
-import { fetchDevices, fetchMe } from './core/api.js';
+import { fetchDevices, fetchMe, currentVia } from './core/api.js';
 
 import { renderDevices, setupDragDrop, setupFileInputs, openFilePicker, toTransferTarget } from './features/devices.js';
 import { setLanUrls, openConnectPanel, closeConnectPanel } from './features/connect.js';
@@ -70,9 +70,11 @@ function stopPolling() {
  */
 async function pollDevices() {
   try {
-    renderDevices(await fetchDevices(), deviceHandlers);
+    // Jalur peer mengikuti link yang sedang dibuka user (LAN atau Tailscale),
+    // supaya tidak "berganti-ganti" di tengah jalan.
+    renderDevices(await fetchDevices(currentVia()), deviceHandlers);
   } catch (_) {
-    // Server tidak terjangkau — biarkan daftar lama.
+    // Server tidak terjangkau - biarkan daftar lama.
   }
 }
 
@@ -317,13 +319,24 @@ async function loadIdentity() {
     byId('deviceName').title = me.deviceName || '';
 
     const urls = Array.isArray(me.urls) ? me.urls : [];
-    setLanUrls(urls.map((entry) => ({
+    const mapped = urls.map((entry) => ({
       ip: entry.ip,
       url: entry.url,
       label: entry.label ? `Alamat ${entry.label}` : 'Alamat LAN',
       // `via` dipakai untuk membedakan petunjuk LAN vs Tailscale.
       via: entry.via || 'lan',
-    })));
+    }));
+    setLanUrls(mapped);
+
+    // Default alamat QR = sesuai link yang dipakai membuka halaman ini.
+    // Kalau halaman dibuka via Tailscale, default-nya Tailscale (user tidak
+    // perlu ganti-ganti). Pilihan manual user tetap dihormati setelah ini.
+    const { selectedUrlIndex } = getState();
+    if (selectedUrlIndex === 0) {
+      const via = currentVia();
+      const idx = mapped.findIndex((u) => u.via === via);
+      if (idx > 0) setState({ selectedUrlIndex: idx });
+    }
   } catch (_) {
     byId('deviceName').textContent = '—';
   }

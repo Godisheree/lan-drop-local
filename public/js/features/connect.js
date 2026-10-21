@@ -11,6 +11,10 @@ import { getState, setState } from '../core/state.js';
 import { showToast } from './notify.js';
 import { openModal, closeModal } from './a11y.js';
 import { renderInstallSection } from './pwa.js';
+import { fetchDiscoveryStatus } from '../core/api.js';
+
+const STATUS_POLL_MS = 5000;
+let statusTimer = null;
 
 /**
  * Buat SVG QR code dari teks.
@@ -45,6 +49,118 @@ function buildQrSvg(text) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" role="img" aria-label="Kode QR untuk membuka LAN DROP"><rect width="${size}" height="${size}" fill="#ffffff"/><path d="${parts.join('')}" fill="#000000"/></svg>`;
 }
 
+// ===================== Status jaringan =====================
+
+/**
+ * Satu baris status (label + nilai).
+ * @param {string} label
+ * @param {string} value
+ * @param {'ok'|'warn'} [tone]
+ * @returns {HTMLElement}
+ */
+function statusRow(label, value, tone) {
+  return el('div', { class: 'net-status-row' + (tone ? ` is-${tone}` : '') }, [
+    el('span', { class: 'net-status-label', text: label }),
+    el('span', { class: 'net-status-value', text: value }),
+  ]);
+}
+
+/**
+ * Render blok status jaringan.
+ *
+ * Tujuannya: kalau perangkat tidak muncul, user bisa langsung tahu
+ * kondisinya (broadcast gagal? listener tidak bind? Tailscale belum aktif?)
+ * daripada cuma melihat daftar perangkat kosong.
+ *
+ * @param {Object|null} status
+ */
+function renderNetStatus(status) {
+  const box = maybeById('netStatus');
+  if (!box) return;
+
+  // Jangan render ulang kalau isinya sama — supaya screen reader tidak
+  // announcing ulang tiap 5 detik.
+  const signature = status ? JSON.stringify(status) : 'error';
+  if (box.dataset.signature === signature) return;
+  box.dataset.signature = signature;
+
+  clear(box);
+
+  if (!status) {
+    box.appendChild(el('p', {
+      class: 'net-status-line is-warn',
+      text: 'Status tidak bisa diambil dari server — cek koneksi ke server ini.',
+    }));
+    return;
+  }
+
+  box.appendChild(statusRow('Server ini', status.deviceName || '-'));
+
+  const interfaces = Array.isArray(status.interfaces) ? status.interfaces : [];
+  if (interfaces.length === 0) {
+    box.appendChild(statusRow('Broadcast LAN', 'tidak ada interface LAN', 'warn'));
+  } else {
+    for (const iface of interfaces) {
+      const label = `Broadcast ${iface.address || '?'}`;
+      if (!iface.bound) {
+        box.appendChild(statusRow(label, 'tidak aktif', 'warn'));
+      } else if (iface.lastError) {
+        box.appendChild(statusRow(label, `gagal (${iface.lastError})`, 'warn'));
+      } else {
+        box.appendChild(statusRow(label, 'ok', 'ok'));
+      }
+    }
+  }
+
+  const listener = status.listener || {};
+  if (listener.bound) {
+    box.appendChild(statusRow('Listener UDP', `port ${listener.port} · aktif`, 'ok'));
+  } else {
+    const suffix = listener.error ? ` (${listener.error})` : '';
+    box.appendChild(statusRow('Listener UDP', `port ${listener.port} · tidak aktif${suffix}`, 'warn'));
+  }
+
+  const peers = status.peers || {};
+  const peerCount = Number(peers.count) || 0;
+  box.appendChild(statusRow(
+    'Perangkat ditemukan',
+    peerCount > 0 ? String(peerCount) : 'belum ada',
+    peerCount > 0 ? 'ok' : 'warn'
+  ));
+
+  const ts = status.tailscale || {};
+  if (ts.selfIp) {
+    const note = ts.cliFound ? '' : ' (tanpa CLI — peer dicari lewat reply-back)';
+    box.appendChild(statusRow('Tailscale', `${ts.selfIp}${note}`, 'ok'));
+  } else {
+    box.appendChild(statusRow('Tailscale', 'belum terdeteksi', 'warn'));
+  }
+}
+
+/**
+ * Ambil status terbaru (diam-diam; error tidak dibiarkan ke console).
+ */
+async function pollNetStatus() {
+  try {
+    renderNetStatus(await fetchDiscoveryStatus());
+  } catch (_) {
+    renderNetStatus(null);
+  }
+}
+
+function startStatusPolling() {
+  stopStatusPolling();
+  pollNetStatus();
+  statusTimer = window.setInterval(pollNetStatus, STATUS_POLL_MS);
+}
+
+function stopStatusPolling() {
+  if (statusTimer) {
+    window.clearInterval(statusTimer);
+    statusTimer = null;
+  }
+}
+
 /**
  * Render isi panel Sambung.
  */
@@ -67,6 +183,10 @@ export function renderConnectPanel() {
 
   // QR memakai alamat yang dipilih user. Default-nya LAN (nol setup),
   // tapi kalau device lain di tailnet, alamat Tailscale jauh lebih berguna.
+  //
+  // Kalau halaman ini dibuka lewat link Tailscale, default-nya ikut
+  // Tailscale — user nggak perlu ganti-ganti. Pilihan manual user tetap
+  // dihormati (state.selectedUrlIndex) selama sesi berjalan.
   const activeIndex = Math.min(selectedUrlIndex, lanUrls.length - 1);
   const primary = lanUrls[activeIndex];
 
@@ -79,16 +199,28 @@ export function renderConnectPanel() {
   }
 
   // Hint menyesuaikan alamat yang dipilih — dua kasusnya beda jauh.
+  //
+  // PENTING: panel ini dirender oleh server yang sedang melayani halaman.
+  // Kalau HP membuka QR dari laptop, yang tampil adalah identitas LAPTOP —
+  // itu bukan bug, tapi perlu dijelaskan supaya tidak bikin bingung
+  // ("kok namanya deviceku sama dengan laptop?").
+  const owner = getState().deviceName || 'server ini';
+  const twoWay =
+    `Halaman ini milik "${owner}". Supaya dua arah, device kedua juga harus ` +
+    'menjalankan LAN DROP-nya sendiri — membuka halaman saja tidak cukup.';
+
   const hint = maybeById('urlHint');
   if (hint) {
     if (primary.via === 'tailscale') {
       hint.textContent =
         'Pindai QR ini dengan kamera HP. Alamat Tailscale bisa dibuka dari mana saja ' +
-        'selama HP-nya terhubung ke tailnet yang sama — tidak harus WiFi yang sama.';
+        'selama HP-nya terhubung ke tailnet yang sama — tidak harus WiFi yang sama. ' +
+        twoWay;
     } else {
       hint.textContent =
         'Pindai QR ini dengan kamera HP, atau buka alamat di bawah. ' +
-        'Pastikan kedua perangkat di WiFi yang sama.';
+        'Pastikan kedua perangkat di WiFi yang sama. ' +
+        twoWay;
     }
   }
 
@@ -197,6 +329,7 @@ export function openConnectPanel() {
   renderConnectPanel();
   renderShortcuts();
   renderInstallSection();
+  startStatusPolling();
   return openModal('connectModal', {
     onEscape: () => {
       closeConnectPanel();
@@ -208,6 +341,7 @@ export function openConnectPanel() {
  * Tutup panel Sambung.
  */
 export function closeConnectPanel() {
+  stopStatusPolling();
   closeModal('connectModal');
 }
 

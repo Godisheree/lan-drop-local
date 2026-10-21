@@ -75,6 +75,9 @@ function startServer(port, transferPort, name, discoveryPort, peers) {
       TRANSFER_PORT: String(transferPort),
       DISCOVERY_PORT: String(discoveryPort),
       LANDROP_PEERS: peers || '',
+      // Dua instance berjalan di 127.0.0.1 — izinkan target self supaya
+      // guard "jangan kirim ke diri sendiri" tidak memblokir test ini.
+      LANDROP_ALLOW_SELF_TARGET: '1',
       LANDROP_SAVE_DIR: path.join(os.tmpdir(), `landrop-e2e-${name}`),
       LANDROP_DATA_DIR: path.join(os.tmpdir(), `landrop-e2e-data-${name}`),
       DEVICE_NAME: name,
@@ -247,6 +250,27 @@ async function main() {
       await sleep(500);
     }
     check('Discovery: kedua server saling melihat', peers > 0, `${peers} peer`);
+
+    // --- Status discovery (diagnostik) ---
+    const status = await (await fetch(`http://localhost:${PORT_A}/discovery/status`)).json();
+    check(
+      'Status: /discovery/status lengkap',
+      status && status.ready === true
+        && Array.isArray(status.interfaces) && status.interfaces.length > 0
+        && status.listener && status.listener.bound === true
+        && status.tailscale && 'selfIp' in status.tailscale,
+      JSON.stringify({
+        ready: status.ready,
+        interfaces: (status.interfaces || []).length,
+        listener: status.listener && status.listener.bound,
+        peers: status.peers && status.peers.count,
+      })
+    );
+    check(
+      'Status: peer terlihat di status',
+      status && status.peers && status.peers.count > 0,
+      `${status.peers ? status.peers.count : 0} peer`
+    );
 
     // --- Buka browser ---
     pageA = await openPage(browser, `http://localhost:${PORT_A}`, 9911);

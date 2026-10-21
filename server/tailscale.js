@@ -161,4 +161,16 @@ function getTailscalePeers() {
   return cachedPeers;
 }
 
-module.exports = { refreshTailscaleState, getTailscalePeers, getSelfTailscaleIP, watchSelfTailscaleIP, isTailscaleIPv4, findTailscaleCli };
+/**
+ * Info Tailscale untuk endpoint status.
+ * @returns {{selfIp: string|null, cliFound: boolean, peerCount: number}}
+ */
+function getTailscaleInfo() {
+  return {
+    selfIp: getSelfTailscaleIP(),
+    cliFound: typeof cachedCliPath === 'string',
+    peerCount: cachedPeers.length,
+  };
+}
+
+module.exports = { refreshTailscaleState, getTailscalePeers, getSelfTailscaleIP, watchSelfTailscaleIP, getTailscaleInfo, isTailscaleIPv4, findTailscaleCli };

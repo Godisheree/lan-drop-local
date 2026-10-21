@@ -93,10 +93,36 @@ Referensi tes LAN DROP:
 - `npm run audit` — karakter asing
 - `npm run check:unused` — import mati
 - `npm run check:security` — regression check keamanan
+- `npm run check:identity` — regression check nama device
+- `npm run check:routing` — regression check routing peer (LAN vs Tailscale)
+- `npm run check:routes` — 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
 - `npm run smoke` — 3 viewport, cek error console, selector QR
 - `npm run verify:qr` — QR di-decode OpenCV
 - `npm run verify:pwa` — manifest, ikon, service worker
 - `npm run e2e` — 2 instance, transfer nyata (port dinamis)
 - `npm run icons` — regenerate ikon PWA
+
+## Troubleshooting: device tidak ditemukan / kirim ke localhost
+
+1. **Buka panel Sambung → blok "Status jaringan".** Di situ kelihatan:
+   broadcast per interface (gagal? kode errornya apa), listener UDP,
+   jumlah peer, dan status Tailscale. Ini jawaban cepat untuk "kenapa gak
+   ketemu".
+2. **`EHOSTUNREACH` di status broadcast** → Tailscale/VPN mengambil alih
+   default route. Quit VPN, atau pakai Tailscale dengan "bypass" untuk LAN.
+3. **Peer tidak muncul padahal WiFi sama** → cek firewall/router memblokir
+   UDP 41234, dan pastikan **kedua device menjalankan LAN DROP sendiri**
+   (HP: `node server/index.js` di Termux). Membuka halaman di browser saja
+   tidak cukup — hanya jadi klien.
+4. **HP di data seluler (bukan WiFi)** → tidak ada alamat LAN, jadi peer
+   hanya bisa dijangkau lewat Tailscale. Pastikan aplikasi Tailscale di HP
+   benar-benar *connected* dan log Termux menunjuk `🔒 Tailscale →
+   http://100.x.x.x:3000`.
+5. **Kirimannya nyasar ke `localhost`** → sudah diperbaiki (alamat peer
+   tidak lagi bisa berupa `localhost`, dan target ke diri sendiri ditolak).
+   Kalau masih muncul, cek `npm run check:routes` — skrip itu menguji 2
+   instance di 3 jalur nyata.
+6. **Nama device di HP = "localhost"** → sudah diperbaiki (sekarang model HP,
+   mis. "OPPO A38"). Mau namain sendiri: `DEVICE_NAME="HP-Umi" node server/index.js`.
 
 Panduan pasang ke layar utama: `docs/guides/install-pwa.md`

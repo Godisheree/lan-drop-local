@@ -7,6 +7,63 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Fixed — alamat peer stabil per jalur (LAN / Tailscale)
+
+Kirim lewat Tailscale bisa mendarat di `localhost:3000`. Akar masalahnya
+tiga: alamat peer disimpan di satu field (yang terakhir datang menimpa
+yang sebelumnya → IP "berganti-ganti"), `getLANIP()` mengembalikan string
+`'localhost'` saat device tidak punya interface LAN (HP di data seluler), dan
+pemilihan jalur yang sudah ada di API tidak pernah dipakai.
+
+#### Fixed
+
+- **Kiriman mendarat di server sendiri.** Peer yang tidak punya interface LAN
+  (HP di data seluler + Tailscale) menyiarkan `ip: 'localhost'` — dan peer
+  menganggap itu alamat yang bisa dihubungi, padahal itu berarti "mesin ini".
+  Sekarang alamat palsu tidak pernah tersimpan (dipakai alamat sumber paket),
+  `getLANIP()` mengembalikan `null` bukan `'localhost'`, dan target yang
+  menunjuk ke diri sendiri ditolak dengan pesan jelas.
+- **IP peer berganti-ganti.** Satu peer bisa punya alamat LAN **dan**
+  Tailscale; sekarang keduanya disimpan terpisah per jalur dan frontend
+  memilih jalurnya sesuai link yang sedang dibuka (Tailscale → Tailscale,
+  WiFi → WiFi, localhost → Tailscale dulu). Kartu device, tombol kirim, dan
+  log server semuanya konsisten.
+- **Log tidak menyebut jalurnya.** Setiap permintaan keluar sekarang
+  mencatat peer + alamat + jalurnya (`via tailscale`), dan timeout menjelaskan
+  kemungkinan penyebabnya.
+- **Nama device di HP Termux = "localhost".** Sekarang diambil dari model HP
+  (`OPPO A38`), dan bisa dioverride dengan `DEVICE_NAME="nama kamu"`.
+- **Kegagalan broadcast diemkan.** `EHOSTUNREACH`/`EACCES` dulu disembunyikan
+  — sekarang dicatat per interface dengan penjelasan (mis. "VPN/Tailscale
+  ambil alih default route"), di-dedupe per menit.
+
+#### Added
+
+- **`GET /discovery/status`** — status diagnostik read-only: broadcast per
+  interface, listener UDP, jumlah peer, status Tailscale. Dibuat supaya
+  "device tidak pernah muncul" punya jawaban, bukan cuma gejala kosong.
+- **Blok "Status jaringan" di panel Sambung** + checklist 4 syarat supaya
+  user tahu apa yang harus dicek (termasuk: kedua device harus menjalankan
+  LAN DROP sendiri).
+- **Panel Sambung menjelaskan identitas server.** "Halaman ini milik
+  DESKTOP-GK51EBL" — sebelumnya HP yang membuka QR laptop menampilkan nama
+  laptop dan dikira itu namanya sendiri.
+- **Skrip regresi baru:** `npm run check:routing` (perilaku routing peer),
+  `npm run check:identity` (nama device), `npm run check:routes` (2 instance
+  sungguhan di 3 jalur nyata: loopback, WiFi, Tailscale — file & teks dua
+  arah, isi file identik, dan file tidak boleh mendarat di server pengirim).
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm test` | check + audit + check:unused + check:security + check:identity + check:routing lolos |
+| `npm run check:routes` | 21/21 lolos — loopback, WiFi, dan Tailscale, file & teks dua arah |
+| `npm run e2e` | 32/32 pemeriksaan lolos |
+| `npm run smoke` | 3 viewport, blok status ter-render, 0 error console |
+
+---
+
 ### Security — hardening setelah audit keamanan
 
 Audit dari scanner + review manual menemukan beberapa celah yang bisa dieksploitasi

@@ -236,9 +236,38 @@ function isAllowedTargetIp(targetIp) {
   return trustedPeerHostnames().has(addr.toLowerCase());
 }
 
+/**
+ * Apakah target menunjuk ke perangkat ini sendiri?
+ *
+ * Peer yang alamatnya 'localhost'/127.x berarti "mesin ini" — kiriman akan
+ * mendarat di server pengirim, bukan di peer (bug nyata: user mengira
+ * "kirimnya nyasar"). Lebih baik ditolak dengan pesan jelas.
+ *
+ * Escape hatch: LANDROP_ALLOW_SELF_TARGET=1 (dipakai scripts/e2e.js &
+ * scripts/check-routes.js yang menjalankan dua instance di 127.0.0.1).
+ *
+ * @param {string} targetIp
+ * @returns {boolean}
+ */
+function isSelfTarget(targetIp) {
+  if (process.env.LANDROP_ALLOW_SELF_TARGET === '1') return false;
+
+  const value = String(targetIp || '').trim().toLowerCase();
+  if (!value) return false;
+  if (value === 'localhost' || value === 'localhost.localdomain') return true;
+  if (value === '::1' || value === '[::1]') return true;
+  if (/^127\./.test(value)) return true;
+
+  // Alamat interface milik server ini (mis. 192.168.1.4).
+  const { getOwnAddresses } = require('./platform');
+  const own = getOwnAddresses().map((a) => a.toLowerCase());
+  return own.includes(value);
+}
+
 module.exports = {
   securityHeaders,
   rateLimit,
   sameOriginGuard,
   isAllowedTargetIp,
+  isSelfTarget,
 };

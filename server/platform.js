@@ -3,6 +3,7 @@
 
 const os = require('os');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 function isTermux() {
   // Termux selalu set PREFIX ke /data/data/com.termux/files/usr
@@ -130,24 +131,126 @@ function listLANIPv4() {
   return listLANInterfaces().map(({ name, address }) => ({ name, address }));
 }
 
-// Alamat LAN utama untuk advertise. Fallback 'localhost' kalau tidak ada
-// interface yang bisa dipakai — pemanggil harus forgive nilai ini.
+// Alamat LAN utama untuk advertise.
+//
+// PENTUM: kalau tidak ada interface LAN yang bisa dipakai (mis. HP cuma di
+// data seluler + Tailscale), fungsi ini mengembalikan NULL — BUKAN string
+// 'localhost'. Alasannya: 'localhost' pernah ikut tersiarkan di paket
+// announce, lalu peer mengira itu alamat yang bisa dihubungi — padahal
+// 'localhost' berarti "mesin ini sendiri" → kiriman mendarat di server
+// pengirim, bukan di peer. Tidak ada alamat = tidak ada jalur LAN.
 function getLANIP() {
   const ips = listLANIPv4();
-  if (ips.length > 0) return ips[0].address;
+  return ips.length > 0 ? ips[0].address : null;
+}
 
-  // Tidak ada interface LAN (mis. HP cuma di data seluler + Tailscale).
-  // Pakai alamat Tailscale kalau ada — itu masih bisa dipakai transfer.
+/**
+ * Semua alamat IP milik device ini (semua interface).
+ * Dipakai untuk menolak peer yang menunjuk ke diri sendiri.
+ * @returns {string[]}
+ */
+function getOwnAddresses() {
   const nets = os.networkInterfaces();
+  const own = [];
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
       const isIPv4 = net.family === 'IPv4' || net.family === 4;
-      if (!isIPv4 || net.internal) continue;
-      if (isTailscaleIPv4(net.address)) return net.address;
+      if (isIPv4 && !net.internal && net.address) own.push(net.address);
     }
   }
-
-  return 'localhost';
+  return own;
 }
 
-module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4 };
+/**
+ * Apakah alamat ini layak dipakai sebagai alamat peer?
+ *
+ * Loopback (127.x / ::1) TIDAK layak: itu artinya "mesik ini sendiri".
+ * Link-local (169.254/16) juga tidak — dipakai metadata cloud.
+ *
+ * @param {string} ip
+ * @returns {boolean}
+ */
+function isUsablePeerAddress(ip) {
+  const value = String(ip || '').trim();
+  if (!value) return false;
+  if (value === '0.0.0.0' || value === '::') return false;
+  if (value === 'localhost' || value === 'localhost.localdomain') return false;
+  if (isLinkLocalIPv4(value)) return false;
+
+  // Loopback IPv4 / IPv6
+  if (/^127\./.test(value)) return false;
+  const lower = value.toLowerCase();
+  if (lower === '::1' || lower === '[::1]') return false;
+  if (lower.startsWith('::ffff:127.')) return false;
+
+  return true;
+}
+
+// ===================== Device Name =====================
+// Nama device yang muncul di UI dan di paket announce.
+//
+// Prioritas:
+//   1. $DEVICE_NAME (kalau operator mau namain sendiri)
+//   2. os.hostname() — di Windows/desktop ini sudah bagus ("DESKTOP-GK51EBL")
+//   3. Android/Termux: hostname default-nya "localhost" (BEDA setiap device,
+//      dan nggak informatif) → pakai model HP dari `getprop` ("OPPO A38")
+const MAX_DEVICE_NAME_LENGTH = 40;
+
+function detectAndroidModel() {
+  try {
+    const out = execFileSync('getprop', ['ro.product.model'], { timeout: 1500, encoding: 'utf8' });
+    const model = String(out || '').trim();
+    return model || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Bersihkan nama device: buang karakter kontrol, rapatkan spasi, potong panjang.
+ * @param {string} value
+ * @returns {string}
+ */
+function sanitizeDeviceName(value) {
+  return String(value || '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_DEVICE_NAME_LENGTH);
+}
+
+let cachedDeviceName = null;
+
+/**
+ * Resolusi nama device (fungsi murni — bisa diuji tanpa mengubah process).
+ *
+ * @param {Object} [options]
+ * @param {string} [options.env] nilai $DEVICE_NAME
+ * @param {string} [options.hostname] os.hostname()
+ * @param {string} [options.model] model HP (dari getprop)
+ * @returns {string}
+ */
+function resolveDeviceName(options = {}) {
+  const env = options.env !== undefined ? options.env : process.env.DEVICE_NAME;
+  const fromEnv = sanitizeDeviceName(env);
+  if (fromEnv) return fromEnv;
+
+  const host = sanitizeDeviceName(
+    options.hostname !== undefined ? options.hostname : os.hostname()
+  );
+  if (host && host !== 'localhost' && host !== 'localhost.localdomain') return host;
+
+  const model = sanitizeDeviceName(
+    options.model !== undefined ? options.model : detectAndroidModel()
+  );
+  return model || 'Android';
+}
+
+function getDeviceName() {
+  if (cachedDeviceName) return cachedDeviceName;
+  cachedDeviceName = resolveDeviceName();
+  return cachedDeviceName;
+}
+
+module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, getOwnAddresses, isUsablePeerAddress, getDeviceName, resolveDeviceName, sanitizeDeviceName, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4 };

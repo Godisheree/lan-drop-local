@@ -305,6 +305,9 @@ async function main() {
             qrSvg: !!svg,
             qrPaths: svg ? svg.querySelectorAll('path').length : 0,
             urlRows: document.querySelectorAll('#urlList .url-item').length,
+            netStatusRows: document.querySelectorAll('#netStatus .net-status-row').length,
+            netStatusText: (document.getElementById('netStatus') || {}).textContent || '',
+            checklist: document.querySelectorAll('.net-checklist li').length,
             qrError: frame ? frame.classList.contains('is-error') : false,
             qrMessage: frame && frame.classList.contains('is-error') ? frame.textContent.trim() : null,
           });
@@ -401,6 +404,15 @@ async function main() {
         if (!result.selectorOk) problems++;
       }
       if (result.qr.qrMessage) console.log(`  QR message  : ${result.qr.qrMessage}`);
+      console.log(`  Net status  : rows=${result.qr.netStatusRows} checklist=${result.qr.checklist}`);
+      if (result.qr.netStatusRows === 0) {
+        problems++;
+        console.log('  Net status  : GAGAL - blok "Status jaringan" tidak ter-render');
+      }
+      if (result.qr.checklist < 4) {
+        problems++;
+        console.log('  Checklist   : GAGAL - checklist syarat device kurang dari 4 baris');
+      }
       console.log(`  screenshot  : ${result.screenshot}`);
 
       if (result.pageErrors.length) {

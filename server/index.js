@@ -8,11 +8,11 @@ const transfer = require('./transfer');
 const tailscale = require('./tailscale');
 const history = require('./history');
 const thumbnail = require('./thumbnail');
-const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp } = require('./security');
-const { listLANIPv4 } = require('./platform');
+const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
+const { listLANIPv4, getDeviceName } = require('./platform');
 
-// Generate device name from hostname atau environment variable
-const DEVICE_NAME = process.env.DEVICE_NAME || os.hostname() || 'LAN-Device';
+// Generate device name dari hostname atau environment variable
+const DEVICE_NAME = getDeviceName();
 
 // ===================== Multer Setup =====================
 const uploadsDir = process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp');
@@ -102,9 +102,25 @@ app.get('/me', (req, res) => {
   res.json({ deviceName: DEVICE_NAME, urls: getLanUrls() });
 });
 
+// GET /discovery/status — status intern discovery (read-only).
+//
+// Tujuannya: "device gak pernah muncul" harus punya jawaban yang jelas.
+// Isinya HANYA status (tanpa path absolut, tanpa stack trace) — kelas data
+// yang sama dengan /devices + /me.
+app.get('/discovery/status', (req, res) => {
+  res.json({
+    deviceName: DEVICE_NAME,
+    ...discovery.getDiagnostics(),
+  });
+});
+
+// GET /devices — daftar peer.
+//
+// `?via=lan|tailscale` memilih jalur alamat yang dipakai: kalau user buka
+// aplikasi lewat link Tailscale, peer juga dijangkau lewat Tailscale.
+// Tanpa parameter ini, jalur LAN yang dipakai.
 app.get('/devices', (req, res) => {
-  const devices = discovery.getDevices();
-  res.json(devices);
+  res.json(discovery.getDevices(req.query.via));
 });
 
 // ===================== Transfer Routes =====================
@@ -131,6 +147,10 @@ app.post('/transfer/request', transferLimiter, (req, res) => {
   // (mis. metadata cloud) atas nama device lain.
   if (!isAllowedTargetIp(targetIp)) {
     return res.status(400).json({ error: 'Target IP ditolak: hanya alamat LAN/Tailscale yang diizinkan' });
+  }
+
+  if (isSelfTarget(targetIp)) {
+    return res.status(400).json({ error: 'Target menunjuk ke perangkat ini sendiri — peer tidak ditemukan?' });
   }
 
   try {
@@ -190,6 +210,10 @@ app.post('/transfer/request-text', transferLimiter, (req, res) => {
 
   if (!isAllowedTargetIp(targetIp)) {
     return res.status(400).json({ error: 'Target IP ditolak: hanya alamat LAN/Tailscale yang diizinkan' });
+  }
+
+  if (isSelfTarget(targetIp)) {
+    return res.status(400).json({ error: 'Target menunjuk ke perangkat ini sendiri — peer tidak ditemukan?' });
   }
 
   try {
@@ -404,6 +428,9 @@ app.use((err, req, res, next) => {
 const server = app.listen(PORT, '0.0.0.0', () => {
   const ips = listLANIPv4();
   console.log(`LAN DROP server — Express on http://localhost:${PORT}`);
+  console.log(`[Server] Nama perangkat: ${DEVICE_NAME}` + (
+    process.env.DEVICE_NAME ? '' : '  (ubah dengan DEVICE_NAME="nama kamu" untuk menamain sendiri)'
+  ));
   if (ips.length === 0) {
     console.log('⚠️  No LAN IP found — check your WiFi connection');
   } else {
@@ -421,6 +448,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   } else {
     console.log('🔒 Tailscale belum terdeteksi — nyalakan Tailscale dulu (HP: aplikasi Play Store juga bisa). Kalau aktif belakangan, alamatnya muncul otomatis di log ini.');
   }
+
+  console.log(`[Server] Port ${PORT} (HTTP) & ${transfer.TRANSFER_PORT} (transfer) listen di 0.0.0.0 — device lain di jaringan yang sama bisa menghubungi`);
+  console.log('[Server] Device kedua harus menjalankan LAN DROP-nya sendiri supaya dua arah (kirim & terima)');
   console.log();
 });
 

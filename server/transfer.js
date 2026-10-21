@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
-const { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES } = require('./platform');
+const { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, isTailscaleIPv4 } = require('./platform');
 const thumbnail = require('./thumbnail');
 const history = require('./history');
 
@@ -848,9 +848,10 @@ function startTransferServer() {
 // ===================== TCP Client (Pengirim) =====================
 function sendTransferRequest(targetIp, targetPort, metadata) {
   const requestId = crypto.randomBytes(4).toString('hex');
-  console.log(`[Transfer] 🔌 Connecting to ${targetIp}:${targetPort} (requestId=${requestId}, file="${metadata.fileName}")`);
-  let connectTimer = setTimeout(() => {
-    console.error(`[Transfer] ⏰ TIMEOUT connecting to ${targetIp}:${targetPort} (requestId=${requestId}) — port unreachable?`);
+  const route = isTailscaleIPv4(targetIp) ? 'tailscale' : 'lan';
+  console.log(`[Transfer] 🔌 → ${metadata.fileName} ke ${metadata.peerName || targetIp} (${targetIp}:${targetPort}) via ${route} [requestId=${requestId}]`);
+  const connectTimer = setTimeout(() => {
+    console.error(`[Transfer] ⏰ TIMEOUT connecting to ${targetIp}:${targetPort} (requestId=${requestId}) — port unreachable? Peer mungkin mati, atau firewall memblokir jalur ${route}.`);
     socket.destroy();
   }, 5000);
   const socket = net.createConnection({ host: targetIp, port: targetPort }, () => {

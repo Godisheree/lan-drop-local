@@ -11,6 +11,9 @@ node scripts/check-js.js        # sintaks semua file JS (ESM-aware)
 node scripts/audit-charset.js   # deteksi karakter asing yang tidak sengaja
 node scripts/check-unused-imports.js  # deteksi import yang tak terpakai
 node scripts/check-security.js  # regression check keamanan
+node scripts/check-identity.js  # regression check nama device
+node scripts/check-routing.js   # regression check routing peer (LAN vs Tailscale)
+node scripts/check-routes.js    # 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
 node scripts/smoke.js --url http://localhost:3000   # 3 viewport, cek error console
 node scripts/verify-qr.js --url http://localhost:3000  # QR di-decode OpenCV
 node scripts/verify-pwa.js --url http://localhost:3000 # manifest, ikon, service worker
@@ -25,6 +28,9 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 | `audit-charset.js` | Artefak generasi (Cyrillic/CJK) di teks & komentar |
 | `check-unused-imports.js` | Import mati — sisa refactor yang tak dibersihkan |
 | `check-security.js` | Path allowlist upload patah, target IP terlalu longgar, header hilang, `exec()` muncul lagi, ffmpeg tanpa whitelist protokol |
+| `check-identity.js` | Nama device "localhost", env tidak diprioritaskan, sumber kebenaran nama device terduplikasi |
+| `check-routing.js` | Alamat peer flip-flop antara LAN/Tailscale, alamat `localhost` tersimpan, jalur `local` salah |
+| `check-routes.js` | Transfer rusak di jalur tertentu (loopback/WiFi/Tailscale), file mendarat di server pengirim, isi file beda |
 | `smoke.js` | Error console, uncaught exception, request 404/500, elemen hilang |
 | `verify-qr.js` | QR tidak valid / tidak cocok dengan URL yang ditampilkan |
 | `verify-pwa.js` | Manifest rusak, ikon salah ukuran, SW cache API, URL CDN |
@@ -127,12 +133,25 @@ dipakai lewat pemeriksaan berikut. Lihat
 - [ ] Upload melebihi batas ditolak dengan pesan jelas (bukan 500): set
       `LANDROP_MAX_UPLOAD_MB=1`, lalu upload file 5 MB → `413`
 
+## Manual — dua device sungguhan (wajib, tidak bisa digantikan skrip)
+
+- [ ] Nama device **berbeda** di kedua layar (HP: "OPPO A38", laptop: "DESKTOP-…")
+- [ ] Panel Sambung di kedua device menampilkan blok "Status jaringan" tanpa baris merah
+- [ ] Transfer file **dua arah** berhasil, isi file identik
+- [ ] Kirim teks diterima di device lain (bukan di server sendiri)
+- [ ] Kartu device menampilkan alamat yang sesuai jalur yang dipakai (WiFi → 192.168.x.x, Tailscale → 100.x.x.x)
+- [ ] Alamat di kartu **tidak berubah-ubah** dalam 30 detik
+- [ ] HP di data seluler (Tailscale): peer tetap ditemukan, kiriman lewat 100.x
+
 ## Sebelum commit
 
 - [ ] `node scripts/check-js.js` — 0 failure
 - [ ] `node scripts/audit-charset.js` — OK
 - [ ] `node scripts/check-unused-imports.js` — 0 import mati
 - [ ] `node scripts/check-security.js` — semua pemeriksaan lolos
+- [ ] `node scripts/check-identity.js` — semua pemeriksaan lolos
+- [ ] `node scripts/check-routing.js` — routing konsisten
+- [ ] `node scripts/check-routes.js` — semua jalur lolos (loopback, WiFi, Tailscale)
 - [ ] `node scripts/smoke.js` — "SEMUA BERSIH"
 - [ ] `node scripts/verify-pwa.js` — semua PASS
 - [ ] `node scripts/e2e.js` — semua PASS

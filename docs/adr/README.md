@@ -16,6 +16,7 @@ Format: [MADR](https://adr.github.io/madr/) — konteks → keputusan → konsek
 | [0005](0005-thumbnail-server-side-via-ffmpeg.md) | Thumbnail foto/video dibuat di server | Diterima | 2025-10-21 |
 | [0006](0006-tailscale-di-panel-sambung.md) | Alamat Tailscale di panel Sambung | Diterima | 2025-10-21 |
 | [0007](0007-keamanan-berlapis-tanpa-autentikasi.md) | Keamanan berlapis tanpa autentikasi | Diterima | 2025-10-21 |
+| [0008](0008-alamat-peer-stable-per-jalur.md) | Alamat peer stabil per jalur (LAN/Tailscale) | Diterima | 2025-10-22 |
 
 ## Template
 

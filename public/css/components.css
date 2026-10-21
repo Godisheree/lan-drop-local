@@ -344,6 +344,66 @@
   color: var(--text-muted);
 }
 
+/* ===== Status jaringan (diagnostik discovery) ===== */
+.net-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.net-status-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.net-status-label {
+  color: var(--text-secondary);
+}
+
+.net-status-value {
+  text-align: right;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.net-status-row.is-ok .net-status-value {
+  color: var(--success-text);
+}
+
+.net-status-row.is-warn .net-status-value {
+  color: var(--warning-text);
+}
+
+.net-status-line {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.net-status-line.is-warn {
+  color: var(--warning-text);
+}
+
+/* Checklist syarat "device bisa ketemu" */
+.net-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 .shortcut-list {
   display: flex;
   flex-direction: column;
