@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { exec, spawn } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES } = require('./platform');
 const thumbnail = require('./thumbnail');
 const history = require('./history');
@@ -17,6 +17,59 @@ const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
 const PART_SUFFIX = '.landrop-part';
 const RESUME_TTL = 7 * 24 * 60 * 60 * 1000;      // partial bisa dilanjutin 7 hari
 const UPLOAD_TTL = 7 * 24 * 60 * 60 * 1000;       // upload sampah dibersihin 7 hari
+
+// ===================== Upload Path Allowlist (keamanan) =====================
+// File yang dikirim ke peer SELALU berasal dari /transfer/upload, jadi path-nya
+// wajib berada di dalam folder upload. Tanpa guard ini, endpoint
+// /transfer/send-file bisa dipakai buat membocorkan file apa pun di disk
+// (path dari body request dipakai mentah-mentah).
+//
+// Folder upload: $LANDROP_UPLOAD_DIR (dipakai Electron) atau ./uploads-temp.
+// Nilainya harus sama persis dengan yang dipakai server/index.js.
+const UPLOADS_ROOT = path.resolve(
+  process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp')
+);
+
+/**
+ * Pastikan path file berada di dalam folder upload.
+ *
+ * Dua lapis:
+ *   1. Cek leksikal — path.resolve + path.relative. Menolak traversal
+ *      ("../../etc/passwd") dan path absolut di luar folder.
+ *   2. Cek kanonik — fs.realpathSync. Menutup symlink/junction di dalam
+ *      folder upload yang mengarah ke luar (butuh akses tulis lokal, tapi
+ *      murah dicek dan tidak boleh dilewati).
+ *
+ * @param {string} filePath
+ * @returns {string} path absolut yang sudah tervalidasi
+ */
+function assertInsideUploads(filePath) {
+  const resolved = path.resolve(String(filePath || ''));
+  const rel = path.relative(UPLOADS_ROOT, resolved);
+  // rel kosong = path-nya folder upload itu sendiri (bukan file)
+  // rel diawali '..' = keluar folder upload
+  // rel absolut = di drive/path lain
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error('Invalid file path: di luar folder upload');
+  }
+
+  // Cek kanonik (kalau file-nya ada).
+  try {
+    const realRoot = fs.realpathSync(UPLOADS_ROOT);
+    const realFile = fs.realpathSync(resolved);
+    const realRel = path.relative(realRoot, realFile);
+    if (!realRel || realRel.startsWith('..') || path.isAbsolute(realRel)) {
+      throw new Error('Invalid file path: di luar folder upload');
+    }
+  } catch (err) {
+    // File belum ada → biarkan pemanggil yang-report "File not found".
+    if (err.code !== 'ENOENT') {
+      throw new Error('Invalid file path: di luar folder upload');
+    }
+  }
+
+  return resolved;
+}
 
 // ===================== State =====================
 const pendingRequests = new Map(); // requestId -> { socket, parser, fileName, fileSize, senderName, senderId, status, createdAt }
@@ -236,7 +289,13 @@ const { getFfmpegPath, getFfprobePath, runFfmpeg } = require('./ffmpeg');
 
 function transcodeToMp4(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
+    // -nostdin: ffmpeg gak boleh baca dari stdin (celah interaktif).
+    // -protocol_whitelist file: ffmpeg probing KONTEN, bukan ekstensi — file
+    //   dari peer bisa jadi playlist M3U8 yang bikin ffmpeg ambil URL attacker
+    //   (SSRF ke metadata cloud). Whitelist cuma izinkan protokol file:.
     const args = [
+      '-nostdin',
+      '-protocol_whitelist', 'file',
       '-i', inputPath,
       '-c:v', 'libx264',
       '-preset', 'fast',
@@ -258,6 +317,8 @@ function remuxToM4a(inputPath, outputPath) {
     // dan container M4A (format ipod) tidak support MP3 — cuma AAC/ALAC.
     // Dengan MP3 container, copy murni jadi super cepat dan lossless.
     const args = [
+      '-nostdin',
+      '-protocol_whitelist', 'file',
       '-i', inputPath,
       '-c:a', 'copy',         // copy audio stream tanpa re-encode (lossless)
       '-vn',                  // buang semua stream video (cover art, dll)
@@ -278,6 +339,7 @@ function getStreamInfo(filePath) {
         '-v', 'quiet',
         '-print_format', 'json',
         '-show_streams',
+        '-protocol_whitelist', 'file',
         filePath
       ], { timeout: 10000 });
 
@@ -634,15 +696,24 @@ function startRawReceive(requestId, req) {
             fs.renameSync(partPath, finalPath);
             deletePartMeta(transferKey);
 
-            // Scan biar muncul di Galeri (khusus foto/video, Termux)
+            // Scan biar muncul di Galeri (khusus foto/video, Termux).
+            //
+            // PAKAI execFile, BUKAN exec: nama file datang dari peer dan
+            // bisa mengandung karakter shell ($( ), backtick, ;). Dengan
+            // exec, string itu dieksekusi shell = RCE di perangkat penerima.
+            // execFile mem Passing argumen apa adanya, tanpa shell.
             const fileType = classifyFileType(safeName);
             if (isTermux() && (fileType === 'photo' || fileType === 'video')) {
-              exec(`termux-media-scan "${finalPath}"`, (err) => {
+              execFile('termux-media-scan', [finalPath], (err) => {
                 if (err) {
                   // Fallback: am broadcast bawaan Android, gak butuh termux-api
                   console.warn(`[Transfer] termux-media-scan gagal (termux-api belum terinstall?), coba am broadcast: ${err.message}`);
                   const target = finalPath.replace(/^~\//, `${os.homedir()}/`).replace(/\\/g, '/');
-                  exec(`am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://${target}`, (err2) => {
+                  execFile('am', [
+                    'broadcast',
+                    '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+                    '-d', `file://${encodeURI(target)}`
+                  ], (err2) => {
                     if (err2) {
                       console.warn(`[Transfer] am broadcast scan gagal: ${err2.message}`);
                     } else {
@@ -857,15 +928,18 @@ async function startFileSend(requestId, filePath) {
     socket.removeListener('data', req.parserHandler);
   }
 
-  // Validasi file
-  if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+  // Validasi file — path WAJIB di dalam folder upload.
+  // Path datang dari body request, jadi tanpa batas folder upload
+  // siapa pun yang bisa njangkau port ini bisa baca file privat server.
+  const safeFilePath = assertInsideUploads(filePath);
+  if (!fs.existsSync(safeFilePath)) throw new Error(`File not found: ${path.basename(safeFilePath)}`);
 
   // ===== Transcoding: konversi video yg mungkin gak di-support HP =====
-  let sendFilePath = filePath;
+  let sendFilePath = safeFilePath;
   let sendFileName = req.fileName;
   let sendFileSize = null;
 
-  const transResult = await transcodeIfNeeded(filePath, req.fileName);
+  const transResult = await transcodeIfNeeded(safeFilePath, req.fileName);
   console.log(`[SEND_FILE] transResult: filePath="${transResult.filePath}", fileName="${transResult.fileName}", fileSize=${transResult.fileSize}`);
   sendFilePath = transResult.filePath;
   if (transResult.fileSize !== null) {
@@ -1175,5 +1249,6 @@ module.exports = {
   getRequestStatus,
   cancelOutgoingTransfer,
   cancelIncomingTransfer,
+  assertInsideUploads, // diekspor buat regression test (scripts/check-security.js)
   TRANSFER_PORT
 };

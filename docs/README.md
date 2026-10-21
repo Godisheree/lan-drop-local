@@ -40,4 +40,6 @@ keputusan penting punya **ADR**, tiap alur punya **panduan**, dan perubahan puny
 | UI/UX overhaul (Fase 0–3) | selesai |
 | Fase 4: shortcut keyboard, thumbnail, PWA, hardening mobile | selesai |
 | Transfer & QR lewat Tailscale | selesai — lihat [ADR-0006](adr/0006-tailscale-di-panel-sambung.md) |
+| Hardening keamanan (path allowlist, batas jaringan, anti shell/SSRF) | selesai — lihat [ADR-0007](adr/0007-keamanan-berlapis-tanpa-autentikasi.md) |
+| Autentikasi / pairing token | belum ada — disengaja, lihat ADR-0007 |
 | SSE untuk progres transfer (pengganti polling) | rencana — tinggal dikerjakan |

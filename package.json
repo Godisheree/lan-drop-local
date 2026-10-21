@@ -10,12 +10,14 @@
     "check": "node scripts/check-js.js",
     "audit": "node scripts/audit-charset.js",
     "check:unused": "node scripts/check-unused-imports.js",
+    "check:security": "node scripts/check-security.js",
+    "check:transcode": "node scripts/check-transcode.js",
     "smoke": "node scripts/smoke.js --url http://localhost:3000",
     "verify:qr": "node scripts/verify-qr.js --url http://localhost:3000",
     "verify:pwa": "node scripts/verify-pwa.js --url http://localhost:3000",
     "icons": "node scripts/generate-icons.js",
     "e2e": "node scripts/e2e.js",
-    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js"
+    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js && node scripts/check-security.js"
   },
   "keywords": [],
   "author": "",
@@ -24,7 +26,7 @@
   "dependencies": {
     "@electron-internal/extract-zip": "^1.0.4",
     "express": "^5.2.1",
-    "multer": "^2.2.0"
+    "multer": "^2.4.0"
   },
   "devDependencies": {
     "electron": "^43.1.0",

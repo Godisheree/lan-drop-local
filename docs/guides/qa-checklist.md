@@ -10,6 +10,7 @@ keamanannya.
 node scripts/check-js.js        # sintaks semua file JS (ESM-aware)
 node scripts/audit-charset.js   # deteksi karakter asing yang tidak sengaja
 node scripts/check-unused-imports.js  # deteksi import yang tak terpakai
+node scripts/check-security.js  # regression check keamanan
 node scripts/smoke.js --url http://localhost:3000   # 3 viewport, cek error console
 node scripts/verify-qr.js --url http://localhost:3000  # QR di-decode OpenCV
 node scripts/verify-pwa.js --url http://localhost:3000 # manifest, ikon, service worker
@@ -23,6 +24,7 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 | `check-js.js` | Syntax error, import rusak, `continue` di luar loop |
 | `audit-charset.js` | Artefak generasi (Cyrillic/CJK) di teks & komentar |
 | `check-unused-imports.js` | Import mati — sisa refactor yang tak dibersihkan |
+| `check-security.js` | Path allowlist upload patah, target IP terlalu longgar, header hilang, `exec()` muncul lagi, ffmpeg tanpa whitelist protokol |
 | `smoke.js` | Error console, uncaught exception, request 404/500, elemen hilang |
 | `verify-qr.js` | QR tidak valid / tidak cocok dengan URL yang ditampilkan |
 | `verify-pwa.js` | Manifest rusak, ikon salah ukuran, SW cache API, URL CDN |
@@ -108,11 +110,29 @@ Pasangan ini sudah dihitung dan harus tetap berlaku:
 Kalau token berubah, hitung ulang. Mode gelap punya pasangan token sendiri —
 nilai modus terang tidak bisa diasumsikan berlaku di modus gelap.
 
+## Keamanan (manual, sekali per rilis)
+
+Server sengaja **tanpa autentikasi** (desain "nol setup"), jadi kontrolnya
+dipakai lewat pemeriksaan berikut. Lihat
+[ADR-0007](../adr/0007-keamanan-berlapis-tanpa-autentikasi.md).
+
+- [ ] Header keamanan ada di response:
+      `curl -sI http://localhost:3000 | findstr /I "Content-Security-Policy X-Frame-Options X-Content-Type-Options"` → semua ada
+- [ ] POST lintas-origin ditolak:
+      `curl -s -o NUL -w "%{http_code}" -X POST -H "Origin: http://evil.example" http://localhost:3000/history/clear` → `403`
+- [ ] File di luar folder upload ditolak:
+      `curl -s -X POST -H "Content-Type: application/json" -d "{\"requestId\":\"x\",\"filePath\":\"C:\\Windows\\win.ini\"}" http://localhost:3000/transfer/send-file` → `400`
+- [ ] Target IP publik ditolak:
+      `curl -s -X POST -H "Content-Type: application/json" -d "{\"targetIp\":\"169.254.169.254\",\"targetPort\":3001,\"fileName\":\"a.txt\",\"fileSize\":1}" http://localhost:3000/transfer/request` → `400`
+- [ ] Upload melebihi batas ditolak dengan pesan jelas (bukan 500): set
+      `LANDROP_MAX_UPLOAD_MB=1`, lalu upload file 5 MB → `413`
+
 ## Sebelum commit
 
 - [ ] `node scripts/check-js.js` — 0 failure
 - [ ] `node scripts/audit-charset.js` — OK
 - [ ] `node scripts/check-unused-imports.js` — 0 import mati
+- [ ] `node scripts/check-security.js` — semua pemeriksaan lolos
 - [ ] `node scripts/smoke.js` — "SEMUA BERSIH"
 - [ ] `node scripts/verify-pwa.js` — semua PASS
 - [ ] `node scripts/e2e.js` — semua PASS

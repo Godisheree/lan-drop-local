@@ -15,6 +15,7 @@ Format: [MADR](https://adr.github.io/madr/) — konteks → keputusan → konsek
 | [0004](0004-pwa-di-konteks-http-lan.md) | PWA & service worker hanya di secure context | Diterima | 2025-10-21 |
 | [0005](0005-thumbnail-server-side-via-ffmpeg.md) | Thumbnail foto/video dibuat di server | Diterima | 2025-10-21 |
 | [0006](0006-tailscale-di-panel-sambung.md) | Alamat Tailscale di panel Sambung | Diterima | 2025-10-21 |
+| [0007](0007-keamanan-berlapis-tanpa-autentikasi.md) | Keamanan berlapis tanpa autentikasi | Diterima | 2025-10-21 |
 
 ## Template
 

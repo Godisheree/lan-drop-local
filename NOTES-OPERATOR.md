@@ -57,9 +57,9 @@ minta persetujuan, tidak perlu interaksi tambahan.
 
 ## Status/task terakhir
 
-LAN DROP **Fase 4 selesai** + **alamat Tailscale di panel Sambung**.
-Ter-commit (`8f99540` · `bd212a8` · `28e613b` · `348c273` · `c5f1188`),
-laporan terkonfirmasi `read`.
+LAN DROP **Fase 4 selesai** + **alamat Tailscale di panel Sambung** +
+**hardening keamanan**. Ter-commit (`8f99540` · `bd212a8` · `28e613b` ·
+`348c273` · `c5f1188`), laporan terkonfirmasi `read`.
 
 Fase 0-3 (UI/UX overhaul) juga sudah selesai sebelumnya (`428249f`).
 
@@ -67,6 +67,22 @@ Fase 0-3 (UI/UX overhaul) juga sudah selesai sebelumnya (`428249f`).
 tailnet). Yang ditambahkan: alamat Tailscale muncul di panel Sambung dan bisa
 dipilih untuk QR, jadi file bisa dikirim ke perangkat yang tidak di WiFi yang
 sama. Lihat `docs/adr/0006-tailscale-di-panel-sambung.md`.
+
+**Tailscale di HP/Termux (tanpa CLI):** aplikasi Tailscale dari Play Store
+cukup — CLI tidak perlu diinstall. Yang perlu dicek: (1) aplikasi Tailscale di
+HP sudah **connected** (bukan cuma terinstall), (2) alamat CGNAT 100.x sudah
+muncul di log Termux (`🔒 Tailscale → http://100.x.x.x:3000`). Kalau Tailscale
+dinyalakan belakangan, alamatnya muncul otomatis beberapa detik kemudian —
+server memantau terus, bukan cuma sekali saat start. CLI cuma dipakai untuk
+mencari peer tailnet duluan; tanpa CLI, HP tetap bisa **ditemukan** desktop
+lewat reply-back.
+
+**Keamanan:** audit menutup 3 celah remote (bocor file privat via
+`/transfer/send-file`, command injection lewat nama file di Termux, SSRF lewat
+ffmpeg) + menambah security header, rate limit, batas upload, dan pembatasan
+target IP ke LAN/Tailscale. Autentikasi **sengaja tidak** ditambahkan (kontrak
+"nol setup") — lihat `docs/adr/0007-keamanan-berlapis-tanpa-autentikasi.md`.
+Regression check: `npm run check:security`.
 
 **Yang sengaja ditunda ke Fase 5:** SSE untuk progres transfer. Alasannya
 (biaya vs manfaat, dan risiko event hilang pada list endpoint) sudah
@@ -76,6 +92,7 @@ Referensi tes LAN DROP:
 - `npm run check` — sintaks semua file JS
 - `npm run audit` — karakter asing
 - `npm run check:unused` — import mati
+- `npm run check:security` — regression check keamanan
 - `npm run smoke` — 3 viewport, cek error console, selector QR
 - `npm run verify:qr` — QR di-decode OpenCV
 - `npm run verify:pwa` — manifest, ikon, service worker

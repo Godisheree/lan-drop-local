@@ -38,6 +38,17 @@ function getWindowsSaveDir(category) {
 
 // ===================== LAN IP Selection =====================
 
+// Tailscale memberi device alamat CGNAT 100.64.0.0/10. Di Windows
+// interface-nya bernama "Tailscale" (udah ke-filter di VIRTUAL_IFACE_HINTS),
+// TAPI di Android aplikasi Tailscale dari Play Store bikin interface TUN
+// bernama "tun0" — jadi HANYA bisa dikenali dari rentang alamatnya.
+function isTailscaleIPv4(addr) {
+  const parts = String(addr || '').split('.').map(Number);
+  if (parts.length !== 4) return false;
+  if (parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  return parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127;
+}
+
 // Interface yang bukan jalur LAN sesungguhnya. Nama lowercase, dicek substring.
 const VIRTUAL_IFACE_HINTS = ['vmware', 'virtualbox', 'docker', 'vethernet', 'warp', 'tailscale'];
 
@@ -71,27 +82,72 @@ function isWifiIface(name) {
 // Semua IPv4 yang layak dipakai sebagai alamat peer LAN, sudah diurutkan:
 // WiFi dulu, lalu interface lain. Index.js dipakai untuk log startup,
 // discovery.js untuk broadcast — keduanya butuh urutan yang sama.
-function listLANIPv4() {
+// Hitung alamat broadcast dari IP + netmask (192.168.1.7/24 → 192.168.1.255).
+function computeBroadcastAddress(address, netmask) {
+  if (!netmask) return '255.255.255.255';
+  const ipParts = address.split('.').map(Number);
+  const maskParts = netmask.split('.').map(Number);
+  if (ipParts.length !== 4 || maskParts.length !== 4) return '255.255.255.255';
+  return ipParts
+    .map((octet, i) => (octet | (~maskParts[i] & 255)))
+    .join('.');
+}
+
+// Semua interface LAN yang layak dipakai sebagai alamat peer, lengkap dengan
+// netmask & alamat broadcast-nya. Index.js dipakai untuk log startup,
+// discovery.js untuk broadcast per-interface.
+function listLANInterfaces() {
   const nets = os.networkInterfaces();
   const found = [];
 
   for (const name of Object.keys(nets)) {
     if (isVirtualIface(name)) continue;
     for (const net of nets[name]) {
-      if (net.family !== 'IPv4' || net.internal) continue;
+      // Node >= 18 balikin 'IPv4' (string), Node lama balikin 4 (number).
+      const isIPv4 = net.family === 'IPv4' || net.family === 4;
+      if (!isIPv4 || net.internal) continue;
       if (isLinkLocalIPv4(net.address) || isPointToPoint(net)) continue;
-      found.push({ name, address: net.address });
+      // Alamat Tailscale (CGNAT) bukan alamat LAN — ditampilkan terpisah
+      // di panel Sambung. Kalau ikut masuk sini, HP Android (interface
+      // "tun0") bakal nampilin alamat Tailscale sebagai "Wi-Fi".
+      if (isTailscaleIPv4(net.address)) continue;
+      found.push({
+        name,
+        address: net.address,
+        netmask: net.netmask,
+        broadcast: computeBroadcastAddress(net.address, net.netmask),
+      });
     }
   }
 
+  // WiFi dulu, lalu interface lain.
   return found.sort((a, b) => (isWifiIface(b.name) ? 1 : 0) - (isWifiIface(a.name) ? 1 : 0));
+}
+
+// Semua IPv4 yang layak dipakai sebagai alamat peer LAN (urutan sama dengan
+// listLANInterfaces).
+function listLANIPv4() {
+  return listLANInterfaces().map(({ name, address }) => ({ name, address }));
 }
 
 // Alamat LAN utama untuk advertise. Fallback 'localhost' kalau tidak ada
 // interface yang bisa dipakai — pemanggil harus forgive nilai ini.
 function getLANIP() {
   const ips = listLANIPv4();
-  return ips.length > 0 ? ips[0].address : 'localhost';
+  if (ips.length > 0) return ips[0].address;
+
+  // Tidak ada interface LAN (mis. HP cuma di data seluler + Tailscale).
+  // Pakai alamat Tailscale kalau ada — itu masih bisa dipakai transfer.
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      const isIPv4 = net.family === 'IPv4' || net.family === 4;
+      if (!isIPv4 || net.internal) continue;
+      if (isTailscaleIPv4(net.address)) return net.address;
+    }
+  }
+
+  return 'localhost';
 }
 
-module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, getLANIP, isLinkLocalIPv4, isPointToPoint };
+module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4 };

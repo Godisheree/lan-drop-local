@@ -1,5 +1,7 @@
 const { execFile } = require('child_process');
 const os = require('os');
+const path = require('path');
+const { isTailscaleIPv4 } = require('./platform');
 
 // ===================== Konstanta =====================
 const CACHE_TTL = 10000; // ms — jangan spam `tailscale status` tiap announce cycle
@@ -8,12 +10,7 @@ const CACHE_TTL = 10000; // ms — jangan spam `tailscale status` tiap announce 
 let cachedPeers = [];
 let lastFetch = 0;
 let cliMissingWarned = false;
-
-// Tailscale's IPv4 CGNAT range: 100.64.0.0 – 100.127.255.255
-function isTailscaleIPv4(addr) {
-  const parts = addr.split('.').map(Number);
-  return parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127;
-}
+let selfIp = null; // alamat Tailscale terakhir yang terdeteksi
 
 // ===================== IP tailscale sendiri — TANPA CLI =====================
 // Gak semua platform punya `tailscale` CLI (misal Tailscale app resmi di
@@ -24,18 +21,91 @@ function getSelfTailscaleIP() {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
-      if (net.family === 'IPv4' && isTailscaleIPv4(net.address)) return net.address;
+      // Node >= 18 balikin 'IPv4' (string), Node lama balikin 4 (number).
+      // Termux sering masih pakai Node lama — dua-duanya harus kena.
+      const isIPv4 = net.family === 'IPv4' || net.family === 4;
+      if (isIPv4 && isTailscaleIPv4(net.address)) return net.address;
     }
   }
   return null;
 }
 
+/**
+ * Pantau alamat Tailscale sendiri, log begitu muncul / berubah.
+ *
+ * Kenapa perlu dipantau (bukan cuma dicetak saat startup): di Android/Termux
+ * aplikasinya sering dinyalakan SETELAH server jalan, jadi log startup
+ * sudah lewat. Dengan pemantau, alamat tetap muncul begitu Tailscale aktif.
+ *
+ * @returns {string|null} alamat Tailscale sekarang
+ */
+function watchSelfTailscaleIP() {
+  const ip = getSelfTailscaleIP();
+  if (ip === selfIp) return ip;
+
+  if (ip) {
+    console.log(`[Tailscale] Alamat Tailscale terdeteksi: ${ip} — device ini bisa dijangkau lewat tailnet (HP/Termux juga, tanpa CLI)`);
+  } else if (selfIp) {
+    console.log('[Tailscale] Alamat Tailscale hilang — Tailscale dimatikan atau belum terhubung');
+  }
+  selfIp = ip;
+  return ip;
+}
+
 // ===================== Peer list — best-effort lewat CLI =====================
 // Ini opsional: device yang gak punya CLI (HP/Termux) gak bisa proaktif nyari
 // peer duluan, tapi tetep BISA ditemuin lewat mekanisme reply-back di discovery.js.
-function runTailscaleStatus() {
+
+// Lokasi umum binary `tailscale`. Di Windows Tailscale memang terinstall
+// ke "C:\Program Files\Tailscale" tapi TIDAK selalu ada di PATH — tanpa
+// daftar ini, device yang Tailscale-nya aktif tetap dikira "CLI gak ada"
+// padahal peer tailnet bisa ditemukan.
+const TAILSCALE_CLI_CANDIDATES = [
+  'tailscale',
+  'tailscale.exe',
+  process.env.PROGRAMFILES ? path.join(process.env.PROGRAMFILES, 'Tailscale', 'tailscale.exe') : null,
+  process.env['PROGRAMFILES(X86)'] ? path.join(process.env['PROGRAMFILES(X86)'], 'Tailscale', 'tailscale.exe') : null,
+  process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Tailscale', 'tailscale.exe') : null,
+  '/usr/bin/tailscale',
+  '/usr/local/bin/tailscale',
+  '/snap/bin/tailscale',
+  '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+].filter(Boolean);
+
+let cachedCliPath = null; // null = belum dicek, false = tidak ada, string = path
+
+/**
+ * Cari binary `tailscale` (PATH + lokasi install umum).
+ * @returns {Promise<string|null>}
+ */
+function findTailscaleCli() {
+  if (cachedCliPath !== null) return Promise.resolve(cachedCliPath || null);
+
   return new Promise((resolve) => {
-    execFile('tailscale', ['status', '--json'], { timeout: 3000 }, (err, stdout) => {
+    let index = 0;
+    (function tryNext() {
+      if (index >= TAILSCALE_CLI_CANDIDATES.length) {
+        cachedCliPath = false;
+        return resolve(null);
+      }
+      const candidate = TAILSCALE_CLI_CANDIDATES[index++];
+      execFile(candidate, ['version'], { timeout: 4000 }, (err) => {
+        if (!err) {
+          cachedCliPath = candidate;
+          return resolve(candidate);
+        }
+        tryNext();
+      });
+    })();
+  });
+}
+
+async function runTailscaleStatus() {
+  const cli = await findTailscaleCli();
+  if (!cli) return null;
+
+  return new Promise((resolve) => {
+    execFile(cli, ['status', '--json'], { timeout: 5000 }, (err, stdout) => {
       if (err) return resolve(null);
       try {
         resolve(JSON.parse(stdout));
@@ -55,6 +125,11 @@ function pickIPv4(ips) {
 
 // ===================== Refresh cache (dipanggil tiap announce cycle, tapi throttled) =====================
 async function refreshTailscaleState() {
+  // Pantau alamat sendiri dulu — jalan tiap siklus announce (3 detik),
+  // bukan cuma saat server start. Ini yang bikin Tailscale di HP (Play Store
+  // app, tanpa CLI) tetap terdeteksi walau nyala belakangan.
+  watchSelfTailscaleIP();
+
   const now = Date.now();
   if (now - lastFetch < CACHE_TTL) return;
   lastFetch = now;
@@ -62,7 +137,7 @@ async function refreshTailscaleState() {
   const status = await runTailscaleStatus();
   if (!status) {
     if (!cliMissingWarned) {
-      console.log('[Tailscale] CLI `tailscale` gak ketemu di device ini — gak bisa proaktif nyari peer, tapi tetep bisa DIKETEMUin peer lain lewat reply-back');
+      console.log('[Tailscale] CLI `tailscale` tidak ada di device ini (normal di Android/Termux) — tidak bisa proaktif mencari peer tailnet, tapi alamat sendiri tetap terdeteksi dan peer yang punya CLI tetap bisa menemukan kita lewat reply-back');
       cliMissingWarned = true;
     }
     cachedPeers = [];
@@ -86,4 +161,4 @@ function getTailscalePeers() {
   return cachedPeers;
 }
 
-module.exports = { refreshTailscaleState, getTailscalePeers, getSelfTailscaleIP, isTailscaleIPv4 };
+module.exports = { refreshTailscaleState, getTailscalePeers, getSelfTailscaleIP, watchSelfTailscaleIP, isTailscaleIPv4, findTailscaleCli };

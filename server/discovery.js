@@ -22,7 +22,7 @@ const deviceName = DEVICE_NAME;
 // ===================== State =====================
 const knownDevices = new Map();
 const recentReplies = new Map(); // ip -> timestamp terakhir kita reply-back
-let broadcastInterval = null;
+let broadcastIntervals = []; // satu interval per interface LAN
 let tailscaleInterval = null;
 let cleanupInterval = null;
 let sockets = [];
@@ -31,35 +31,67 @@ let tailscaleSock = null; // socket khusus buat unicast (announce ke peer & repl
 // ===================== Helper: Dapetin IP LAN =====================
 // Dipindah ke platform.js supaya sinkron dengan index.js — sebelumnya
 // dua duplikat bisa memilih IP berbeda untuk device yang sama.
-const { getLANIP } = require('./platform');
+const { getLANIP, listLANInterfaces } = require('./platform');
 
 // ===================== Broadcaster =====================
+// Broadcast dikirim PER INTERFACE, ke alamat broadcast interface itu
+// (192.168.1.7 → 192.168.1.255), bukan ke 255.255.255.255.
+//
+// Kenapa: 255.255.255.255 pakai default route, dan kalau Tailscale/VPN
+// mengambil alih default route, broadcast jadi gagal (EHOSTUNREACH) —
+// peer di WiFi yang sama jadi tidak pernah ditemukan. Socket per
+// interface (bind ke IP interface itu) memastikan paket keluar lewat
+// interface yang benar.
 function startBroadcaster() {
-  const sock = dgram.createSocket('udp4');
   const ip = getLANIP();
   const message = JSON.stringify({
     type: 'announce', deviceId, deviceName, ip, port: LAN_PORT, transferPort: TRANSFER_PORT
   });
   const buffer = Buffer.from(message);
 
+  const interfaces = listLANInterfaces();
+  if (interfaces.length === 0) {
+    // Tidak ada interface LAN → broadcast global sebagai upaya terakhir.
+    startBroadcastSocket(null, '255.255.255.255', buffer);
+    return;
+  }
+
+  for (const iface of interfaces) {
+    startBroadcastSocket(iface.address, iface.broadcast, buffer);
+  }
+}
+
+function startBroadcastSocket(bindAddress, broadcastAddress, buffer) {
+  const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+
   sock.on('error', (err) => {
-    if (err.code !== 'EADDRINUSE') console.error('[Discovery] Broadcaster:', err.message);
+    if (err.code !== 'EADDRINUSE' && err.code !== 'EACCES') {
+      console.error('[Discovery] Broadcaster:', err.message);
+    }
   });
 
-  // Bind ke random port, set broadcast, kirim tiap interval
-  sock.bind(() => {
+  const start = () => {
     sock.setBroadcast(true);
     sock.unref();
-  });
 
-  broadcastInterval = setInterval(() => {
-    sock.send(buffer, 0, buffer.length, DISCOVERY_PORT, '255.255.255.255', (err) => {
-      if (err && err.code !== 'EADDRINUSE') console.error('[Discovery] Send error:', err.message);
-    });
-  }, BROADCAST_INTERVAL);
+    const interval = setInterval(() => {
+      sock.send(buffer, 0, buffer.length, DISCOVERY_PORT, broadcastAddress, (err) => {
+        if (err && err.code !== 'EADDRINUSE' && err.code !== 'EHOSTUNREACH') {
+          console.error('[Discovery] Send error:', err.message);
+        }
+      });
+    }, BROADCAST_INTERVAL);
+    broadcastIntervals.push(interval);
+  };
+
+  if (bindAddress) {
+    sock.bind(bindAddress, start);
+  } else {
+    sock.bind(start);
+  }
 
   sockets.push(sock);
-  console.log(`[Discovery] Broadcasting as "${deviceName}" (${deviceId})`);
+  console.log(`[Discovery] Broadcasting as "${deviceName}" (${deviceId}) → ${broadcastAddress}`);
 }
 
 // ===================== Tailscale Unicast Announce =====================
@@ -232,7 +264,8 @@ function seedStaticPeers() {
 }
 
 function stopDiscovery() {
-  if (broadcastInterval) clearInterval(broadcastInterval);
+  broadcastIntervals.forEach(i => clearInterval(i));
+  broadcastIntervals = [];
   if (tailscaleInterval) clearInterval(tailscaleInterval);
   if (cleanupInterval) clearInterval(cleanupInterval);
   sockets.forEach(s => s.close());

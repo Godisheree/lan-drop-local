@@ -2,7 +2,7 @@
 /**
  * Audit karakter non-Latin yang tidak disengaja di file teks.
  *
- * Menangkap artefak generasi (Cyrillic/CJK混入) yang lolos ke dokumen atau
+ * Menangkap artefak generasi (Cyrillic/CJK yang bocor) yang lolos ke dokumen atau
  * komentar kode. Emoji dan simbol umum diizinkan.
  *
  * Usage: node scripts/audit-charset.js [path ...]

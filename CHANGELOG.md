@@ -7,6 +7,136 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Security — hardening setelah audit keamanan
+
+Audit dari scanner + review manual menemukan beberapa celah yang bisa dieksploitasi
+dari device mana saja yang bisa njangkau port HTTP LAN DROP. Semuanya diperbaiki di
+rilis ini; tidak ada perubahan API yang mengganggu user.
+
+#### Fixed
+
+- **Arbitrary file read lewat `/transfer/send-file`.** Endpoint ini menerima
+  `filePath` apa adanya dari body request dan cuma dicek "ada atau tidak".
+  Artinya siapa pun yang bisa njangkau port 3000 bisa bikin device lain
+  mengirim file apa pun di disk (SSH key, cookie browser, file wallet) dengan
+  menyamar sebagai peer yang terima transfer. Sekarang path-nya wajib berada di
+  dalam folder upload (`assertInsideUploads()`), dan pesan error tidak lagi
+  membocorkan path absolut.
+- **Command injection di Termux.** Media scan memakai `exec()` dengan nama file
+  dari peer yang dipakai mentah-mentah — nama file berisi `$(...)` atau
+  backtick dieksekusi shell saat file diterima. Sekarang pakai `execFile()`
+  (argumen terpisah, tanpa shell), dan path untuk `am broadcast` di-encode
+  sebagai URI.
+- **SSRF lewat ffmpeg/ffprobe.** ffmpeg mem-*probe* isi file, bukan ekstensi:
+  file dari peer berformat `.ts` yang isinya playlist M3U8 bikin server ambil
+  URL pilihan penyerang (mis. metadata cloud `169.254.169.254`). Jalur transcode
+  dan remux sekarang pakai `-protocol_whitelist file` + `-nostdin`, sama seperti
+  jalur thumbnail yang sudah aman.
+- **Dependency produksi bermasalah.** `multer` 2.2.0 → 2.4.0 (4 advisory DoS),
+  `proxy-addr` 2.0.7 → 2.0.8 (IP spoofing, severity critical),
+  `qs` 6.15.3 → 6.16.1. `npm audit --omit=dev` sekarang **0 vulnerability**.
+  Advisory di dev-dependency (`electron-builder`) cuma build-time, tidak ikut
+  terkirim ke user.
+- **Bypass SSRF lewat hostname.** Validasi target IP semula menerima hostname
+  apa pun yang lolos charset — jadi `metadata.google.internal` bisa diselundupkan
+  lewat paket announce UDP palsu, lalu server membuka koneksi ke sana. Sekarang
+  **hanya IP literal** yang diterima (IPv4/IPv6, termasuk IPv4-mapped
+  `::ffff:192.168.x.x`). Hostname hanya boleh kalau operator daftarkan sendiri
+  lewat `LANDROP_PEERS`. Bentuk angka (`2130706433`) juga ditolak.
+- **Allowlist upload masih leksikal.** Path dicek dengan `path.resolve` +
+  `path.relative`, jadi symlink/junction di dalam folder upload yang mengarah
+  ke luar bisa lolos. Sekarang ada cek kanonik `fs.realpathSync`.
+- **Error server membocorkan stack trace.** JSON yang rusak dibalas HTML
+  bawaan Express yang berisi stack trace + path absolut, dan tanpa header
+  keamanan. Sekarang: header keamanan dipasang sebelum parser body, dan ada
+  global error handler yang balas JSON bersih (`Format JSON tidak valid`,
+  `Terjadi kesalahan di server`).
+
+#### Added
+
+- **`server/security.js`** — satu tempat untuk kontrol HTTP: security headers
+  (CSP, `nosniff`, `X-Frame-Options`), origin guard (POST lintas-origin dari
+  halaman web lain ditolak), rate limiter per IP, dan validasi target IP.
+- **Target IP cuma LAN/Tailscale.** `/transfer/request` dan
+  `/transfer/request-text` menolak alamat di luar jaringan privat/CGNAT
+  (Tailscale). Ini menutup SSRF ke host publik. Peer di luar LAN bisa tetap
+  dipakai dengan `LANDROP_ALLOW_PUBLIC_TARGETS=1`.
+- **Batas upload.** Multer sekarang punya `limits`: ukuran per file
+  (default 2 GB, `LANDROP_MAX_UPLOAD_MB`), jumlah file, jumlah field, jumlah
+  part. Error limit dibalas 413 dengan pesan jelas, bukan 500 HTML.
+- **Rate limit.** Endpoint yang mengubah state dibatasi 600 request/menit per
+  IP (cukup untuk batch 50 file); `/history/clear` dibatasi 20/menit.
+- **`npm run check:security`** — regression check buat semua kontrol di atas:
+  path allowlist, target IP, header, rate limit, larangan `exec()`, dan
+  whitelist protokol ffmpeg. Jalankan tiap kali menyentuh `server/`.
+
+#### Known limitation (bukan bug, memang desain)
+
+- **Belum ada autentikasi.** Semua endpoint terbuka untuk device di jaringan
+  yang sama — itu inti produk "nol setup". Kontrol di atas menutup jalur abuse
+  yang murah, tapi tidak menggantikan autentikasi. Kalau LAN-nya tidak
+  sepenuhnya dipercaya, jalankan server di jaringan yang lebih sempit atau
+  pakai Tailscale yang sudah ada.
+- **HTTP tanpa TLS.** Designed untuk LAN; bukan untuk internet terbuka.
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm test` | check + audit + check:unused + check:security lolos |
+| `npm run check:security` | 75/75 pemeriksaan lolos |
+| `npm run e2e` | 30/30 pemeriksaan lolos (transfer nyata dua arah) |
+| `npm audit --omit=dev` | 0 vulnerability |
+
+---
+
+### Fixed — Tailscale di HP/Termux (tanpa CLI)
+
+Tailscale di HP biasanya **tidak punya CLI `tailscale`** — aplikasinya dari
+Play Store cuma bikin interface VPN. Akibatnya log server di Termux tidak
+pernah menampilkan alamat Tailscale, padahal device-nya sebenarnya sudah
+terhubung ke tailnet.
+
+#### Fixed
+
+- **Alamat Tailscale cuma dicek saat server start.** Kalau Tailscale dinyalakan
+  **setelah** Termux, log startup sudah lewat dan alamatnya tidak pernah
+  muncul. Sekarang alamat dipantau tiap 3 detik dan langsung dicetak begitu
+  muncul (atau hilang), jadi tidak masalah urutan nyalanya.
+- **Tailscale dianggap "Wi-Fi" di Android.** Di Android, aplikasi Tailscale
+  membuat interface VPN bernama `tun0` — bukan "Tailscale" — jadi tidak
+  ke-filter dari daftar alamat LAN. Alamat CGNAT 100.x sempat muncul sebagai
+  "Wi-Fi". Sekarang alamat Tailscale dikenali dari **rentang alamatnya**
+  (100.64.0.0/10) dan ditampilkan terpisah, sesuai dokumen ADR-0006.
+- **CLI Tailscale di Windows tidak selalu ada di PATH.** Binary-nya ada di
+  `C:\Program Files\Tailscale\`, tapi tidak otomatis masuk PATH — server
+  menganggap device "tidak punya CLI" padahal peer tailnet bisa ditemukan.
+  Sekarang lokasinya dicari di PATH + lokasi install umum (Windows, macOS,
+  Linux, Termux).
+
+#### Fixed
+
+- **Broadcast LAN gagal kalau Tailscale/VPN ambil alih default route.**
+  Announce dikirim ke `255.255.255.255` yang lewat default route, jadi kalau
+  Tailscale aktif, broadcast bisa gagal (`EHOSTUNREACH`) — peer di WiFi yang
+  sama jadi tidak pernah ditemukan. Sekarang broadcast dikirim **per
+  interface** ke alamat broadcast interface itu (192.168.1.255), dengan
+  socket yang bind ke IP interface tersebut.
+- **Alamat Wi-Fi bisa berubah (DHCP).** Kalau router memberi IP baru, URL
+  dan QR di panel Sambung ikut berubah — perangkat kedua harus scan ulang.
+  Log startup selalu menampilkan alamat yang sedang dipakai.
+
+#### Notes
+
+- **CLI cuma buat cari peer**, bukan buat tahu alamat sendiri. Alamat sendiri
+  selalu dibaca dari network interface — itu yang bikin HP/Termux (tanpa CLI)
+  tetap bisa jalan. Device tanpa CLI **tidak bisa mencari peer duluan**, tapi
+  **tetep bisa ditemukan** peer lain lewat reply-back di `server/discovery.js`.
+- Kalau alamat Tailscale belum muncul di log Termux, cek dulu: aplikasi
+  Tailscale di HP sudah benar-benar "connected" (bukan sekadar terinstall)?
+  Alamat CGNAT hanya diberikan setelah VPN-nya aktif.
+
+---
 ### Added — Fase 4 (shortcut keyboard, thumbnail, PWA, hardening mobile)
 
 #### Fixed

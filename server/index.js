@@ -8,6 +8,7 @@ const transfer = require('./transfer');
 const tailscale = require('./tailscale');
 const history = require('./history');
 const thumbnail = require('./thumbnail');
+const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp } = require('./security');
 const { listLANIPv4 } = require('./platform');
 
 // Generate device name from hostname atau environment variable
@@ -16,12 +17,31 @@ const DEVICE_NAME = process.env.DEVICE_NAME || os.hostname() || 'LAN-Device';
 // ===================== Multer Setup =====================
 const uploadsDir = process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp');
 fs.mkdirSync(uploadsDir, { recursive: true });
-const upload = multer({ dest: uploadsDir });
+
+// Batas ukuran upload default 2 GB (file video besar masih muat).
+// Override: LANDROP_MAX_UPLOAD_MB=<angka>
+const MAX_UPLOAD_MB = parseInt(process.env.LANDROP_MAX_UPLOAD_MB, 10) || 2048;
+
+const upload = multer({
+  dest: uploadsDir,
+  limits: {
+    fileSize: MAX_UPLOAD_MB * 1024 * 1024,
+    files: 50,
+    fields: 20,
+    parts: 60,
+  },
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+//
+// Urutan penting: header keamanan & origin guard DULUAN, baru parser body.
+// Kalau parser body yang pertama, request dengan JSON rusak dibalas HTML
+// bawaan Express yang berisi stack trace + path absolut (bocor info).
+app.use(securityHeaders);
+app.use(sameOriginGuard);
 app.use(express.json());
 
 // Manifest & service worker butuh Content-Type & Cache-Control khusus.
@@ -89,12 +109,28 @@ app.get('/devices', (req, res) => {
 
 // ===================== Transfer Routes =====================
 
+// Rate limit untuk endpoint yang mengubah state / transferring data.
+// Device di LAN yang normal cuma polling ringan, jadi batasnya longgar
+// (1200 request / menit per IP) — cukup buat banyak batch file beruntun
+// (1 batch 50 file ≈ 100 POST) tanpa nabrak limit.
+const transferLimiter = rateLimit({ windowMs: 60 * 1000, max: 1200 });
+
+// Endpoint destruktif (hapus riwayat) — batas lebih ketat.
+const destructiveLimiter = rateLimit({ windowMs: 60 * 1000, max: 20 });
+
 // POST /transfer/request — kirim permintaan transfer ke device lain
-app.post('/transfer/request', (req, res) => {
+app.post('/transfer/request', transferLimiter, (req, res) => {
   const { targetIp, targetPort, fileName, fileSize, batchId, targetName } = req.body;
 
   if (!targetIp || !targetPort || !fileName || fileSize === undefined) {
     return res.status(400).json({ error: 'Missing fields: targetIp, targetPort, fileName, fileSize' });
+  }
+
+  // Cuma boleh menghubungi peer di LAN/Tailscale. Tanpa ini, endpoint ini
+  // jadi SSRF: server bisa dipaksa buka koneksi ke host mana saja
+  // (mis. metadata cloud) atas nama device lain.
+  if (!isAllowedTargetIp(targetIp)) {
+    return res.status(400).json({ error: 'Target IP ditolak: hanya alamat LAN/Tailscale yang diizinkan' });
   }
 
   try {
@@ -118,7 +154,7 @@ app.get('/transfer/pending', (req, res) => {
 });
 
 // POST /transfer/respond — accept/reject request
-app.post('/transfer/respond', (req, res) => {
+app.post('/transfer/respond', transferLimiter, (req, res) => {
   const { requestId, accept } = req.body;
 
   if (!requestId || accept === undefined) {
@@ -145,11 +181,15 @@ app.get('/transfer/status/:requestId', (req, res) => {
 // ===================== Hari 4 — Streaming Endpoints =====================
 
 // POST /transfer/request-text — kirim permintaan transfer teks
-app.post('/transfer/request-text', (req, res) => {
+app.post('/transfer/request-text', transferLimiter, (req, res) => {
   const { targetIp, targetPort, fileName } = req.body;
 
   if (!targetIp || !targetPort || !fileName) {
     return res.status(400).json({ error: 'Missing fields: targetIp, targetPort, fileName' });
+  }
+
+  if (!isAllowedTargetIp(targetIp)) {
+    return res.status(400).json({ error: 'Target IP ditolak: hanya alamat LAN/Tailscale yang diizinkan' });
   }
 
   try {
@@ -167,7 +207,7 @@ app.post('/transfer/request-text', (req, res) => {
 });
 
 // POST /transfer/cancel/:requestId — batalin transfer (sisi pengirim 'send' / penerima 'receive')
-app.post('/transfer/cancel/:requestId', (req, res) => {
+app.post('/transfer/cancel/:requestId', transferLimiter, (req, res) => {
   const { requestId } = req.params;
   const { role } = req.body; // 'send' atau 'receive'
   try {
@@ -183,7 +223,7 @@ app.post('/transfer/cancel/:requestId', (req, res) => {
 });
 
 // POST /transfer/send-text — kirim isi teks setelah accepted
-app.post('/transfer/send-text', async (req, res) => {
+app.post('/transfer/send-text', transferLimiter, async (req, res) => {
   const { requestId, text } = req.body;
 
   if (!requestId || typeof text !== 'string') {
@@ -211,7 +251,7 @@ app.post('/transfer/text/:id/ack', (req, res) => {
 });
 
 // POST /transfer/send-file — mulai streaming file setelah accepted
-app.post('/transfer/send-file', async (req, res) => {
+app.post('/transfer/send-file', transferLimiter, async (req, res) => {
   const { requestId, filePath } = req.body;
 
   if (!requestId || !filePath) {
@@ -303,7 +343,7 @@ app.get('/system/disk', (req, res) => {
 // ===================== Upload Route (Hari 5) =====================
 
 // POST /transfer/upload — terima file dari browser, simpan sementara
-app.post('/transfer/upload', upload.array('file', 50), (req, res) => {
+app.post('/transfer/upload', transferLimiter, upload.array('file', 50), (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -323,9 +363,40 @@ app.get('/history', (req, res) => {
 });
 
 // POST /history/clear — hapus semua riwayat
-app.post('/history/clear', (req, res) => {
+app.post('/history/clear', destructiveLimiter, (req, res) => {
   history.clear();
   res.json({ ok: true });
+});
+
+// ===================== Global Error Handler =====================
+// Handler global (HARUS 4 argumen, di Registered TERAKHIR) supaya SEMUA
+// error — dari route mana pun — dibalas JSON yang bersih.
+//
+// Tanpa ini, Express balas HTML bawaan yang isinya stack trace + path
+// absolut: itu bocor struktur folder server ke siapa pun yang bisa njangkau
+// port HTTP.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+
+  // Batas multer
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: `File melebihi batas ${MAX_UPLOAD_MB} MB` });
+  }
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_PART_COUNT' || err.code === 'LIMIT_FIELD_COUNT') {
+    return res.status(413).json({ error: 'Jumlah file/part melebihi batas yang diizinkan' });
+  }
+
+  // Body JSON rusak / terlalu besar
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Format JSON tidak valid' });
+  }
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request terlalu besar' });
+  }
+
+  // Error lain: log di server, balas pesan generik (tanpa detail internal).
+  console.error(`[Server] ${req.method} ${req.originalUrl} — ${err.message}`);
+  res.status(500).json({ error: 'Terjadi kesalahan di server' });
 });
 
 // ===================== Server Startup =====================
@@ -345,7 +416,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   transfer.startTransferServer();
 
   const tsIP = tailscale.getSelfTailscaleIP();
-  if (tsIP) console.log(`🔒 Tailscale → http://${tsIP}:${PORT}`);
+  if (tsIP) {
+    console.log(`🔒 Tailscale → http://${tsIP}:${PORT}`);
+  } else {
+    console.log('🔒 Tailscale belum terdeteksi — nyalakan Tailscale dulu (HP: aplikasi Play Store juga bisa). Kalau aktif belakangan, alamatnya muncul otomatis di log ini.');
+  }
   console.log();
 });
 
