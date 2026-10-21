@@ -59,8 +59,6 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
   aktif di `localhost` dan di deployment HTTPS. Service worker tidak pernah
   meng-cache response API (dicek oleh `verify-pwa.js`).
 
-#### Verification
-
 #### Fixed
 
 - **20 import tak terpakai** dibersihkan setelah pemecahan modul — sisa
@@ -68,14 +66,22 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
   (kadang memanggil fungsi yang sudah berubah), jadi sekarang ada skrip
   `npm run check:unused` sebagai penjaga.
 
+#### Added
+
+- **Alamat Tailscale di panel Sambung.** Kalau Tailscale aktif, alamat
+  tailnet (100.x.x.x) ikut tampil dan bisa dipilih untuk QR — sehingga file
+  bisa dikirim ke perangkat yang **tidak** di WiFi yang sama. Default tetap
+  alamat LAN (nol setup), dan petunjuk di panel menyesuaikan alamat yang
+  dipilih. Lihat [ADR-0006](docs/adr/0006-tailscale-di-panel-sambung.md).
+
 #### Verification
 
 | Skrip | Hasil |
 |---|---|
-| `npm run check` | 38/38 file lolos |
+| `npm run check` | 39/39 file lolos |
 | `npm run audit` | bersih |
 | `npm run check:unused` | 0 import mati |
-| `npm run smoke` | 3 viewport, 0 error console |
+| `npm run smoke` | 3 viewport, 0 error console, selector QR terverifikasi |
 | `npm run verify:pwa` | 16/16 pemeriksaan lolos |
 | `npm run verify:qr` | QR ter-decode OpenCV, cocok dengan URL |
 | `npm run e2e` | 30/30 pemeriksaan lolos |

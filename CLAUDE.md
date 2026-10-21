@@ -127,7 +127,7 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/devices` | GET | List discovered peers |
-| `/me` | GET | Own hostname + LAN URLs (untuk panel Sambung/QR) |
+| `/me` | GET | Own hostname + LAN URLs (Wi-Fi & Tailscale, untuk panel Sambung/QR) |
 | `/manifest.webmanifest` | GET | PWA manifest |
 | `/sw.js` | GET | Service worker (hanya dipakai di secure context) |
 | `/thumbnail/:id` | GET | Thumbnail foto/video dari file yang sudah diterima |

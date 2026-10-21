@@ -313,6 +313,53 @@ async function main() {
       });
       const qrData = JSON.parse(qrProbe.result.value);
 
+      // Cek tambahan: kalau ada lebih dari satu alamat (mis. LAN +
+      // Tailscale), user harus bisa memilih mana yang dipakai untuk QR.
+      let selectorOk = true;
+      let selectorDetail = '';
+
+      if (qrData.urlRows > 1) {
+        const selProbe = await cdp.send('Runtime.evaluate', {
+          expression: `(() => {
+            const rows = Array.from(document.querySelectorAll('#urlList .url-item'));
+            const svgBefore = document.querySelector('#qrFrame svg');
+            const hashBefore = svgBefore ? svgBefore.innerHTML : '';
+
+            // Pilih baris kedua.
+            if (rows[1]) rows[1].querySelector('.url-select').click();
+
+            // PENTING: daftar di-render ulang setelah klik, jadi node lama
+            // sudah lepas dari DOM. Yang dicek harus node yang SEKARANG.
+            const rowsAfter = Array.from(document.querySelectorAll('#urlList .url-item'));
+            const svgAfter = document.querySelector('#qrFrame svg');
+            const hashAfter = svgAfter ? svgAfter.innerHTML : '';
+
+            return JSON.stringify({
+              firstActive: rowsAfter[0] ? rowsAfter[0].classList.contains('is-active') : null,
+              secondActive: rowsAfter[1] ? rowsAfter[1].classList.contains('is-active') : null,
+              secondPressed: rowsAfter[1]
+                ? rowsAfter[1].querySelector('.url-select').getAttribute('aria-pressed')
+                : null,
+              qrChanged: hashBefore !== hashAfter,
+              labels: rowsAfter.map(r => r.querySelector('.url-label')?.textContent),
+              hint: document.getElementById('urlHint')?.textContent || '',
+              introCount: document.querySelectorAll('.connect-intro, .url-hint').length,
+            });
+          })()`,
+          returnByValue: true,
+        });
+        const sel = JSON.parse(selProbe.result.value);
+
+        selectorOk =
+          sel.firstActive === false &&
+          sel.secondActive === true &&
+          sel.secondPressed === 'true' &&
+          sel.qrChanged === true &&
+          sel.introCount === 1;
+
+        selectorDetail = JSON.stringify(sel);
+      }
+
       // Tutup modal lagi.
       await cdp.send('Runtime.evaluate', {
         expression: `document.getElementById('btnCloseConnect').click()`,
@@ -328,6 +375,8 @@ async function main() {
         viewport: viewport.name,
         probe: probeData,
         qr: qrData,
+        selectorOk,
+        selectorDetail,
         consoleErrors,
         pageErrors,
         failedRequests,
@@ -347,6 +396,10 @@ async function main() {
       console.log(`  module script: ${result.probe.moduleScripts}`);
       console.log(`  QR vendor   : ${result.probe.qrVendor}`);
       console.log(`  QR modal    : open=${result.qr.modalOpen} svg=${result.qr.qrSvg} paths=${result.qr.qrPaths} urls=${result.qr.urlRows} error=${result.qr.qrError}`);
+      if (result.qr.urlRows > 1) {
+        console.log(`  QR selector : ${result.selectorOk ? 'OK' : 'GAGAL'} · ${result.selectorDetail}`);
+        if (!result.selectorOk) problems++;
+      }
       if (result.qr.qrMessage) console.log(`  QR message  : ${result.qr.qrMessage}`);
       console.log(`  screenshot  : ${result.screenshot}`);
 

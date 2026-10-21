@@ -53,7 +53,7 @@ export function renderConnectPanel() {
   const urlList = maybeById('urlList');
   if (!frame || !urlList) return;
 
-  const { lanUrls } = getState();
+  const { lanUrls, selectedUrlIndex } = getState();
 
   clear(frame);
   clear(urlList);
@@ -61,26 +61,57 @@ export function renderConnectPanel() {
   if (lanUrls.length === 0) {
     frame.className = 'qr-frame is-error';
     frame.textContent =
-      'Tidak ada alamat LAN yang terdeteksi. Pastikan perangkat terhubung ke WiFi, lalu muat ulang halaman.';
+      'Tidak ada alamat yang terdeteksi. Pastikan perangkat terhubung ke WiFi, lalu muat ulang halaman.';
     return;
   }
 
-  frame.className = 'qr-frame';
+  // QR memakai alamat yang dipilih user. Default-nya LAN (nol setup),
+  // tapi kalau device lain di tailnet, alamat Tailscale jauh lebih berguna.
+  const activeIndex = Math.min(selectedUrlIndex, lanUrls.length - 1);
+  const primary = lanUrls[activeIndex];
 
-  // QR memuat URL utama — alamat WiFi pertama (paling mungkin dipakai HP).
-  const primary = lanUrls[0].url;
+  frame.className = 'qr-frame';
   try {
-    frame.innerHTML = buildQrSvg(primary);
+    frame.innerHTML = buildQrSvg(primary.url);
   } catch (err) {
     frame.className = 'qr-frame is-error';
     frame.textContent = 'Gagal membuat QR: ' + err.message;
   }
 
-  for (const entry of lanUrls) {
-    const item = el('li', { class: 'url-item' }, [
-      el('div', { style: { 'min-width': '0', flex: '1' } }, [
-        el('span', { class: 'url-label', text: entry.label || 'Alamat LAN' }),
-        el('span', { class: 'url-text', text: entry.url }),
+  // Hint menyesuaikan alamat yang dipilih — dua kasusnya beda jauh.
+  const hint = maybeById('urlHint');
+  if (hint) {
+    if (primary.via === 'tailscale') {
+      hint.textContent =
+        'Pindai QR ini dengan kamera HP. Alamat Tailscale bisa dibuka dari mana saja ' +
+        'selama HP-nya terhubung ke tailnet yang sama — tidak harus WiFi yang sama.';
+    } else {
+      hint.textContent =
+        'Pindai QR ini dengan kamera HP, atau buka alamat di bawah. ' +
+        'Pastikan kedua perangkat di WiFi yang sama.';
+    }
+  }
+
+  for (let i = 0; i < lanUrls.length; i++) {
+    const entry = lanUrls[i];
+    const isActive = i === activeIndex;
+
+    const item = el('li', { class: 'url-item' + (isActive ? ' is-active' : '') }, [
+      el('button', {
+        class: 'url-select',
+        type: 'button',
+        'aria-pressed': String(isActive),
+        title: isActive ? 'Alamat ini dipakai untuk QR' : 'Pakai alamat ini untuk QR',
+        onclick: () => {
+          setState({ selectedUrlIndex: i });
+          renderConnectPanel();
+        },
+      }, [
+        el('span', { class: 'url-marker', 'aria-hidden': 'true', text: isActive ? '●' : '○' }),
+        el('span', { class: 'url-body' }, [
+          el('span', { class: 'url-label', text: entry.label || 'Alamat LAN' }),
+          el('span', { class: 'url-text', text: entry.url }),
+        ]),
       ]),
       el('button', {
         class: 'copy-btn',

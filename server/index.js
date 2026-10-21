@@ -44,14 +44,38 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // ===================== Discovery Routes =====================
 
-// URL LAN yang bisa dipakai perangkat lain untuk membuka halaman ini.
+// URL yang bisa dipakai perangkat lain untuk membuka halaman ini.
 // Dipakai panel "Sambung" di frontend untuk QR + teks salin.
+//
+// Dua jenis alamat:
+//   - LAN (Wi-Fi)  : hanya bisa dijangkau perangkat di WiFi yang sama.
+//                     Nol setup — asalannya ("buka URL yang sama").
+//   - Tailscale     : alamat CGNAT 100.64.0.0/10, bisa dijangkau dari
+//                     mana saja selama perangkat lain ada di tailnet yang
+//                     sama (HP di data seluler, laptop di kantor, dll).
+//
+// Keduanya ditampilkan, user yang memilih. Tailscale TIDAK ikut
+// listLANIPv4() (interface-nya difilter sebagai virtual), jadi tidak
+// mungkin dobel.
 function getLanUrls() {
-  return listLANIPv4().map(({ name, address }) => ({
+  const urls = listLANIPv4().map(({ name, address }) => ({
     ip: address,
     url: `http://${address}:${PORT}`,
     label: name,
+    via: 'lan',
   }));
+
+  const tsIP = tailscale.getSelfTailscaleIP();
+  if (tsIP) {
+    urls.push({
+      ip: tsIP,
+      url: `http://${tsIP}:${PORT}`,
+      label: 'Tailscale',
+      via: 'tailscale',
+    });
+  }
+
+  return urls;
 }
 
 app.get('/me', (req, res) => {

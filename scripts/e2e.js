@@ -14,15 +14,47 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const net = require('net');
 const { spawn } = require('child_process');
 
 const KEEP = process.argv.includes('--keep');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const PORT_A = 3110;
-const TRANSFER_A = 3111;
-const PORT_B = 3120;
-const TRANSFER_B = 3121;
+/**
+ * Cari port bebas untuk TCP.
+ * @param {number} startPort
+ * @returns {Promise<number>}
+ */
+function findFreePort(startPort) {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', () => {
+      // Port dipakai — coba yang berikutnya.
+      if (startPort < 65000) {
+        findFreePort(startPort + 1).then(resolve, reject);
+      } else {
+        reject(new Error('Tidak ada port bebas'));
+      }
+    });
+    server.listen(startPort, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+/**
+ * Alokasikan 4 port bebas (HTTP + transfer untuk dua instance).
+ * @returns {Promise<Object>}
+ */
+async function allocatePorts() {
+  const PORT_A = await findFreePort(3110);
+  const TRANSFER_A = await findFreePort(3111);
+  const PORT_B = await findFreePort(3120);
+  const TRANSFER_B = await findFreePort(3121);
+  return { PORT_A, TRANSFER_A, PORT_B, TRANSFER_B };
+}
 
 const results = [];
 
@@ -191,8 +223,11 @@ async function main() {
     fs.rmSync(path.join(os.tmpdir(), `landrop-e2e-data-${name}`), { recursive: true, force: true });
   }
 
-  // Kedua instance satu host:peer didaftarkan manual (UDP broadcast tidak
+  // Kedua instance satu host: peer didaftarkan manual (UDP broadcast tidak
   // bisa dipakai karena satu listener per port).
+  const ports = await allocatePorts();
+  const { PORT_A, TRANSFER_A, PORT_B, TRANSFER_B } = ports;
+
   const serverA = startServer(PORT_A, TRANSFER_A, 'MesinA', 41234, `MesinB@127.0.0.1:${PORT_B}@${TRANSFER_B}`);
   const serverB = startServer(PORT_B, TRANSFER_B, 'MesinB', 41235, `MesinA@127.0.0.1:${PORT_A}@${TRANSFER_A}`);
 

@@ -321,6 +321,8 @@ async function loadIdentity() {
       ip: entry.ip,
       url: entry.url,
       label: entry.label ? `Alamat ${entry.label}` : 'Alamat LAN',
+      // `via` dipakai untuk membedakan petunjuk LAN vs Tailscale.
+      via: entry.via || 'lan',
     })));
   } catch (_) {
     byId('deviceName').textContent = '—';

@@ -39,4 +39,5 @@ keputusan penting punya **ADR**, tiap alur punya **panduan**, dan perubahan puny
 | Fungsionalitas inti (transfer, resume, riwayat, teks) | stabil |
 | UI/UX overhaul (Fase 0–3) | selesai |
 | Fase 4: shortcut keyboard, thumbnail, PWA, hardening mobile | selesai |
-| SSE untuk progres transfer (pengganti polling) | rencana — lihat [ADR-0006](adr/0006-sse-progress-dengan-fallback-polling.md) |
+| Transfer & QR lewat Tailscale | selesai — lihat [ADR-0006](adr/0006-tailscale-di-panel-sambung.md) |
+| SSE untuk progres transfer (pengganti polling) | rencana — tinggal dikerjakan |

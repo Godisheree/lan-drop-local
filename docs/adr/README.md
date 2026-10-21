@@ -14,6 +14,7 @@ Format: [MADR](https://adr.github.io/madr/) — konteks → keputusan → konsek
 | [0003](0003-dark-mode-via-tokens.md) | Dark mode lewat design token | Diterima | 2025-09-21 |
 | [0004](0004-pwa-di-konteks-http-lan.md) | PWA & service worker hanya di secure context | Diterima | 2025-10-21 |
 | [0005](0005-thumbnail-server-side-via-ffmpeg.md) | Thumbnail foto/video dibuat di server | Diterima | 2025-10-21 |
+| [0006](0006-tailscale-di-panel-sambung.md) | Alamat Tailscale di panel Sambung | Diterima | 2025-10-21 |
 
 ## Template
 

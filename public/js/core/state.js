@@ -59,6 +59,10 @@ const state = {
   installPrompt: null,
   /** Service worker versi baru tersedia dan menunggu aktif. */
   swUpdateAvailable: false,
+
+  // --- Panel Sambung ---
+  /** Index alamat yang dipakai untuk QR (0 = LAN/Wi-Fi, 1 = Tailscale, ...). */
+  selectedUrlIndex: 0,
 };
 
 /** @type {Set<(state: Object, changed: Set<string>) => void>} */
