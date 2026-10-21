@@ -9,6 +9,7 @@ keamanannya.
 ```bash
 node scripts/check-js.js        # sintaks semua file JS (ESM-aware)
 node scripts/audit-charset.js   # deteksi karakter asing yang tidak sengaja
+node scripts/check-unused-imports.js  # deteksi import yang tak terpakai
 node scripts/smoke.js --url http://localhost:3000   # 3 viewport, cek error console
 node scripts/verify-qr.js --url http://localhost:3000  # QR di-decode OpenCV
 node scripts/verify-pwa.js --url http://localhost:3000 # manifest, ikon, service worker
@@ -19,10 +20,11 @@ node scripts/e2e.js             # 2 instance, transfer nyata dua arah
 |---|---|
 | `check-js.js` | Syntax error, import rusak, `continue` di luar loop |
 | `audit-charset.js` | Artefak generasi (Cyrillic/CJK) di teks & komentar |
+| `check-unused-imports.js` | Import mati — sisa refactor yang tak dibersihkan |
 | `smoke.js` | Error console, uncaught exception, request 404/500, elemen hilang |
 | `verify-qr.js` | QR tidak valid / tidak cocok dengan URL yang ditampilkan |
 | `verify-pwa.js` | Manifest rusak, ikon salah ukuran, SW cache API, URL CDN |
-| `e2e.js` | Alur transfer rusak, batch tidak terkelompok, cancel gagal, shortcut mati, thumbnail hilang |
+| `e2e.js` | Alur transfer rusak, batch tidak terkelompok, cancel gagal, shortcut mati, thumbnail hilang, beforeunload salah |
 
 **Prasyarat `verify-qr.js`:** `pip install opencv-python-headless pillow`
 
@@ -106,6 +108,7 @@ nilai modus terang tidak bisa diasumsikan berlaku di modus gelap.
 
 - [ ] `node scripts/check-js.js` — 0 failure
 - [ ] `node scripts/audit-charset.js` — OK
+- [ ] `node scripts/check-unused-imports.js` — 0 import mati
 - [ ] `node scripts/smoke.js` — "SEMUA BERSIH"
 - [ ] `node scripts/verify-pwa.js` — semua PASS
 - [ ] `node scripts/e2e.js` — semua PASS

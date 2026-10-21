@@ -5,9 +5,9 @@
  * Menggantikan sendBatch() / pollSendStatus() / retryTransfer() dari client.js lama.
  */
 
-import { getState, setState } from '../core/state.js';
+import { getState } from '../core/state.js';
 import { showToast, announce } from './notify.js';
-import { addTransferItem, updateTransferItem, pollProgress, stopProgress } from './transfers.js';
+import { addTransferItem, updateTransferItem, pollProgress } from './transfers.js';
 
 /** @type {Map<string, AbortController>} batchId -> controller upload */
 const uploadControllers = new Map();

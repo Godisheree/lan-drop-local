@@ -12,9 +12,8 @@
  *                    gagal di tengah jalan.
  */
 
-import { el, byId, maybeById } from '../core/dom.js';
 import { getState } from '../core/state.js';
-import { showToast, notify } from './notify.js';
+import { notify } from './notify.js';
 import { formatBytes } from '../core/format.js';
 
 /** @type {WakeLockSentinel|null} */

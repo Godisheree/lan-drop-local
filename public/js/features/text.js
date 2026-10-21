@@ -4,7 +4,7 @@
  * Menggantikan setupTextSend() / pollReceivedTexts() / showTextOverlay() dari client.js lama.
  */
 
-import { el, byId } from '../core/dom.js';
+import { byId } from '../core/dom.js';
 import { getState, setState } from '../core/state.js';
 import { showToast, notify } from './notify.js';
 import { openModal, closeModal } from './a11y.js';

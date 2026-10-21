@@ -4,7 +4,7 @@
  * Semua di-bundle di satu modul supaya mudah disabling (mis. mode tenang).
  */
 
-import { el, clear, byId, maybeById } from '../core/dom.js';
+import { el, clear, maybeById } from '../core/dom.js';
 
 const TOAST_DURATION = 4000;
 const MAX_TOASTS = 4;

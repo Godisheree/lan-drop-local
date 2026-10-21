@@ -220,6 +220,21 @@ async function main() {
     const deviceCountA = await pageA.cdp.eval(`document.querySelectorAll('.device-card').length`);
     check('UI: kartu perangkat tampil di sisi A', deviceCountA > 0, `${deviceCountA} kartu`);
 
+    // --- Hardening mobile: beforeunload saat idle ---
+    // Dicek di AWAL, sebelum ada transfer apa pun — secara logika inilah
+    // satu-satunya waktu yang benar-benar "idle".
+    const idleProbe = await pageA.cdp.eval(`(async () => {
+      const m = await import('/js/core/state.js');
+      const active = Array.from(m.getState().activeTransfers.entries())
+        .map(([id, t]) => id + ':' + t.status);
+      const ev = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(ev);
+      return JSON.stringify({ active, prevented: ev.defaultPrevented });
+    })()`);
+    const idle = JSON.parse(idleProbe);
+    check('Mobile: beforeunload tidak mengganggu saat idle', idle.prevented === false,
+      `prevented=${idle.prevented} active=${idle.active.join(',') || 'tidak ada'}`);
+
     // --- Siapkan file uji (3 file -> harus jadi 1 batch) ---
     const tmpFiles = [];
     for (let i = 1; i <= 3; i++) {
@@ -686,6 +701,55 @@ async function main() {
       })()`
     );
     check('Thumbnail: id asing ditolak', traversal === 404 || traversal === 400, `status ${traversal}`);
+
+    // --- Hardening mobile ---
+    const mobileProbe = await pageA.cdp.eval(`(async () => {
+      const mod = await import('/js/features/mobile.js');
+      const disk = await mod.checkDiskSpace(1024);
+      return JSON.stringify({
+        wakeLockSupported: mod.isWakeLockSupported(),
+        diskOk: disk ? disk.ok : null,
+        diskFree: disk ? disk.free : null,
+        diskNeeded: disk ? disk.needed : null,
+      });
+    })()`);
+    const mobile = JSON.parse(mobileProbe);
+    check('Mobile: pemeriksaan ruang disk bekerja', mobile.diskOk === true,
+      `free=${mobile.diskFree} needed=${mobile.diskNeeded}`);
+
+    // Sekarang aktifkan transfer, lalu cek beforeunload MENYANGKAL.
+    await pageA.cdp.eval(`(async () => {
+      const mod = await import('/js/features/send.js');
+      const devices = await (await fetch('/devices')).json();
+      const peer = devices[0];
+      const chunk = new Uint8Array(1024 * 1024);
+      const parts = [];
+      for (let i = 0; i < 30; i++) parts.push(chunk);
+      await mod.sendBatch(
+        { ip: peer.ip, port: peer.transferPort, targetName: peer.deviceName },
+        [new File(parts, 'e2e-wakelock.bin')]
+      );
+    })()`);
+
+    // Terima di peer supaya transfer benar-benar berjalan.
+    for (let i = 0; i < 30; i++) {
+      const open = await pageB.cdp.eval(
+        `!document.getElementById('requestModal').classList.contains('hidden')`
+      );
+      if (open) {
+        await pageB.cdp.eval(`document.getElementById('btnAccept').click()`);
+        break;
+      }
+      await sleep(300);
+    }
+
+    const beforeUnloadActive = await pageA.cdp.eval(`(() => {
+      const ev = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    })()`);
+    check('Mobile: beforeunload memperingatkan saat transfer aktif', beforeUnloadActive === true,
+      `defaultPrevented=${beforeUnloadActive}`);
 
     // --- Error console ---
     const allErrors = [...pageA.cdp.consoleErrors, ...pageB.cdp.consoleErrors];

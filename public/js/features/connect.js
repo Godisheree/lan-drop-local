@@ -6,7 +6,7 @@
  * Tidak ada request ke luar jaringan.
  */
 
-import { el, clear, byId, maybeById } from '../core/dom.js';
+import { el, clear, maybeById } from '../core/dom.js';
 import { getState, setState } from '../core/state.js';
 import { showToast } from './notify.js';
 import { openModal, closeModal } from './a11y.js';

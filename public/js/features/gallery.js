@@ -10,7 +10,7 @@
  * browser).
  */
 
-import { el, clear, byId, maybeById } from '../core/dom.js';
+import { el, clear, maybeById } from '../core/dom.js';
 import { formatBytes } from '../core/format.js';
 import { showToast } from './notify.js';
 import { thumbnailUrl } from './thumbnail.js';

@@ -32,9 +32,12 @@ npm run build-win                  # build NSIS installer -> dist/*.exe
 ```bash
 npm run check          # syntax check semua file JS (ESM-aware)
 npm run audit          # deteksi karakter asing yang tidak disengaja
+npm run check:unused   # deteksi import yang tak terpakai
 npm run smoke          # 3 viewport + cek error console (butuh server jalan)
 npm run verify:qr      # decode QR dengan OpenCV, cocokkan dengan URL di UI
+npm run verify:pwa     # manifest + ikon + service worker
 npm run e2e            # 2 instance, transfer file nyata dua arah
+npm run icons          # regenerate ikon PWA
 ```
 
 Detail tiap skrip ada di [docs/guides/qa-checklist.md](docs/guides/qa-checklist.md).

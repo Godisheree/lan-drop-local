@@ -5,9 +5,9 @@
  * pollProgress / pollSendStatus / retryTransfer).
  */
 
-import { el, clear, byId } from '../core/dom.js';
+import { el, byId } from '../core/dom.js';
 import { formatBytes, formatSpeed, formatDuration, fileEmoji, formatPath } from '../core/format.js';
-import { getState, setState, updateSpeed, getSpeed } from '../core/state.js';
+import { getState, updateSpeed } from '../core/state.js';
 import { showToast, announce } from './notify.js';
 import { attachThumbnail } from './thumbnail.js';
 

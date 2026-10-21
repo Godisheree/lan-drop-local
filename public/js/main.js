@@ -9,15 +9,11 @@
 
 import { byId, maybeById } from './core/dom.js';
 import { getState, setState } from './core/state.js';
-import {
-  fetchDevices, fetchMe, fetchHistory, fetchPending, fetchReceivedTexts,
-} from './core/api.js';
+import { fetchDevices, fetchMe } from './core/api.js';
 
 import { renderDevices, setupDragDrop, setupFileInputs, openFilePicker, toTransferTarget } from './features/devices.js';
 import { setLanUrls, openConnectPanel, closeConnectPanel } from './features/connect.js';
-import {
-  addTransferItem, updateTransferItem, cancelTransfer, retryTransfer, stopProgress,
-} from './features/transfers.js';
+import { cancelTransfer, retryTransfer } from './features/transfers.js';
 import { sendBatch, sendText } from './features/send.js';
 import {
   setupTextComposer, openComposer, setupTextOverlay, pollReceivedTexts, submitComposer,
@@ -25,7 +21,7 @@ import {
 import { setupRequestModal, pollPending } from './features/receive.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
-import { initPwa, renderInstallSection, applyUpdate } from './features/pwa.js';
+import { initPwa, applyUpdate } from './features/pwa.js';
 import { initLiveRegion, showToast, clearBadge } from './features/notify.js';
 import { initMobileHardening } from './features/mobile.js';
 import { initShortcuts, registerShortcut, closeTopModal, hasOpenModal } from './features/a11y.js';
