@@ -65,6 +65,12 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
   refactor yang tak pernah dirapikan. Import mati menyembunyikan bug
   (kadang memanggil fungsi yang sudah berubah), jadi sekarang ada skrip
   `npm run check:unused` sebagai penjaga.
+- **Deteksi ffmpeg terduplikasi.** `server/transfer.js` masih punya salinan
+  penuh `FFMPEG_CANDIDATES` + `checkFfmpeg()` padahal `server/ffmpeg.js`
+  sudah dibuat untuk itu. Akibatnya **ffmpeg dipindai dua kali** (mahal,
+  ~5 detik tiap kali) dan kedua salinan bisa menghasilkan path berbeda.
+  Sekarang satu sumber kebenaran di `server/ffmpeg.js`, termasuk
+  `getFfprobePath()` yang diturunkan dari path ffmpeg.
 
 #### Added
 
@@ -85,6 +91,7 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 | `npm run verify:pwa` | 16/16 pemeriksaan lolos |
 | `npm run verify:qr` | QR ter-decode OpenCV, cocok dengan URL |
 | `npm run e2e` | 30/30 pemeriksaan lolos |
+| `node scripts/check-transcode.js` | PASS — .mkv jadi .mp4, ffprobe jalan |
 
 ---
 

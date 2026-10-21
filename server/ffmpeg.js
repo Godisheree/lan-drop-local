@@ -60,6 +60,20 @@ async function getFfmpegPath() {
 }
 
 /**
+ * Path ffprobe yang pas dengan ffmpeg yang ditemukan.
+ *
+ * Kalau ffmpeg ada di lokasi kustom, ffprobe biasanya ada di direktori yang
+ * sama. Kalau tidak ketemu, jatuh ke `ffprobe` di PATH.
+ *
+ * @returns {Promise<string>}
+ */
+async function getFfprobePath() {
+  const ffmpegPath = await getFfmpegPath();
+  if (!ffmpegPath) return 'ffprobe';
+  return ffmpegPath.replace(/ffmpeg(\.exe)?$/i, (m) => 'ffprobe' + m.slice(6));
+}
+
+/**
  * Jalankan ffmpeg dengan argumen yang diberikan.
  * @param {string[]} args
  * @param {Object} [opts]
@@ -83,5 +97,6 @@ module.exports = {
   FFMPEG_CANDIDATES,
   checkFfmpeg,
   getFfmpegPath,
+  getFfprobePath,
   runFfmpeg,
 };

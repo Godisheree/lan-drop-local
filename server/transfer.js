@@ -229,36 +229,10 @@ function cleanupStale() {
 // Format video lama/yang mungkin gak di-support native HP → konversi ke H.264 .mp4
 const NEEDS_TRANSCODE = ['.mpeg', '.mpg', '.avi', '.mkv', '.webm', '.mov', '.3gp', '.flv', '.ts'];
 
-// Lokasi umum ffmpeg di Windows (winget, manual install, dll)
-const FFMPEG_CANDIDATES = [
-  'ffmpeg',
-  'ffmpeg.exe',
-  path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.1-full_build', 'bin', 'ffmpeg.exe'),
-  path.join(process.env.ProgramFiles || '', 'ffmpeg', 'bin', 'ffmpeg.exe'),
-  path.join(process.env.ProgramW6432 || '', 'ffmpeg', 'bin', 'ffmpeg.exe'),
-  path.join(os.homedir(), 'ffmpeg', 'bin', 'ffmpeg.exe'),
-];
-
-let _ffmpegPath = undefined; // undefined=belum cek, false=cek&gakada, string=path
-
-function checkFfmpeg() {
-  return new Promise((resolve) => {
-    console.log('[FFMPEG] checkFfmpeg: mulai scan ffmpeg...');
-    (function tryNext(i) {
-      if (i >= FFMPEG_CANDIDATES.length) {
-        console.log('[FFMPEG] checkFfmpeg: SEMUA kandidat habis — ffmpeg TIDAK ditemukan');
-        return resolve(false);
-      }
-      const candidate = FFMPEG_CANDIDATES[i];
-      console.log(`[FFMPEG] checkFfmpeg: coba kandidat [${i}]: "${candidate}"`);
-      const proc = spawn(candidate, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 });
-      let settled = false;
-      const done = (result) => { if (!settled) { settled = true; if (result) { console.log(`[FFMPEG] checkFfmpeg: ✅ DITEMUKAN di "${candidate}"`); _ffmpegPath = candidate; resolve(true); } else { console.log(`[FFMPEG] checkFfmpeg: ❌ "${candidate}" gagal, lanjut next...`); tryNext(i + 1); } } };
-      proc.on('error', () => done(false));
-      proc.on('exit', (code) => { console.log(`[FFMPEG] checkFfmpeg: "${candidate}" exit code=${code}`); done(code === 0); });
-    })(0);
-  });
-}
+// Deteksi & pemanggilan ffmpeg lived di server/ffmpeg.js - dipakai juga oleh
+// server/thumbnail.js. Dipisah supaya thumbnail.js tidak perlu mengimpor
+// transfer.js (itu akan bikin import siklik).
+const { getFfmpegPath, getFfprobePath, runFfmpeg } = require('./ffmpeg');
 
 function transcodeToMp4(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
@@ -270,14 +244,10 @@ function transcodeToMp4(inputPath, outputPath) {
       '-movflags', '+faststart',
       '-y', outputPath
     ];
-    const proc = spawn(_ffmpegPath || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let stderr = '';
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (err) => reject(err));
-    proc.on('exit', (code) => {
+    runFfmpeg(args).then(({ code, stderr }) => {
       if (code === 0) resolve(outputPath);
       else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-300)}`));
-    });
+    }, reject);
   });
 }
 
@@ -293,39 +263,35 @@ function remuxToM4a(inputPath, outputPath) {
       '-vn',                  // buang semua stream video (cover art, dll)
       '-y', outputPath
     ];
-    const proc = spawn(_ffmpegPath || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let stderr = '';
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (err) => reject(err));
-    proc.on('exit', (code) => {
+    runFfmpeg(args).then(({ code, stderr }) => {
       if (code === 0) resolve(outputPath);
       else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-300)}`));
-    });
+    }, reject);
   });
 }
 
 function getStreamInfo(filePath) {
   return new Promise((resolve) => {
     // ffprobe biasanya di PATH atau satu direktori dengan ffmpeg
-    const ffprobePath = _ffmpegPath
-      ? _ffmpegPath.replace(/ffmpeg(\.exe)?$/i, (m) => 'ffprobe' + m.slice(6))
-      : 'ffprobe';
-    const proc = spawn(ffprobePath, [
-      '-v', 'quiet',
-      '-print_format', 'json',
-      '-show_streams',
-      filePath
-    ], { timeout: 10000 });
-    let stdout = '';
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.on('error', () => resolve(null));
-    proc.on('exit', (code) => {
-      if (code === 0) {
-        try { resolve(JSON.parse(stdout)); } catch (_) { resolve(null); }
-      } else {
-        resolve(null);
-      }
-    });
+    getFfprobePath().then((ffprobePath) => {
+      const proc = spawn(ffprobePath, [
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_streams',
+        filePath
+      ], { timeout: 10000 });
+
+      let stdout = '';
+      proc.stdout.on('data', (d) => { stdout += d.toString(); });
+      proc.on('error', () => resolve(null));
+      proc.on('exit', (code) => {
+        if (code === 0) {
+          try { resolve(JSON.parse(stdout)); } catch (_) { resolve(null); }
+        } else {
+          resolve(null);
+        }
+      });
+    }, () => resolve(null));
   });
 }
 
@@ -338,25 +304,13 @@ async function transcodeIfNeeded(filePath, fileName) {
   }
   console.log(`[TRANSCODE] ext "${ext}" TERMASUK NEEDS_TRANSCODE — lanjut cek ffmpeg`);
 
-  // Cek ffmpeg availability sekali aja
-  if (_ffmpegPath === undefined) {
-    console.log('[TRANSCODE] _ffmpegPath masih undefined, akan jalankan checkFfmpeg()...');
-    const ok = await checkFfmpeg();
-    if (!ok) {
-      _ffmpegPath = false; // cache negative result
-      console.log('[TRANSCODE] ffmpeg TIDAK tersedia — skip konversi video, kirim original');
-    } else {
-      console.log(`[TRANSCODE] ffmpeg tersedia di "${_ffmpegPath}" — lanjut konversi`);
-    }
-  } else if (_ffmpegPath === false) {
-    console.log('[TRANSCODE] _ffmpegPath = false (cache negatif) — ffmpeg sebelumnya gak ketemu, kirim original');
-  } else {
-    console.log(`[TRANSCODE] _ffmpegPath sudah terisi = "${_ffmpegPath}" — lanjut konversi langsung`);
-  }
-  if (!_ffmpegPath) {
-    console.log('[TRANSCODE] _ffmpegPath falsy — FALLBACK: kirim original tanpa konversi');
+  // Cek ffmpeg availability sekali aja (di-cache di server/ffmpeg.js).
+  const ffmpegPath = await getFfmpegPath();
+  if (!ffmpegPath) {
+    console.log('[TRANSCODE] ffmpeg TIDAK tersedia — skip konversi video, kirim original');
     return { filePath, fileName, fileSize: null, wasProcessed: false };
   }
+  console.log(`[TRANSCODE] ffmpeg tersedia di "${ffmpegPath}" — lanjut konversi`);
 
   // ===== Fix: Multer simpan file tanpa ekstensi, ffmpeg perlu ekstensi untuk deteksi format =====
   let inputPath = filePath;

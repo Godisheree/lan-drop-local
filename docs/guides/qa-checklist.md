@@ -14,6 +14,8 @@ node scripts/smoke.js --url http://localhost:3000   # 3 viewport, cek error cons
 node scripts/verify-qr.js --url http://localhost:3000  # QR di-decode OpenCV
 node scripts/verify-pwa.js --url http://localhost:3000 # manifest, ikon, service worker
 node scripts/e2e.js             # 2 instance, transfer nyata dua arah
+node scripts/check-transcode.js # video .mkv -> .mp4 (butuh ffmpeg)
+node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tailscale
 ```
 
 | Skrip | Menangkap |
@@ -25,6 +27,8 @@ node scripts/e2e.js             # 2 instance, transfer nyata dua arah
 | `verify-qr.js` | QR tidak valid / tidak cocok dengan URL yang ditampilkan |
 | `verify-pwa.js` | Manifest rusak, ikon salah ukuran, SW cache API, URL CDN |
 | `e2e.js` | Alur transfer rusak, batch tidak terkelompok, cancel gagal, shortcut mati, thumbnail hilang, beforeunload salah |
+| `check-transcode.js` | Autotranscode video mati (ffmpeg tak jalan / path salah) |
+| `check-tailscale-ui.js` | Alamat Tailscale tak muncul, selector tak mengubah QR, hint dobel |
 
 **Prasyarat `verify-qr.js`:** `pip install opencv-python-headless pillow`
 
