@@ -52,6 +52,12 @@
       </div>
     </header>
 
+    <!-- Badge mode terima otomatis — harus terlihat tanpa membuka panel -->
+    <div id="autoApproveBadge" class="auto-badge" role="status" hidden>
+      <span aria-hidden="true">⚡</span>
+      <span>Terima otomatis aktif</span>
+    </div>
+
     <!-- ===== Tab mobile ===== -->
     <nav id="mobileTabs" class="mobile-tabs" role="tablist" aria-label="Tampilan utama">
       <button class="tab" type="button" role="tab" data-tab="devices"
@@ -201,6 +207,24 @@
         <li>Router/firewall tidak boleh memblokir UDP 41234 dan TCP 3000–3001.</li>
         <li>Kalau device tidak muncul, cek blok "Status jaringan" di atas.</li>
       </ul>
+
+      <h4 class="connect-subtitle">Terima otomatis</h4>
+      <div class="auto-approve" id="autoApproveSection">
+        <label class="switch-row" for="autoApproveToggle">
+          <input type="checkbox" id="autoApproveToggle" class="switch-input">
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-text">
+            <strong>Terima file tanpa konfirmasi</strong>
+            <small>Perangkat ini langsung menerima file dari perangkat lain, tanpa jendela terima/tolak.</small>
+          </span>
+        </label>
+        <div id="autoApprovePeers" class="auto-peers" hidden>
+          <p class="auto-peers-hint">
+            Pilih perangkat yang boleh mengirim otomatis. Tidak ada yang dipilih = semua perangkat.
+          </p>
+          <ul id="autoApprovePeerList" class="auto-peer-list"></ul>
+        </div>
+      </div>
 
       <h4 class="connect-subtitle">Aplikasi</h4>
       <div id="installSection" class="install-section"></div>

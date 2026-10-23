@@ -1,5 +1,4 @@
 const express = require('express');
-const os = require('os');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -7,6 +6,7 @@ const discovery = require('./discovery');
 const transfer = require('./transfer');
 const tailscale = require('./tailscale');
 const history = require('./history');
+const settings = require('./settings');
 const thumbnail = require('./thumbnail');
 const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
 const { listLANIPv4, getDeviceName } = require('./platform');
@@ -331,32 +331,13 @@ app.get('/thumbnail/:id', async (req, res) => {
 // yang jelas — lebih baik ditolak di awal daripada gagal di tengah transfer.
 app.get('/system/disk', (req, res) => {
   try {
-    const { getWindowsSaveDir } = require('./platform');
-    const { isTermux } = require('./platform');
+    const { getSaveDirRoot, getSaveDirFreeSpace } = require('./platform');
 
-    // Folder tujuan: Windows pakai D:\LAN-DROP, Termux pakai shared storage,
-    // sisanya data dir.
-    let targetDir;
-    if (isTermux()) {
-      targetDir = path.join(os.homedir(), 'storage', 'pictures');
-    } else {
-      targetDir = getWindowsSaveDir('photo');
-    }
+    const targetDir = getSaveDirRoot();
+    const free = getSaveDirFreeSpace();
+    if (free === null) throw new Error('unavailable');
 
-    // Kalau foldernya belum ada, cek parent-nya.
-    let probe = targetDir;
-    while (probe && !fs.existsSync(probe)) {
-      const parent = path.dirname(probe);
-      if (parent === probe) break;
-      probe = parent;
-    }
-
-    const stat = fs.statfsSync(probe);
-    return res.json({
-      free: stat.bavail * stat.bsize,
-      total: stat.blocks * stat.bsize,
-      path: targetDir,
-    });
+    return res.json({ free, total: null, path: targetDir });
   } catch (err) {
     // Tidak bisa diukur (mis. filesystem virtual) — biarkan client yang
     // menentukan sendiri apakah perlu memeriksa.
@@ -377,6 +358,31 @@ app.post('/transfer/upload', transferLimiter, upload.array('file', 50), (req, re
     fileSize: f.size
   }));
   res.json({ files });
+});
+
+// ===================== Settings =====================
+
+// GET /settings/auto-approve — status terima otomatis
+app.get('/settings/auto-approve', (req, res) => {
+  res.json(settings.getAutoApprove());
+});
+
+// POST /settings/auto-approve — nyalain/matiin terima otomatis
+//
+// Dilindungi sameOriginGuard (middleware global): POST lintas-origin dari
+// halaman web lain ditolak, jadi halaman asing tidak bisa menyalakan mode
+// ini dari browser orang lain.
+app.post('/settings/auto-approve', transferLimiter, (req, res) => {
+  const { enabled, peers } = req.body || {};
+
+  if (enabled !== undefined && typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Field "enabled" harus boolean' });
+  }
+  if (peers !== undefined && !Array.isArray(peers)) {
+    return res.status(400).json({ error: 'Field "peers" harus array nama perangkat' });
+  }
+
+  res.json(settings.setAutoApprove({ enabled, peers }));
 });
 
 // ===================== History =====================

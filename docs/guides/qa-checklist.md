@@ -14,6 +14,7 @@ node scripts/check-security.js  # regression check keamanan
 node scripts/check-identity.js  # regression check nama device
 node scripts/check-routing.js   # regression check routing peer (LAN vs Tailscale)
 node scripts/check-routes.js    # 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
+node scripts/check-autoapprove.js  # terima otomatis: fail-closed saat ukuran mencurigakan
 node scripts/smoke.js --url http://localhost:3000   # 3 viewport, cek error console
 node scripts/verify-qr.js --url http://localhost:3000  # QR di-decode OpenCV
 node scripts/verify-pwa.js --url http://localhost:3000 # manifest, ikon, service worker
@@ -31,6 +32,7 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 | `check-identity.js` | Nama device "localhost", env tidak diprioritaskan, sumber kebenaran nama device terduplikasi |
 | `check-routing.js` | Alamat peer flip-flop antara LAN/Tailscale, alamat `localhost` tersimpan, jalur `local` salah |
 | `check-routes.js` | Transfer rusak di jalur tertentu (loopback/WiFi/Tailscale), file mendarat di server pengirim, isi file beda |
+| `check-autoapprove.js` | Terima otomatis menerima ukuran yang mencurigakan (klaim palsu dari pengirim), file ditulis padahal disk tidak cukup, entri pending tertinggal |
 | `smoke.js` | Error console, uncaught exception, request 404/500, elemen hilang |
 | `verify-qr.js` | QR tidak valid / tidak cocok dengan URL yang ditampilkan |
 | `verify-pwa.js` | Manifest rusak, ikon salah ukuran, SW cache API, URL CDN |

@@ -137,6 +137,23 @@ export function fetchProgress(requestId) {
 }
 
 /**
+ * GET status terima otomatis.
+ * @returns {Promise<{enabled: boolean, peers: string[]}>}
+ */
+export function fetchAutoApprove() {
+  return api('/settings/auto-approve');
+}
+
+/**
+ * Nyalain/matiin terima otomatis.
+ * @param {{enabled?: boolean, peers?: string[]}} patch
+ * @returns {Promise<{enabled: boolean, peers: string[]}>}
+ */
+export function postAutoApprove(patch) {
+  return postJson('/settings/auto-approve', patch);
+}
+
+/**
  * GET status request keluar.
  * @param {string} requestId
  * @returns {Promise<Object>}

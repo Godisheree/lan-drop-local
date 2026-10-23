@@ -63,6 +63,10 @@ const state = {
   // --- Panel Sambung ---
   /** Index alamat yang dipakai untuk QR (0 = LAN/Wi-Fi, 1 = Tailscale, ...). */
   selectedUrlIndex: 0,
+
+  // --- Terima otomatis ---
+  /** Setting server: terima file dari peer tanpa modal. `peers` kosong = semua. */
+  autoApprove: { enabled: false, peers: [] },
 };
 
 /** @type {Set<(state: Object, changed: Set<string>) => void>} */

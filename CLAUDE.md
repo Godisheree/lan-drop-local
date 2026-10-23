@@ -37,6 +37,7 @@ npm run check:security # regression check keamanan (path allowlist, header, rate
 npm run check:identity # regression check nama device
 npm run check:routing  # regression check routing peer (LAN vs Tailscale)
 npm run check:routes   # 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
+npm run check:autoapprove # terima otomatis: fail-closed saat ukuran mencurigakan
 npm run smoke          # 3 viewport + cek error console (butuh server jalan)
 npm run verify:qr      # decode QR dengan OpenCV, cocokkan dengan URL di UI
 npm run verify:pwa     # manifest + ikon + service worker
@@ -102,6 +103,10 @@ TCP protocol over `net` module on port 3001. Custom **length-prefixed frame prot
 **Resume transfer:** resume key = `sha1(senderName|batchId|fileName|fileSize)` — stable across retries because the frontend reuses the same `batchId`. Receiver checks `parts/` meta in data dir; if a partial exists, `transfer-response` frame carries `resumeOffset`, and sender's read stream starts at that offset. On unexpected disconnect the partial file + meta are kept (retry via "Coba Lagi" button); on explicit cancel both are deleted. Partial/meta older than 7 days cleaned on startup (`cleanupStale()`), same for stale uploads.
 
 **History (`server/history.js`):** completed/failed/cancelled transfers recorded to `history.json` in data dir (debounced atomic write, max 200 entries). Endpoints `GET /history`, `POST /history/clear`. Rendered in UI "Riwayat" panel.
+
+**Auto-approve / terima otomatis (`server/settings.js` + `decideAutoAccept` in `server/transfer.js`):** a receiving device can accept incoming files with no modal. Settings live in `settings.json` in the data dir (`{ autoApprove: { enabled, peers } }`, `peers: []` = every peer). Endpoints `GET`/`POST /settings/auto-approve`. The decision runs **server-side**, not in the frontend — frontend polling stops when the tab is hidden, so a frontend-side implementation would only work while someone watches the screen. `kind: 'text'` frames already worked this way.
+
+Size checks are **two-stage**, and this matters: the `transfer-request` frame's `fileSize` is the sender's claim, while the number actually written comes from `file-start`. The first check screens, the second one (`req.auto` guard in `startRawReceive`) protects the disk — a peer can claim 1 byte and then send 50 GB. Unknown/non-finite/`<= 0` sizes and sizes that exceed free space both cancel **before any byte is written**. Unmeasurable disk space means **reject** (fail-closed). Resume compares only the remaining bytes (`actualSize - startBytes`), otherwise a resumable transfer would be rejected forever. `pendingRequests` entries are dropped on socket close regardless of status — not just when `pending` — else an accepted-but-never-started transfer leaks a phantom progress row.
 
 **Data dir:** `%APPDATA%/lan-drop` (Windows) or `~/.lan-drop` (Termux/Linux), override with `$LANDROP_DATA_DIR`. Never write data inside the install dir — Program Files is read-only for non-admin users.
 
@@ -198,6 +203,8 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 | `/transfer/progress/:id` | GET | Poll transfer progress (both sides) |
 | `/history` | GET | Transfer history (newest first) |
 | `/history/clear` | POST | Delete all history |
+| `/settings/auto-approve` | GET | Status terima otomatis (`{ enabled, peers }`) |
+| `/settings/auto-approve` | POST | Nyalain/matiin terima otomatis |
 
 ## Critical Implementation Details
 

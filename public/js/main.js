@@ -20,6 +20,7 @@ import {
 } from './features/text.js';
 import { setupRequestModal, pollPending } from './features/receive.js';
 import { setupPaste } from './features/paste.js';
+import { setupAutoApprove, renderAutoApprove } from './features/autoapprove.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
 import { initPwa, applyUpdate } from './features/pwa.js';
@@ -74,6 +75,8 @@ async function pollDevices() {
     // Jalur peer mengikuti link yang sedang dibuka user (LAN atau Tailscale),
     // supaya tidak "berganti-ganti" di tengah jalan.
     renderDevices(await fetchDevices(currentVia()), deviceHandlers);
+    // Daftar peer online ikut menentukan pilihan di allowlist terima otomatis.
+    renderAutoApprove();
   } catch (_) {
     // Server tidak terjangkau - biarkan daftar lama.
   }
@@ -356,6 +359,7 @@ async function init() {
   setupRequestModal();
   setupHistory();
   setupTextOverlay();
+  setupAutoApprove();
 
   setupTextComposer({
     onSend: (target, text) => sendText(target, text),

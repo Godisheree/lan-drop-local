@@ -4,9 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
-const { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, isTailscaleIPv4 } = require('./platform');
+const { isTermux, isWindows, getDataDir, getWindowsSaveDir, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, isTailscaleIPv4 } = require('./platform');
 const thumbnail = require('./thumbnail');
 const history = require('./history');
+const settings = require('./settings');
 
 // ===================== Konstanta =====================
 const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
@@ -534,6 +535,20 @@ function startRawReceive(requestId, req) {
         const transferKey = req.transferKey || makeTransferKey(req.senderName, req.batchId, safeName, actualSize);
         req.transferKey = transferKey;
 
+        // ===== Guard ukuran nyata (transfer yang diterima otomatis) =====
+        //
+        // decideAutoAccept() hanya melihat ukuran yang DIKLAIM pengirim di
+        // frame transfer-request. Ukuran yang benar-benar ditulis datang dari
+        // frame ini, dan bisa jauh lebih besar (pengirim jahat, atau
+        // transcoding ffmpeg di sisi pengirim yang membesarkan file).
+        // Tanpa cek ulang, "fail-closed" cuma berlaku untuk pengirim jujur.
+        if (!Number.isFinite(Number(actualSize)) || Number(actualSize) <= 0) {
+          console.warn(`[Transfer] ⏸️ ${requestId} — ukuran file tidak masuk akal (${actualSize}), transfer dibatalkan`);
+          socket.end();
+          pendingRequests.delete(requestId);
+          return;
+        }
+
         // ===== Tujuan akhir: stream LANGSUNG ke folder tujuan =====
         // Dulu: tulis ke cwd/downloads dulu, lalu move ke folder tujuan.
         //   1. Windows, app install di Program Files → mkdirSync di cwd (folder
@@ -596,6 +611,22 @@ function startRawReceive(requestId, req) {
           savePath: finalPath,
           resumed: startBytes > 0
         });
+
+        // ===== Guard ruang disk dengan ukuran NYATA (transfer otomatis) =====
+        // Cek terakhir sebelum menulis. Ukuran di frame file-start ini yang
+        // benar-benar dipakai write stream, dan hanya sisa (actualSize -
+        // startBytes) yang perlu ruang baru. Gagal ukur = jangan tebak.
+        if (req.auto) {
+          const free = getSaveDirFreeSpace();
+          const remaining = actualSize - startBytes;
+          if (free === null || remaining > free) {
+            console.warn(`[Transfer] ⏸️ ${requestId} — ruang disk tidak cukup untuk sisa ${remaining} byte (terima otomatis), transfer dibatalkan`);
+            transferProgress.delete(requestId);
+            socket.end();
+            pendingRequests.delete(requestId);
+            return;
+          }
+        }
 
         // Part file: 'w' buat transfer baru, 'r+' + start offset buat lanjutan
         const writeStream = startBytes > 0
@@ -768,6 +799,50 @@ function startRawReceive(requestId, req) {
   socket.on('data', metaHandler);
 }
 
+// ===================== Terima Otomatis (auto-approve) =====================
+/**
+ * Putuskan permintaan file ini diterima tanpa modal?
+ *
+ * Dijalankan di SERVER, bukan frontend: polling frontend berhenti saat tab
+ * disembunyikan, jadi kalau logikanya di sana mode "drop box" cuma jalan
+ * selama ada yang menatap layar.
+ *
+ * Ukuran di sini datang dari frame `transfer-request` — itu klaim pengirim,
+ * bukan fakta. Cek ini hanya penyaring awal; ukuran yang benar-benar ditulis
+ * dicek ulang di `file-start` (lihat guard di startRawReceive). Tanpa cek
+ * kedua itu, peer bisa mengaku file 1 byte lalu mengirim 50 GB.
+ *
+ * Gagal cek disk = TOLAK (fail-closed). Mengisi disk sampai penuh bikin
+ * perangkat penerima tidak bisa dipakai sama sekali.
+ *
+ * @param {{senderName: string, fileSize: number}} msg
+ * @param {number} [resumeOffset] byte yang sudah ada di disk (tidak perlu ruang baru)
+ * @returns {{accept: boolean, reason?: string}}
+ */
+function decideAutoAccept(msg, resumeOffset = 0) {
+  if (!settings.isAutoApprovePeer(msg.senderName)) return { accept: false };
+
+  const size = Number(msg.fileSize);
+  // Ukuran tidak diketahui → tidak bisa dijamin muat. Jangan tebak.
+  if (!Number.isFinite(size) || size <= 0) {
+    return { accept: false, reason: 'Ukuran file tidak diketahui, terima otomatis dilewati' };
+  }
+
+  const free = getSaveDirFreeSpace();
+  if (free === null) {
+    return { accept: false, reason: 'Penerima tidak bisa memeriksa ruang disk, kiriman otomatis dilewati' };
+  }
+
+  // Sisa yang masih perlu ditulis, bukan ukuran penuh — kalau tidak, transfer
+  // yang bisa dilanjutkan (partial sudah 90%) ditolak terus selamanya.
+  const remaining = Math.max(0, size - Number(resumeOffset || 0));
+  if (remaining > free) {
+    return { accept: false, reason: 'Ruang disk penerima tidak cukup untuk terima otomatis' };
+  }
+
+  return { accept: true };
+}
+
 // ===================== TCP Server (Penerima) =====================
 function startTransferServer() {
   cleanupStale(); // buang upload & partial yang udah kedaluwarsa
@@ -815,6 +890,18 @@ function startTransferServer() {
         // Text: langsung auto-accept + terima frame isi, tanpa menunggu modal
         if (msg.kind === 'text') {
           respondToRequest(requestId, true);
+          return;
+        }
+
+        // Terima otomatis (kalau diaktifkan) — jalan tanpa frontend.
+        const decision = decideAutoAccept(msg, entry.resumeOffset);
+        if (decision.accept) {
+          entry.auto = true;
+          console.log(`[Transfer] ⚡ ${requestId} diterima otomatis dari ${msg.senderName}`);
+          respondToRequest(requestId, true);
+        } else if (decision.reason) {
+          console.log(`[Transfer] ⏸️ ${requestId} tidak diterima otomatis: ${decision.reason}`);
+          respondToRequest(requestId, false, decision.reason);
         }
       }
     });
@@ -824,14 +911,20 @@ function startTransferServer() {
     socket.on('data', dataHandler);
     socket.on('error', () => {});
     socket.on('close', () => {
+      // Socket tertutup = transfer ini tidak akan bergerak lagi. Entri
+      // pendingRequests WAJIB dibuang apa pun statusnya, kalau tidak Map-nya
+      // tumbuh terus dan frontend melihat "permintaan" hantu yang tak pernah
+      // selesai (progresnya 404 selamanya, polling tidak pernah berhenti).
+      // Progres akhir tetap terbaca dari transferProgress, yang Map terpisah.
       for (const [id, req] of pendingRequests) {
-        if (req.socket === socket) {
-          if (req.status === 'pending') {
-            console.log(`[Transfer] Request ${id} cancelled — sender disconnected`);
-            pendingRequests.delete(id);
-          }
-          break;
+        if (req.socket !== socket) continue;
+        if (req.status === 'pending') {
+          console.log(`[Transfer] Request ${id} cancelled — sender disconnected`);
+        } else if (req.status === 'accepted') {
+          console.log(`[Transfer] Request ${id} selesai tanpa transfer — entri dibuang (${req.status})`);
         }
+        pendingRequests.delete(id);
+        break;
       }
     });
   });
@@ -875,6 +968,8 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
 
       req.status = msg.accepted ? 'accepted' : 'rejected';
       req.responseAt = Date.now();
+      // Alasan penolakan dari penerima (mis. ruang disk tidak cukup).
+      req.rejectMessage = msg.accepted ? null : (msg.message || null);
       // Penerima punya partial file ini → lanjutkan dari offset, bukan dari nol
       req.resumeOffset = (msg.accepted && msg.resumeOffset) || 0;
 
@@ -1100,25 +1195,39 @@ async function startTextSend(requestId, text) {
 }
 
 // ===================== Respond Accept/Reject =====================
-function respondToRequest(requestId, accepted) {
+/**
+ * @param {string} requestId
+ * @param {boolean} accepted
+ * @param {string} [message] alasan penolakan otomatis, diteruskan ke pengirim
+ */
+function respondToRequest(requestId, accepted, message) {
   const req = pendingRequests.get(requestId);
   if (!req) throw new Error(`Request ${requestId} not found`);
   if (req.status !== 'pending') throw new Error(`Request ${requestId} already ${req.status}`);
 
   req.status = accepted ? 'accepted' : 'rejected';
+  req.rejectMessage = accepted ? null : (message || null);
 
   if (accepted) {
     // resumeOffset: penerima punya partial → pengirim lanjut dari sini, bukan dari nol
     sendFramedMessage(req.socket, { type: 'transfer-response', accepted: true, resumeOffset: req.resumeOffset || 0 });
     // Mulai raw receive — parser akan dilepas di dalam startRawReceive
     startRawReceive(requestId, req);
+    // Entri TIDAK dihapus di sini: alur penerimaan masih butuh `req`
+    // (transferKey, status, senderName) untuk menulis file dan mencatat
+    // riwayat. Yang menghapusnya: 'finish'/'error' di startRawReceive, atau
+    // handler 'close' di bawah kalau pengirim menghilang sebelum file-start.
   } else {
-    sendFramedMessage(req.socket, { type: 'transfer-response', accepted: false, message: 'Rejected by user' });
+    sendFramedMessage(req.socket, {
+      type: 'transfer-response',
+      accepted: false,
+      message: req.rejectMessage || 'Ditolak oleh penerima'
+    });
     req.socket.end();
     pendingRequests.delete(requestId);
   }
 
-  return { requestId, status: req.status };
+  return { requestId, status: req.status, message: req.rejectMessage };
 }
 
 // ===================== Progress =====================
@@ -1152,6 +1261,7 @@ function getPendingRequests() {
       senderId: req.senderId,
       batchId: req.batchId,
       kind: req.kind || 'file',
+      auto: !!req.auto,
       status: req.status,
       createdAt: req.createdAt
     });
@@ -1181,7 +1291,15 @@ function getRequestStatus(requestId) {
 
   const outgoing = outgoingRequests.get(requestId);
   if (outgoing) {
-    return { requestId, status: outgoing.status, role: 'sender', resumeOffset: outgoing.resumeOffset || 0 };
+    return {
+      requestId,
+      status: outgoing.status,
+      role: 'sender',
+      resumeOffset: outgoing.resumeOffset || 0,
+      // Alasan penolakan dari penerima (mis. ruang disk tidak cukup untuk
+      // terima otomatis). null kalau ditolak manual tanpa pesan.
+      reason: outgoing.rejectMessage || null
+    };
   }
 
   return null;

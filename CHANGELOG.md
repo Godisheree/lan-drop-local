@@ -7,6 +7,68 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Added — terima otomatis (auto-approve)
+
+Satu perangkat bisa dijadikan "drop box": nyalakan **Terima otomatis** di panel
+Sambung, dan perangkat itu langsung menerima file dari perangkat lain tanpa
+jendela terima/tolak. Gunanya untuk perangkat yang memang jadi tujuan (laptop
+yang ditinggal menyala, HP yang dipakai sebagai penampung foto).
+
+Saat aktif, muncul badge **⚡ Terima otomatis aktif** di bawah header — status
+ini harus terlihat tanpa membuka panel, karena artinya perangkat berubah jadi
+penampung terbuka.
+
+#### Added
+
+- **Toggle di panel Sambung**, di bagian "Terima otomatis", lengkap dengan
+  penjelasan singkat apa yang terjadi kalau dinyalakan.
+- **Allowlist peer opsional.** Saat toggle aktif, daftar perangkat yang terdeteksi
+  muncul dengan checkbox. Tidak ada yang dicentang = semua perangkat boleh.
+  Peer yang sudah dicentang tapi sedang offline tetap tampil supaya centangnya
+  bisa dicopot.
+- **Transfer otomatis muncul di panel Aktivitas** dengan label
+  "⚡ Diterima otomatis" — bukan mendarat diam-diam di folder.
+- **Pengirim melihat alasan penolakan otomatis.** Kalau ruang disk penerima
+  tidak cukup, pengirim membaca "Ruang disk penerima tidak cukup untuk terima
+  otomatis", bukan "Ditolak penerima" yang bikin salah paham.
+- **`GET`/`POST /settings/auto-approve`**, tersimpan di `settings.json` dalam
+  data dir (pola sama dengan `history.json`: cache memori + tulis atomic yang
+  di-debounce).
+
+#### Catatan implementasi
+
+- **Keputusannya di SERVER, bukan di frontend.** Polling frontend berhenti saat
+  tab disembunyikan (`visibilitychange`), jadi kalau logikanya di sana mode ini
+  cuma jalan selama ada yang menatap layar. Pola ini sudah ada: frame
+  `kind: 'text'` juga diterima otomatis di sisi server.
+- **Ukuran dari `transfer-request` adalah klaim, bukan fakta.** Cek awal memakai
+  angka itu, lalu dicek ulang di frame `file-start` — angka itulah yang
+  benar-benar ditulis ke disk, dan bisa lebih besar (pengirim jahat, atau
+  transcoding ffmpeg di sisi pengirim). Ukuran yang tidak masuk akal (`NaN`,
+  `<= 0`) dan ukuran yang melebihi ruang bebas membatalkan transfer **sebelum**
+  satu byte ditulis.
+- **Fail-closed.** Kalau ruang disk tidak bisa diukur (`statfs` gagal, drive
+  belum terpasang), permintaan **ditolak** — bukan diterima dengan harapan.
+- **Resume dihitung dari sisa, bukan ukuran penuh.** Transfer 2 GB dengan
+  partial 1,9 GB hanya butuh 100 MB ruang baru; memakai ukuran penuh bikin
+  transfer itu ditolak selamanya.
+- **`getSaveDirFreeSpace()` pindah ke `server/platform.js`**, menggantikan loop
+  probe yang dulu ditulis inline di `/system/disk`. Sekarang dipakai dua tempat.
+- **Entri `pendingRequests` dibuang saat socket tertutup**, apa pun statusnya —
+  bukan cuma saat `pending`. Sebelumnya transfer yang diterima tapi gagal
+  sebelum `file-start` meninggalkan entri hantu yang membuat frontend
+  menampilkan baris progres yang tidak pernah selesai.
+- `CACHE_VERSION` naik ke `landrop-shell-v4`; `/js/features/autoapprove.js`
+  masuk daftar precache.
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm run check:autoapprove` | 11/11 — toggle mati tidak menerima, ukuran tak diketahui ditolak, klaim 1e15 ditolak, file ukuran wajar mendarat utuh, klaim palsu di `file-start` tidak menulis apa pun, tidak ada entri pending tertinggal |
+
+---
+
 ### Added — tempel dari clipboard (Ctrl+V)
 
 Kirim tanpa menyeret dan tanpa memilih file: salin file, gambar, atau teks di

@@ -3,6 +3,7 @@
 
 const os = require('os');
 const path = require('path');
+const fs = require('fs');
 const { execFileSync } = require('child_process');
 
 function isTermux() {
@@ -35,6 +36,50 @@ function getWindowsSaveDir(category) {
   if (process.env.LANDROP_SAVE_DIR) return process.env.LANDROP_SAVE_DIR;
   const sub = WINDOWS_SAVE_CATEGORIES[category];
   return sub ? path.join(WINDOWS_SAVE_DIR, sub) : WINDOWS_SAVE_DIR;
+}
+
+// ===================== Ruang Disk Folder Simpan =====================
+
+/**
+ * Folder tempat file diterima mendarat (sebelum dibagi per kategori).
+ * @returns {string}
+ */
+function getSaveDirRoot() {
+  return isTermux()
+    ? path.join(os.homedir(), 'storage', 'pictures')
+    : getWindowsSaveDir('photo');
+}
+
+/**
+ * Ruang bebas (byte) di filesystem tempat file diterima mendarat.
+ *
+ * Semua subfolder kategori ada di filesystem yang sama, jadi satu probe cukup.
+ * Kalau folder simpan tidak ada (drive D: belum terpasang), resolveSaveDir()
+ * jatuh ke data dir — jadi data dir ikut diprobe sebelum menyerah.
+ *
+ * @returns {number|null} byte bebas, atau null kalau tidak bisa diukur.
+ *   Pemanggil harus fail-closed (anggap tidak muat).
+ */
+function getSaveDirFreeSpace() {
+  for (const target of [getSaveDirRoot(), getDataDir()]) {
+    let probe = target;
+
+    // Folder-nya mungkin belum ada — naik ke leluhur terdekat yang ada.
+    while (probe && !fs.existsSync(probe)) {
+      const parent = path.dirname(probe);
+      probe = parent === probe ? null : parent;
+    }
+    if (!probe) continue;
+
+    try {
+      const stat = fs.statfsSync(probe);
+      return stat.bavail * stat.bsize;
+    } catch (_) {
+      // Coba kandidat berikutnya.
+    }
+  }
+
+  return null;
 }
 
 // ===================== LAN IP Selection =====================
@@ -253,4 +298,4 @@ function getDeviceName() {
   return cachedDeviceName;
 }
 
-module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, getOwnAddresses, isUsablePeerAddress, getDeviceName, resolveDeviceName, sanitizeDeviceName, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4 };
+module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, getSaveDirRoot, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, getOwnAddresses, isUsablePeerAddress, getDeviceName, resolveDeviceName, sanitizeDeviceName, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4 };

@@ -25,8 +25,27 @@ export async function pollPending() {
     const pendings = await fetchPending();
 
     for (const req of pendings) {
-      if (req.status !== 'pending') continue;
       if (state.knownRequestIds.has(req.requestId)) continue;
+
+      // Diterima otomatis oleh server (mode terima otomatis): tidak ada modal,
+      // tapi tetap harus muncul di panel Aktivitas — kalau tidak, user cuma
+      // lihat file mendarat di folder tanpa jejak apa pun di UI.
+      if (req.status === 'accepted' && req.auto) {
+        state.knownRequestIds.add(req.requestId);
+        addTransferItem(req.requestId, {
+          direction: 'receive',
+          fileName: req.fileName,
+          fileSize: req.fileSize,
+          senderName: req.senderName,
+          status: 'transferring',
+          statusText: '⚡ Diterima otomatis',
+          batchId: req.batchId,
+        });
+        pollProgress(req.requestId, 'receive');
+        continue;
+      }
+
+      if (req.status !== 'pending') continue;
       state.knownRequestIds.add(req.requestId);
 
       // Kelompokkan request satu kiriman jadi satu batch.

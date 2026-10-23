@@ -14,7 +14,7 @@
  *      user bisa melihat UI versi lama setelah update.
  */
 
-const CACHE_VERSION = 'landrop-shell-v3';
+const CACHE_VERSION = 'landrop-shell-v4';
 
 const SHELL_ASSETS = [
   '/',
@@ -33,6 +33,7 @@ const SHELL_ASSETS = [
   '/js/core/format.js',
   '/js/core/state.js',
   '/js/features/a11y.js',
+  '/js/features/autoapprove.js',
   '/js/features/connect.js',
   '/js/features/devices.js',
   '/js/features/gallery.js',

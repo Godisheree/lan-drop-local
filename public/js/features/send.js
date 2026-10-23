@@ -248,11 +248,14 @@ async function waitForAccept(item) {
       if (st.status === 'rejected') {
         clearInterval(timer);
         state.waitStartedAt.delete(item.requestId);
+        // Penerima bisa menolak otomatis dengan alasan (mis. ruang disk
+        // tidak cukup). Tampilkan alasannya — "Ditolak penerima" saja bikin
+        // user mengira orangnya yang menolak.
         updateTransferItem(item.requestId, {
           status: 'rejected',
-          statusText: '❌ Ditolak penerima',
+          statusText: st.reason ? `❌ ${st.reason}` : '❌ Ditolak penerima',
         });
-        showToast('Permintaan ditolak', 'error');
+        showToast(st.reason || 'Permintaan ditolak', 'error');
         return;
       }
 
