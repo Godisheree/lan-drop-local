@@ -14,3 +14,4 @@ out/
 .tmp/
 
 electron.zip
+.tmp-*

@@ -55,7 +55,7 @@ function buildCard(device, handlers) {
     el('span', { text: 'tersambung' }),
   ]);
 
-  const dropHint = el('p', { class: 'drop-hint', text: '📤 Seret file ke sini untuk mengirim' });
+  const dropHint = el('p', { class: 'drop-hint', text: '📤 Seret file ke sini, atau Ctrl+V untuk menempel' });
 
   const actions = el('div', { class: 'btn-file-row' }, [
     el('button', {

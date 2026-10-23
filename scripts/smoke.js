@@ -369,6 +369,78 @@ async function main() {
       });
       await sleep(300);
 
+      // Ctrl+V di badan halaman (tanpa klik area) harus ditangani app,
+      // bukan diabaikan browser. Tiga hal yang dicek:
+      //   1. ada kartu peer  -> preventDefault dipanggil + kartu berkedip
+      //   2. tanpa kartu     -> toast "Belum ada perangkat tujuan"
+      //   3. fokus di textarea -> TIDAK direbut (composer tetap bisa paste)
+      const pasteProbe = await cdp.send('Runtime.evaluate', {
+        awaitPromise: true,
+        expression: `(() => {
+          const toasts = () => document.querySelectorAll('#toastHost .toast').length;
+          const flash = () => document.querySelectorAll('.device-card.is-drag-over').length;
+          const warnText = () => Array.from(document.querySelectorAll('#toastHost .toast'))
+            .map((t) => t.textContent).join(' | ');
+
+          const makePaste = (text) => {
+            const dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            return new ClipboardEvent('paste', {
+              clipboardData: dt, bubbles: true, cancelable: true,
+            });
+          };
+
+          // Jangan benar-benar mengirim ke peer palsu — cukup pastikan jalur
+          // kirim terpanggil. fetch diganti promise yang tidak pernah settle,
+          // jadi tidak ada request jaringan dan tidak ada unhandled rejection.
+          //
+          // Stub TIDAK dipulihkan: sendText melakukan await import lebih
+          // dulu, jadi postJson baru jalan di microtask setelah IIFE
+          // ini selesai. Memulihkan fetch secara sinkron membuat request
+          // sungguhan lolos ke server. Navigasi viewport berikutnya
+          // me-reload halaman, jadi stub hilang dengan sendirinya.
+          window.fetch = () => new Promise(() => {});
+
+          const list = document.getElementById('deviceList');
+          const cards = Array.from(document.querySelectorAll('.device-card'));
+          const hasCard = cards.length > 0;
+
+          // --- 1. Ada peer: paste ditangani app + kartu teratas berkedip ---
+          const ev = makePaste('halo dari smoke test');
+          document.body.dispatchEvent(ev);
+          const bodyHandled = ev.defaultPrevented;
+          const flashed = flash();
+
+          // --- 2. Tanpa peer: harus muncul toast peringatan, bukan diam ---
+          for (const card of cards) card.remove();
+          const warnBefore = toasts();
+          const evNoPeer = makePaste('tidak ada tujuan');
+          document.body.dispatchEvent(evNoPeer);
+          const noPeerHandled = evNoPeer.defaultPrevented;
+          const noPeerToast = toasts() - warnBefore;
+          const warn = warnText();
+          for (const card of cards) list.appendChild(card);
+
+          // --- 3. Fokus di textarea: paste TIDAK boleh direbut ---
+          const ta = document.createElement('textarea');
+          document.body.appendChild(ta);
+          ta.focus();
+          const taBefore = toasts();
+          const evTa = makePaste('ikuti saya');
+          ta.dispatchEvent(evTa);
+          const taRebut = evTa.defaultPrevented;
+          ta.remove();
+
+          return JSON.stringify({
+            bodyHandled, flashed, hasCard,
+            noPeerHandled, noPeerToast, warn,
+            taRebut, leftover: toasts() - taBefore,
+          });
+        })()`,
+        returnByValue: true,
+      });
+      const pasteData = JSON.parse(pasteProbe.result.value);
+
       // Screenshot.
       const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
       const shotPath = path.join(args.out, `${viewport.name}.png`);
@@ -380,6 +452,7 @@ async function main() {
         qr: qrData,
         selectorOk,
         selectorDetail,
+        paste: pasteData,
         consoleErrors,
         pageErrors,
         failedRequests,
@@ -412,6 +485,26 @@ async function main() {
       if (result.qr.checklist < 4) {
         problems++;
         console.log('  Checklist   : GAGAL - checklist syarat device kurang dari 4 baris');
+      }
+      // Ctrl+V: dengan peer → ditangani app + kartu teratas berkedip;
+      // tanpa peer → toast peringatan; fokus di textarea → tidak direbut.
+      const p = result.paste || {};
+      const pasteOk =
+        p.bodyHandled === true &&
+        p.flashed >= 1 &&
+        p.noPeerHandled === true &&
+        p.noPeerToast >= 1 &&
+        /Belum ada perangkat/.test(p.warn || '') &&
+        p.taRebut === false &&
+        p.leftover === 0;
+      console.log(
+        `  Ctrl+V      : ${pasteOk ? 'OK' : 'GAGAL'} · ` +
+        `handled=${p.bodyHandled} flash=${p.flashed} ` +
+        `tanpaPeerToast=${p.noPeerToast} textareaDiRebut=${p.taRebut}`
+      );
+      if (!pasteOk) {
+        problems++;
+        console.log(`  Ctrl+V      : ${JSON.stringify(p)}`);
       }
       console.log(`  screenshot  : ${result.screenshot}`);
 

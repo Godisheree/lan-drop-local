@@ -19,6 +19,7 @@ import {
   setupTextComposer, openComposer, setupTextOverlay, pollReceivedTexts, submitComposer,
 } from './features/text.js';
 import { setupRequestModal, pollPending } from './features/receive.js';
+import { setupPaste } from './features/paste.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
 import { initPwa, applyUpdate } from './features/pwa.js';
@@ -362,6 +363,13 @@ async function init() {
 
   setupDragDrop(deviceHandlers);
   setupFileInputs(deviceHandlers);
+
+  // Ctrl+V di mana saja (tanpa klik area dulu) — file/gambar lewat jalur
+  // kirim file, teks lewat jalur kirim teks. Target: perangkat pertama.
+  setupPaste({
+    onFiles: (target, files) => sendBatch(target, files),
+    onText: (target, text) => sendText(target, text),
+  });
 
   // Shortcut global. Satu sumber kebenaran: a11y.js menangani Escape
   // (menutup modal teratas) dan Enter/Ctrl+Enter per konteks.

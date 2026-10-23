@@ -7,6 +7,54 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Added — tempel dari clipboard (Ctrl+V)
+
+Kirim tanpa menyeret dan tanpa memilih file: salin file, gambar, atau teks di
+mana saja, lalu tekan **Ctrl+V** saat kursor ada di halaman LAN DROP. Tidak
+perlu mengklik area mana pun lebih dulu.
+
+Jenis isi dideteksi di browser, bukan di server — event `paste` sudah membawa
+`clipboardData`, jadi tidak ada satu pun round-trip HTTP tambahan hanya untuk
+menebak yang ditempel itu file atau teks:
+
+| Isi clipboard | Jalur yang dipakai |
+|---|---|
+| File / gambar (termasuk "Copy image" dari browser) | Jalur kirim file yang sudah ada (`sendBatch`) |
+| Teks biasa | Jalur kirim teks yang sudah ada (`sendText`) |
+
+#### Added
+
+- **Ctrl+V di badan halaman.** Target = perangkat teratas di daftar; kartu
+  tersebut berkedip sebagai konfirmasi visual ke mana isinya pergi. Kalau
+  belum ada peer, muncul toast peringatan — bukan diam.
+- **`Ctrl+V` terdaftar di panel Sambung** beserta hint pada kartu perangkat
+  ("Seret file ke sini, atau Ctrl+V untuk menempel").
+
+#### Catatan implementasi
+
+- **Gambar dari "Copy image" tetap tertangkap.** Sebagian browser hanya
+  mengisi `clipboardData.items` (`kind: 'file'`) dan membiarkan
+  `clipboardData.files` kosong — tanpa fallback `getAsFile()` gambar akan
+  terkirim sebagai teks.
+- **Paste di kolom isian tidak direbut.** Composer teks dan modal yang sedang
+  terbuka menang atas handler global, supaya menempel ke textarea tetap
+  berperilaku normal.
+- **`preventDefault` juga dipanggil saat belum ada peer.** Kalau tidak,
+  browser menjalankan paste native (mis. membuka file di tab baru) sambil
+  app menampilkan peringatan — dua reaksi untuk satu aksi.
+- `CACHE_VERSION` di `public/sw.js` naik ke `landrop-shell-v3` dan
+  `/js/features/paste.js` masuk daftar precache.
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm test` | check + audit + check:unused + check:security + check:identity + check:routing lolos |
+| `npm run e2e` | 39/39 — 2 instance: paste file tersimpan utuh (1 MB), paste teks tampil di penerima, paste di textarea tidak direbut |
+| `npm run smoke` | 3 viewport: paste ditangani, kartu berkedip, peringatan tanpa peer, 0 error console |
+
+---
+
 ### Fixed — alamat peer stabil per jalur (LAN / Tailscale)
 
 Kirim lewat Tailscale bisa mendarat di `localhost:3000`. Akar masalahnya

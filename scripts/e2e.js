@@ -810,6 +810,131 @@ async function main() {
     check('Mobile: beforeunload memperingatkan saat transfer aktif', beforeUnloadActive === true,
       `defaultPrevented=${beforeUnloadActive}`);
 
+    // --- Ctrl+V: tempel file & teks di badan halaman ---
+    // Tanpa klik area dulu — persis yang dilakukan user: fokus di halaman,
+    // lalu Ctrl+V. Event `paste` disintesiskan dengan DataTransfer asli
+    // (bukan clipboard OS, yang tidak bisa diisi dari CDP).
+    const pasteFileProbe = await pageA.cdp.eval(`(async () => {
+      const list = document.getElementById('deviceList');
+      const card = list.querySelector('.device-card');
+      if (!card) return JSON.stringify({ error: 'tidak ada kartu peer' });
+
+      const bytes = new Uint8Array(1024 * 1024);
+      for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 7) % 251;
+      const file = new File([bytes], 'e2e-paste.bin');
+
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const ev = new ClipboardEvent('paste', {
+        clipboardData: dt, bubbles: true, cancelable: true,
+      });
+      // Fokus di body — bukan kartu, bukan tombol.
+      document.body.focus();
+      document.body.dispatchEvent(ev);
+
+      return JSON.stringify({
+        handled: ev.defaultPrevented,
+        files: dt.files.length,
+        flashed: card.classList.contains('is-drag-over'),
+        target: card.dataset.deviceName,
+      });
+    })()`);
+    const pf = JSON.parse(pasteFileProbe);
+    check('Ctrl+V: paste file ditangani di badan halaman',
+      pf.handled === true && pf.files === 1,
+      JSON.stringify(pf));
+    check('Ctrl+V: kartu perangkat teratas berkedip sebagai umpan balik',
+      pf.flashed === true, `flashed=${pf.flashed} target=${pf.target}`);
+
+    // Receiver harus melihat permintaan dengan nama file yang benar.
+    let pasteModalSeen = false;
+    let pasteModalName = '';
+    for (let i = 0; i < 40; i++) {
+      const info = await pageB.cdp.eval(`(() => {
+        const m = document.getElementById('requestModal');
+        if (m.classList.contains('hidden')) return null;
+        return document.getElementById('modalInfo').textContent || '';
+      })()`);
+      if (info !== null) { pasteModalSeen = true; pasteModalName = info; break; }
+      await sleep(400);
+    }
+    check('Ctrl+V: penerima menerima permintaan dari hasil paste',
+      pasteModalSeen && pasteModalName.includes('e2e-paste.bin'),
+      pasteModalName || 'modal tidak muncul');
+
+    if (pasteModalSeen) {
+      await pageB.cdp.eval(`document.getElementById('btnAccept').click()`);
+
+      let pasteSaved = false;
+      const pastePath = path.join(saveDirB, 'e2e-paste.bin');
+      for (let i = 0; i < 60; i++) {
+        if (fs.existsSync(pastePath)) { pasteSaved = true; break; }
+        await sleep(500);
+      }
+      const sizeOk = pasteSaved && fs.statSync(pastePath).size === 1024 * 1024;
+      check('Ctrl+V: file hasil paste tersimpan utuh di penerima',
+        sizeOk, pasteSaved ? `${fs.statSync(pastePath).size} byte` : 'file tidak ada');
+    }
+
+    // Paste teks → jalur kirim teks.
+    const pasteTextProbe = await pageA.cdp.eval(`(() => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', 'Halo dari Ctrl+V e2e');
+      const ev = new ClipboardEvent('paste', {
+        clipboardData: dt, bubbles: true, cancelable: true,
+      });
+      document.body.dispatchEvent(ev);
+      return JSON.stringify({ handled: ev.defaultPrevented, files: dt.files.length });
+    })()`);
+    const pt = JSON.parse(pasteTextProbe);
+    check('Ctrl+V: teks (bukan file) lewat jalur kirim teks',
+      pt.handled === true && pt.files === 0, JSON.stringify(pt));
+
+    // Tiriskan antrian overlay teks di penerima. Beberapa skenario
+    // sebelumnya meninggalkan teks di antrian; kalau tidak dikosongkan,
+    // teks baru ikut mengantre dan yang tampil tetap teks lama.
+    for (let i = 0; i < 10; i++) {
+      const closed = await pageB.cdp.eval(`(() => {
+        const o = document.getElementById('textOverlay');
+        if (o.classList.contains('hidden')) return true;
+        document.getElementById('btnCloseTextOverlay').click();
+        return false;
+      })()`);
+      if (closed) break;
+      await sleep(400);
+    }
+    await sleep(500);
+
+    let pasteTextSeen = false;
+    for (let i = 0; i < 30; i++) {
+      const body = await pageB.cdp.eval(`(() => {
+        const o = document.getElementById('textOverlay');
+        if (o.classList.contains('hidden')) return null;
+        return document.getElementById('textOverlayBody').textContent;
+      })()`);
+      if (body === 'Halo dari Ctrl+V e2e') { pasteTextSeen = true; break; }
+      await sleep(500);
+    }
+    check('Ctrl+V: teks hasil paste tampil di penerima', pasteTextSeen);
+
+    // Paste saat fokus di textarea tidak boleh direbut app.
+    const pasteTaProbe = await pageA.cdp.eval(`(() => {
+      const ta = document.createElement('textarea');
+      document.body.appendChild(ta);
+      ta.focus();
+      const dt = new DataTransfer();
+      dt.setData('text/plain', 'jangan direbut');
+      const ev = new ClipboardEvent('paste', {
+        clipboardData: dt, bubbles: true, cancelable: true,
+      });
+      ta.dispatchEvent(ev);
+      const rebut = ev.defaultPrevented;
+      ta.remove();
+      return JSON.stringify({ rebut });
+    })()`);
+    check('Ctrl+V: paste di textarea tidak direbut',
+      JSON.parse(pasteTaProbe).rebut === false, pasteTaProbe);
+
     // --- Error console ---
     const allErrors = [...pageA.cdp.consoleErrors, ...pageB.cdp.consoleErrors];
     const allPageErrors = [...pageA.cdp.pageErrors, ...pageB.cdp.pageErrors];

@@ -304,6 +304,7 @@ const SHORTCUTS = [
   { keys: 'Enter', label: 'Terima permintaan masuk' },
   { keys: 'Esc', label: 'Tolak / tutup jendela' },
   { keys: 'Ctrl+Enter', label: 'Kirim teks' },
+  { keys: 'Ctrl+V', label: 'Tempel file/gambar/teks → kirim ke perangkat teratas' },
 ];
 
 /**
