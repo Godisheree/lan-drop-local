@@ -124,7 +124,19 @@ function buildItem(requestId, data) {
   const name = el('span', { class: 'tf-filename truncate', text: data.fileName || '?' });
   const emoji = el('span', { class: 'tf-emoji', 'aria-hidden': 'true', text: fileEmoji(data.fileName) });
 
-  const actions = el('div', { class: 'tf-actions' });
+  const actions = el('div', { class: 'tf-actions' }, [
+    // Salin nama file. Setelah kirim/terima, nama file sering dibutuhkan untuk
+    // ditempel di chat atau dipakai rename di tujuan — dan nama panjang yang
+    // terpotong (`truncate`) tidak bisa diseleksi di layar HP. Nama dari peer =
+    // input tak tepercaya, jadi masuk lewat text, bukan HTML.
+    el('button', {
+      class: 'btn-mini btn-copy-name',
+      type: 'button',
+      title: 'Salin nama file',
+      'aria-label': `Salin nama file ${data.fileName || 'transfer'}`,
+      onclick: () => copyText(data.fileName || '', 'Nama file disalin'),
+    }, '📋 Nama'),
+  ]);
 
   const header = el('div', { class: 'tf-header' }, [
     el('span', { class: 'tf-name' }, [emoji, name]),
@@ -287,7 +299,7 @@ export function updateTransferItem(requestId, data) {
           class: 'tf-path-copy',
           type: 'button',
           'aria-label': 'Salin lokasi folder',
-          onclick: () => copyPath(data.savedTo),
+          onclick: () => copyText(data.savedTo, 'Lokasi folder disalin'),
         }, 'Salin'),
       ]);
       item.appendChild(pathRow);
@@ -347,13 +359,28 @@ function updateActions(requestId, data) {
   }
 }
 
-async function copyPath(path) {
+/**
+ * Salin teks ke clipboard, dengan fallback untuk konteks non-HTTPS.
+ *
+ * Di LAN, LAN DROP dibuka lewat `http://192.168.x.x` — bukan secure context —
+ * jadi `navigator.clipboard` tidak ada dan cabang `execCommand` itulah yang
+ * benar-benar jalan di HP. Jangan dihapus.
+ *
+ * @param {string} text
+ * @param {string} okMessage Toast saat berhasil.
+ */
+async function copyText(text, okMessage) {
+  if (!text) {
+    showToast('Tidak ada yang bisa disalin', 'error');
+    return;
+  }
+
   try {
     if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(path);
+      await navigator.clipboard.writeText(text);
     } else {
       const ta = document.createElement('textarea');
-      ta.value = path;
+      ta.value = text;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
@@ -361,9 +388,9 @@ async function copyPath(path) {
       document.execCommand('copy');
       document.body.removeChild(ta);
     }
-    showToast('Lokasi folder disalin', 'success');
+    showToast(okMessage, 'success');
   } catch (_) {
-    showToast('Gagal menyalin lokasi folder', 'error');
+    showToast('Gagal menyalin', 'error');
   }
 }
 

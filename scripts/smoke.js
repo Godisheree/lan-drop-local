@@ -327,6 +327,101 @@ async function main() {
       });
       const qrData = JSON.parse(qrProbe.result.value);
 
+      // Salin nama file: tiap item transfer harus punya tombol "Salin nama",
+      // dan tombolnya benar-benar menaruh nama di clipboard (nama panjang yang
+      // terpotong `truncate` tidak bisa diseleksi manual di layar HP).
+      try {
+        await cdp.send('Browser.grantPermissions', {
+          origin: new URL(args.url).origin,
+          permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'],
+        });
+      } catch (_) {
+        // Versi Chrome lama menolak nama permission ini — bukan alasan gagal.
+      }
+
+      // Langkah 1: item transfer palsu + posisi tombol.
+      const copySetup = await cdp.send('Runtime.evaluate', {
+        expression: `(async () => {
+          // Panel Sambung masih terbuka dari pemeriksaan QR di atas — overlay-nya
+          // menutupi halaman, jadi klik koordinat akan mendarat di backdrop,
+          // bukan di tombol salin.
+          const modal = document.getElementById('connectModal');
+          const closeBtn = document.getElementById('btnCloseConnect');
+          if (modal && !modal.classList.contains('hidden') && closeBtn) closeBtn.click();
+          await new Promise((res) => setTimeout(res, 300));
+
+          const mod = await import('/js/features/transfers.js');
+          const fileName = 'laporan tahunan 2026.pdf';
+          mod.addTransferItem('smoke-copy-name', {
+            direction: 'send',
+            fileName,
+            fileSize: 2048,
+            status: 'completed',
+            targetName: 'HP',
+          });
+          const item = document.querySelector('[data-rid="smoke-copy-name"]');
+          const btn = item ? item.querySelector('.btn-copy-name') : null;
+          if (!btn) return JSON.stringify({ hasBtn: false, fileName });
+
+          // Di viewport HP, panel Aktivitas ada di tab yang belum aktif —
+          // tombolnya nol-ukuran dan klik koordinat akan meleset.
+          let r = btn.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) {
+            const tab = document.getElementById('tabActivity');
+            if (tab) tab.click();
+            await new Promise((res) => setTimeout(res, 300));
+          }
+
+          item.scrollIntoView({ block: 'center' });
+          await new Promise((res) => setTimeout(res, 150));
+          r = btn.getBoundingClientRect();
+
+          return JSON.stringify({
+            hasBtn: true,
+            aria: btn.getAttribute('aria-label'),
+            fileName,
+            x: Math.round(r.left + r.width / 2),
+            y: Math.round(r.top + r.height / 2),
+          });
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const copySetupData = JSON.parse(copySetup.result.value);
+
+      // Langkah 2: klik LEWAT protokol input CDP, bukan `btn.click()` dari
+      // skrip. Bedanya penting: `navigator.clipboard.writeText()` menuntut
+      // aktivasi user, dan `btn.click()` dari JS tidak menghasilkan itu —
+      // tombolnya terlihat gagal padahal klik sungguhan berhasil.
+      if (copySetupData.hasBtn) {
+        for (const type of ['mousePressed', 'mouseReleased']) {
+          await cdp.send('Input.dispatchMouseEvent', {
+            type,
+            x: copySetupData.x,
+            y: copySetupData.y,
+            button: 'left',
+            clickCount: 1,
+          });
+        }
+      }
+
+      // Langkah 3: baca hasilnya dari clipboard sungguhan.
+      const copyProbe = await cdp.send('Runtime.evaluate', {
+        expression: `(async () => {
+          await new Promise((r) => setTimeout(r, 300));
+          const toasts = Array.from(document.querySelectorAll('#toastHost .toast-message'));
+          const toast = toasts.length ? toasts[toasts.length - 1].textContent.trim() : null;
+          let readBack = null;
+          try { readBack = await navigator.clipboard.readText(); } catch (_) {}
+          const item = document.querySelector('[data-rid="smoke-copy-name"]');
+          if (item) item.remove();
+          return JSON.stringify({ toast, readBack });
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const copyData = { ...copySetupData, ...JSON.parse(copyProbe.result.value) };
+
       // Cek tambahan: kalau ada lebih dari satu alamat (mis. LAN +
       // Tailscale), user harus bisa memilih mana yang dipakai untuk QR.
       let selectorOk = true;
@@ -464,6 +559,7 @@ async function main() {
         selectorOk,
         selectorDetail,
         paste: pasteData,
+        copyName: copyData,
         consoleErrors,
         pageErrors,
         failedRequests,
@@ -502,6 +598,16 @@ async function main() {
       if (!result.qr.autoToggleInView) {
         problems++;
         console.log('  Auto toggle : GAGAL - toggle "Terima otomatis" tidak terlihat tanpa menggulir');
+      }
+      // Salin nama file: tombol ada, aria-nya membawa nama, dan nama benar-benar
+      // masuk clipboard (atau minimal toast sukses muncul di jalur fallback).
+      const cp = result.copyName || {};
+      const copied = cp.readBack === cp.fileName;
+      const copiedFallback = !copied && /disalin/.test(cp.toast || '');
+      console.log(`  Copy name   : btn=${cp.hasBtn} clipboard=${copied} toast="${cp.toast}"`);
+      if (!cp.hasBtn || !(cp.aria || '').includes(cp.fileName || '§') || !(copied || copiedFallback)) {
+        problems++;
+        console.log('  Copy name   : GAGAL - "Salin nama" tidak ada / tidak menyalin nama file');
       }
       // Ctrl+V: dengan peer → ditangani app + kartu teratas berkedip;
       // tanpa peer → toast peringatan; fokus di textarea → tidak direbut.

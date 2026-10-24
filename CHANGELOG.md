@@ -7,6 +7,51 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Added — salin nama file dari baris transfer
+
+Habis kirim atau terima, nama file sering dibutuhkan lagi: ditempel ke chat,
+dipakai untuk rename di tujuan, atau dicari di galeri. Nama panjang sudah
+terpotong `truncate` di baris transfer dan tidak bisa diseleksi di layar HP,
+jadi tiap baris transfer sekarang punya tombol **📋 Nama**.
+
+#### Added
+
+- **Tombol "📋 Nama" di setiap baris transfer** (panel Aktivitas) — untuk
+  pengirim maupun penerima, sejak transfer mulai sampai selesai.
+  `aria-label`-nya membawa nama file utuh, jadi screen reader dan tooltip tetap
+  membacanya walau teks di layar terpotong.
+- **Toast konfirmasi** "Nama file disalin" / "Gagal menyalin" — tanpa itu user
+  menekan tombol tanpa tahu hasilnya.
+- `copyPath()` di `public/js/features/transfers.js` digeneralisasi jadi
+  `copyText(text, okMessage)`; tombol "Salin" di baris lokasi folder sekarang
+  memakai fungsi yang sama.
+
+#### Catatan implementasi
+
+- **Jalur fallback clipboard itu yang benar-benar dipakai di HP.** LAN DROP
+  dibuka lewat `http://192.168.x.x` — bukan secure context — jadi
+  `navigator.clipboard` tidak ada dan `document.execCommand('copy')` yang
+  jalan. Diuji langsung di origin LAN: `typeof navigator.clipboard` =
+  `undefined`, klik nyata → toast "Nama file disalin", 0 `<textarea>` sisa.
+- **Nama file dari peer = input tak tepercaya.** Tombolnya dibuat lewat `el()`
+  dengan `text`/atribut, bukan HTML.
+- `CACHE_VERSION` naik ke `landrop-shell-v6` (`transfers.js` dan
+  `components.css` ada di daftar precache).
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm run smoke` | 3 viewport bersih; `Copy name : btn=true clipboard=true` di ketiganya — klik nyata lewat `Input.dispatchMouseEvent`, nama file terbaca kembali dari clipboard |
+| Cek manual `http://192.168.1.4:3000` | `isSecureContext=false`, `navigator.clipboard` undefined, toast sukses — jalur fallback terbukti jalan |
+
+Catatan uji: klik di smoke harus lewat protokol input CDP, bukan `btn.click()`
+dari skrip — `navigator.clipboard.writeText()` menuntut aktivasi user, jadi
+klik programatik membuat tombol tampak gagal padahal klik sungguhan berhasil.
+Panel Sambung juga harus ditutup dulu: overlay-nya menutupi baris transfer.
+
+---
+
 ### Added — terima otomatis (auto-approve)
 
 Satu perangkat bisa dijadikan "drop box": nyalakan **Terima otomatis** di panel

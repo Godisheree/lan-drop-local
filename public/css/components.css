@@ -803,6 +803,13 @@
   color: var(--accent-strong);
 }
 
+/* "Salin nama" bukan aksi destruktif — hover-nya accent, bukan danger. */
+.btn-mini.btn-copy-name:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
 .btn-mini:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* --- Batch grouping ------------------------------------------------------ */
