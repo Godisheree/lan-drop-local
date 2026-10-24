@@ -28,13 +28,32 @@ function flush() {
   if (flushTimer) return;
   flushTimer = setTimeout(() => {
     flushTimer = null;
-    try {
-      fs.mkdirSync(path.dirname(dataFile), { recursive: true });
-      const tmp = dataFile + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(cache));
-      fs.renameSync(tmp, dataFile);
-    } catch (_) {}
+    writeNow();
   }, 300); // debounce — batch transfer bisa picu banyak entry sekaligus
+}
+
+/**
+ * Tulis SEKARANG dan batalkan timer yang menunggu.
+ *
+ * Dipanggil saat proses berhenti (SIGINT/SIGTERM, `before-quit` Electron).
+ * Tanpa ini, transfer yang selesai beberapa ratus milidetik sebelum user
+ * menutup app hilang dari riwayat.
+ */
+function flushNow() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (cache) writeNow();
+}
+
+function writeNow() {
+  try {
+    fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+    const tmp = dataFile + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(cache));
+    fs.renameSync(tmp, dataFile);
+  } catch (_) {}
 }
 
 function add(entry) {
@@ -64,4 +83,4 @@ function clear() {
   flush();
 }
 
-module.exports = { add, list, clear };
+module.exports = { add, list, clear, flushNow };

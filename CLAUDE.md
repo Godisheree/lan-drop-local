@@ -102,7 +102,7 @@ TCP protocol over `net` module on port 3001. Custom **length-prefixed frame prot
 
 **Resume transfer:** resume key = `sha1(senderName|batchId|fileName|fileSize)` — stable across retries because the frontend reuses the same `batchId`. Receiver checks `parts/` meta in data dir; if a partial exists, `transfer-response` frame carries `resumeOffset`, and sender's read stream starts at that offset. On unexpected disconnect the partial file + meta are kept (retry via "Coba Lagi" button); on explicit cancel both are deleted. Partial/meta older than 7 days cleaned on startup (`cleanupStale()`), same for stale uploads.
 
-**History (`server/history.js`):** completed/failed/cancelled transfers recorded to `history.json` in data dir (debounced atomic write, max 200 entries). Endpoints `GET /history`, `POST /history/clear`. Rendered in UI "Riwayat" panel.
+**History (`server/history.js`):** completed/failed/cancelled transfers recorded to `history.json` in data dir (debounced atomic write, max 200 entries; `flushNow()` on shutdown so a finish just before quit is not lost). Endpoints `GET /history`, `POST /history/clear`. Rendered in UI "Riwayat" panel.
 
 **Auto-approve / terima otomatis (`server/settings.js` + `decideAutoAccept` in `server/transfer.js`):** a receiving device can accept incoming files with no modal. Settings live in `settings.json` in the data dir (`{ autoApprove: { enabled, peers } }`, `peers: []` = every peer). Endpoints `GET`/`POST /settings/auto-approve`. The decision runs **server-side**, not in the frontend — frontend polling stops when the tab is hidden, so a frontend-side implementation would only work while someone watches the screen. `kind: 'text'` frames already worked this way.
 

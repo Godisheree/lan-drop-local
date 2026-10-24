@@ -16,7 +16,6 @@ const DEFAULTS = {
 };
 
 let cache = null;
-let flushTimer = null;
 
 function normalizeAutoApprove(value) {
   const v = value && typeof value === 'object' ? value : {};
@@ -39,17 +38,25 @@ function load() {
   return cache;
 }
 
-function flush() {
-  if (flushTimer) return;
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    try {
-      fs.mkdirSync(path.dirname(dataFile), { recursive: true });
-      const tmp = dataFile + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(cache));
-      fs.renameSync(tmp, dataFile);
-    } catch (_) {}
-  }, 300);
+/**
+ * Tulis ke disk SEKARANG, bukan lewat timer.
+ *
+ * `history.js` sengaja di-debounce 300 ms karena batch transfer bisa memicu
+ * banyak entri sekaligus. Setting tidak begitu: satu perubahan = satu klik
+ * user, jadi menundanya cuma menciptakan jendela di mana nilai sudah berubah
+ * di UI tapi belum ada di disk — dan proses yang mati di jendela itu (Ctrl+C,
+ * tutup jendela Electron) membuat toggle kembali ke keadaan semula seolah
+ * tidak pernah dinyalakan.
+ */
+function writeNow() {
+  try {
+    fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+    const tmp = dataFile + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(cache));
+    fs.renameSync(tmp, dataFile);
+  } catch (_) {
+    // Disk penuh / read-only — biarkan nilai tetap hidup di memori.
+  }
 }
 
 function getAutoApprove() {
@@ -66,7 +73,7 @@ function setAutoApprove(patch) {
     enabled: patch && patch.enabled !== undefined ? patch.enabled : current.enabled,
     peers: patch && patch.peers !== undefined ? patch.peers : current.peers,
   });
-  flush();
+  writeNow();
   return cache.autoApprove;
 }
 

@@ -53,6 +53,14 @@ app.on('window-all-closed', () => {
   app.quit();
 });
 
+// Jendela ditutup = proses utama ikut mati, jadi timer debounce di
+// server/history.js tidak pernah sempat jatuh tempo. Tulis sekarang.
+app.on('before-quit', () => {
+  try {
+    require('./server/history.js').flushNow();
+  } catch (_) {}
+});
+
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();

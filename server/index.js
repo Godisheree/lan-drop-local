@@ -465,6 +465,11 @@ function shutdown() {
   console.log('\n[Server] Shutting down...');
   discovery.stopDiscovery();
   transfer.stopTransferServer();
+  // Tulis apa pun yang masih menunggu di timer debounce (riwayat). Setting
+  // auto-approve sudah ditulis begitu diubah — tidak ada yang menggantung.
+  try {
+    history.flushNow();
+  } catch (_) {}
   server.close(() => {
     console.log('[Server] Stopped.');
     process.exit(0);

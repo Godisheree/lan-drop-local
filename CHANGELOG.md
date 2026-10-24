@@ -7,6 +7,42 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Fixed — setting terima otomatis bertahan setelah restart
+
+Toggle "Terima otomatis" dulu bisa kembali mati sendiri setelah `Ctrl+C` atau
+tutup jendela Electron. Penyebabnya bukan di frontend: `settings.json` ditulis
+lewat timer debounce 300 ms, dan proses yang sudah mati tidak pernah
+menjalankan timer yang belum jatuh tempo. Semua nilai yang diubah user dalam
+300 ms terakhir kalah cepat dengan prosesnya.
+
+Yang berubah:
+
+- **`server/settings.js` menulis segera, tanpa timer.** Satu perubahan setting =
+  satu klik user, jadi menundanya cuma menciptakan jendela di mana nilai sudah
+  berubah di UI tapi belum ada di disk. Riwayat tetap di-debounce 300 ms karena
+  batch transfer bisa memicu banyak entri sekaligus.
+- **`server/history.js` dapat `flushNow()`**, dipanggil dari `shutdown()`
+  (`SIGINT`/`SIGTERM`) di `server/index.js` dan dari `before-quit` di `main.js`.
+  Sebelumnya transfer yang selesai beberapa ratus milidetik sebelum app ditutup
+  juga hilang dari riwayat — kelas bug yang sama.
+- **`npm run check:settings`** (9 pemeriksaan) menjalankan tiap kasus di proses
+  anak yang **mati segera** setelah mengubah nilai, jadi hasilnya tidak
+  tergantung kecepatan mesin: toggle nyala/mati langsung mendarat, allowlist
+  peer ikut tersimpan, nilai terbaca lagi setelah restart, peer kosong dibuang,
+  riwayat tertulis saat proses berhenti rapi, dan dua penjaga regresi yang
+  memastikan `flushNow()` masih dipanggil di jalur keluar.
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm run check:settings` | 9/9 — sebelum perbaikan skrip yang sama melaporkan **0/6 GAGAL** (bug-nya direproduksi dulu, bukan ditebak) |
+
+Uji langsung: nyalakan lewat `POST /settings/auto-approve`, bunuh proses tanpa
+menunggu, jalankan lagi → `{"enabled":true}`.
+
+---
+
 ### Added — salin nama file dari baris transfer
 
 Habis kirim atau terima, nama file sering dibutuhkan lagi: ditempel ke chat,
@@ -77,8 +113,8 @@ penampung terbuka.
   tidak cukup, pengirim membaca "Ruang disk penerima tidak cukup untuk terima
   otomatis", bukan "Ditolak penerima" yang bikin salah paham.
 - **`GET`/`POST /settings/auto-approve`**, tersimpan di `settings.json` dalam
-  data dir (pola sama dengan `history.json`: cache memori + tulis atomic yang
-  di-debounce).
+  data dir (cache memori + tulis atomic; tulisannya **segera**, bukan
+  di-debounce seperti `history.json` — lihat entri "setting bertahan" di atas).
 
 #### Catatan implementasi
 
