@@ -308,6 +308,17 @@ async function main() {
             netStatusRows: document.querySelectorAll('#netStatus .net-status-row').length,
             netStatusText: (document.getElementById('netStatus') || {}).textContent || '',
             checklist: document.querySelectorAll('.net-checklist li').length,
+            // Toggle "Terima otomatis" harus kelihatan TANPA menggulir. Dulu
+            // blok-nya di dasar panel yang panjang (~1021 px di panel 660 px)
+            // dan user menyimpulkan fiturnya tidak ada.
+            autoToggleInView: (() => {
+              const panel = document.querySelector('.connect-panel');
+              const sw = document.querySelector('#autoApproveSection .switch');
+              if (!panel || !sw) return false;
+              const p = panel.getBoundingClientRect();
+              const s = sw.getBoundingClientRect();
+              return panel.scrollTop === 0 && s.height > 0 && s.top >= p.top && s.bottom <= p.bottom;
+            })(),
             qrError: frame ? frame.classList.contains('is-error') : false,
             qrMessage: frame && frame.classList.contains('is-error') ? frame.textContent.trim() : null,
           });
@@ -485,6 +496,12 @@ async function main() {
       if (result.qr.checklist < 4) {
         problems++;
         console.log('  Checklist   : GAGAL - checklist syarat device kurang dari 4 baris');
+      }
+      // Toggle terima otomatis harus terlihat tanpa menggulir panel.
+      console.log(`  Auto toggle : inView=${result.qr.autoToggleInView}`);
+      if (!result.qr.autoToggleInView) {
+        problems++;
+        console.log('  Auto toggle : GAGAL - toggle "Terima otomatis" tidak terlihat tanpa menggulir');
       }
       // Ctrl+V: dengan peer → ditangani app + kartu teratas berkedip;
       // tanpa peer → toast peringatan; fokus di textarea → tidak direbut.

@@ -193,21 +193,10 @@
         Pindai QR ini dengan kamera HP, atau buka alamat di bawah. Pastikan kedua
         perangkat di WiFi yang sama.
       </p>
-      <div id="qrFrame" class="qr-frame"></div>
-      <ul id="urlList" class="url-list"></ul>
 
-      <h4 class="connect-subtitle">Status jaringan</h4>
-      <div id="netStatus" class="net-status" aria-live="polite">
-        <p class="net-status-line">Memuat status…</p>
-      </div>
-      <ul class="net-checklist">
-        <li>Kedua perangkat harus di WiFi yang sama (atau satu di Tailscale).</li>
-        <li><strong>Kedua device harus menjalankan LAN DROP sendiri</strong> — membuka
-          halaman saja tidak cukup, supaya bisa kirim &amp; terima dua arah.</li>
-        <li>Router/firewall tidak boleh memblokir UDP 41234 dan TCP 3000–3001.</li>
-        <li>Kalau device tidak muncul, cek blok "Status jaringan" di atas.</li>
-      </ul>
-
+      <!-- Terima otomatis sengaja di ATAS QR: di bawah (setelah status
+           jaringan) toggle-nya jatuh di luar area terlihat panel, dan user
+           mengira fiturnya tidak ada. -->
       <h4 class="connect-subtitle">Terima otomatis</h4>
       <div class="auto-approve" id="autoApproveSection">
         <label class="switch-row" for="autoApproveToggle">
@@ -225,6 +214,21 @@
           <ul id="autoApprovePeerList" class="auto-peer-list"></ul>
         </div>
       </div>
+
+      <div id="qrFrame" class="qr-frame"></div>
+      <ul id="urlList" class="url-list"></ul>
+
+      <h4 class="connect-subtitle">Status jaringan</h4>
+      <div id="netStatus" class="net-status" aria-live="polite">
+        <p class="net-status-line">Memuat status…</p>
+      </div>
+      <ul class="net-checklist">
+        <li>Kedua perangkat harus di WiFi yang sama (atau satu di Tailscale).</li>
+        <li><strong>Kedua device harus menjalankan LAN DROP sendiri</strong> — membuka
+          halaman saja tidak cukup, supaya bisa kirim &amp; terima dua arah.</li>
+        <li>Router/firewall tidak boleh memblokir UDP 41234 dan TCP 3000–3001.</li>
+        <li>Kalau device tidak muncul, cek blok "Status jaringan" di atas.</li>
+      </ul>
 
       <h4 class="connect-subtitle">Aplikasi</h4>
       <div id="installSection" class="install-section"></div>

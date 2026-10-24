@@ -58,8 +58,17 @@ penampung terbuka.
   bukan cuma saat `pending`. Sebelumnya transfer yang diterima tapi gagal
   sebelum `file-start` meninggalkan entri hantu yang membuat frontend
   menampilkan baris progres yang tidak pernah selesai.
-- `CACHE_VERSION` naik ke `landrop-shell-v4`; `/js/features/autoapprove.js`
+- `CACHE_VERSION` naik ke `landrop-shell-v5`; `/js/features/autoapprove.js`
   masuk daftar precache.
+
+#### Fixed
+
+- **Toggle "Terima otomatis" tidak terlihat.** Blok-nya dulu duduk di bawah
+  "Status jaringan" dan daftar diagnostik — di jendela 1100x750 (ukuran default
+  app Electron) posisinya ~1021 px dari atas panel yang cuma menampilkan 660 px,
+  jadi user harus menggulir jauh ke bawah untuk menemukannya. Blok-nya
+  dipindah ke **atas QR**: toggle terlihat tanpa menggulir, dan QR tetap utuh di
+  dalam area terlihat (diukur: toggle 209–289 px, QR 297–571 px, panel 660 px).
 
 #### Verification
 
