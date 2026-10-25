@@ -39,6 +39,7 @@ export function renderHistory(items) {
 
   for (const item of list.slice(0, 30)) {
     const icon = item.status === 'completed' ? '✅'
+      : item.status === 'unconfirmed' ? '⚠️'
       : item.status === 'cancelled' ? '🚫'
       : '❌';
     const dirIcon = item.direction === 'send' ? '📤' : '📥';
@@ -49,6 +50,7 @@ export function renderHistory(items) {
       formatTime(item.ts),
     ];
     if (item.resumed) metaParts.push('dilanjutkan');
+    if (item.reason) metaParts.push(item.reason);
 
     const row = el('div', { class: 'history-item' }, [
       el('span', { class: 'h-icon', 'aria-hidden': 'true', text: icon }),

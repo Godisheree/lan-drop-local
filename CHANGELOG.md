@@ -7,6 +7,53 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Fixed — "terkirim" sekarang berarti file benar-benar tersimpan
+
+Keluhan: kirim lewat Tailscale, aplikasi bilang terkirim, tapi di Pictures
+tidak ada file baru. Penyebabnya bukan setelan terima otomatis: pengirim
+menandai `completed` begitu semua byte masuk buffer socket. Penerima yang mati
+di tengah, gagal `rename` `.part` → nama akhir, atau gagal tulis tetap bikin
+pengirim bilang "terkirim" — UI-nya berbohong dan file-nya hilang tanpa jejak.
+
+Bug-nya direproduksi dulu, bukan ditebak. Uji dengan penerima palsu: (a) simpan
+penuh, (b) baca semua byte lalu RST tanpa menulis apa pun. Kode lama: kasus (b)
+→ status `completed`, folder penerima kosong. Setelah perbaikan → `unconfirmed`
+plus alasan yang bisa dibaca user.
+
+Yang berubah:
+
+- **Penerima (`server/transfer.js`)** mengirim frame setelah rename `.part` →
+  nama akhir sukses: `{type: 'transfer-saved', savedTo, fallback}`, atau
+  `{type: 'transfer-save-failed', reason}` kalau gagal simpan (rename error /
+  write error). `fallback: true` = penerima terpaksa menulis ke folder internal
+  (`$LANDROP_DATA_DIR/downloads`), artinya file **tidak** akan muncul di Galeri
+  HP — dulu user tidak punya cara tahu ini.
+- **Pengirim** cuma menandai `completed` kalau frame ACK tiba. Byte habis tanpa
+  frame = `unconfirmed`, frame gagal = `failed` + alasan penerima diteruskan apa
+  adanya. `savedTo` dari penerima ikut dicatat di riwayat.
+- **UI (`public/js/features/transfers.js`, `history.js`)** dapat status baru
+  `unconfirmed` (ikon ⚠️, tombol "Coba Lagi" tersedia), alasan tampil di baris
+  transfer dan di riwayat. Typo lama `❌ Gagal —iksa koneksi` ikut dibetulkan.
+- **`scripts/check-ack.js`** (9 pemeriksaan, masuk rantai `npm test`) menjalankan
+  penerima palsu 3 mode — simpan / mati tanpa ACK / gagal simpan — supaya
+  pengirim tidak pernah lagi bilang sukses tanpa file di ujung sana.
+
+- **`public/sw.js`**: CACHE_VERSION → `landrop-shell-v7` supaya PWA di HP
+  benar-benar mengambil `transfers.js` dan `history.js` versi baru.
+
+Catatan kompatibilitas: penerima versi lama (belum di-pull) tidak mengirim ACK,
+jadi kiriman ke perangkat itu tampil `unconfirmed` — sengaja, lebih baik
+"belum dikonfirmasi" daripada "terkirim" palsu. Perbarui kedua perangkat supaya
+statusnya kembali hijau.
+
+#### Verification
+
+| Skrip | Hasil |
+|---|---|
+| `npm run check:ack` | 9/9 — pada kode lama kasus "penerima mati tanpa ACK" = `completed` walau folder penerima kosong |
+| `npm test` | semua suite lolos, exit 0 |
+| `npm run e2e` | 38/39 (1 gagal: cek `discovery listener` yang sudah gagal sebelum perubahan ini) |
+
 ### Fixed — setting terima otomatis bertahan setelah restart
 
 Toggle "Terima otomatis" dulu bisa kembali mati sendiri setelah `Ctrl+C` atau

@@ -65,7 +65,7 @@ function add(entry) {
     fileName: entry.fileName || '?',
     fileSize: Number(entry.fileSize) || 0,
     peer: entry.peer || '?',
-    status: entry.status || 'completed',
+    status: entry.status || 'completed',    reason: entry.reason || null,
     savedTo: entry.savedTo || null,
     thumbnailId: entry.thumbnailId || null,
     resumed: !!entry.resumed

@@ -325,7 +325,7 @@ function updateActions(requestId, data) {
 
   const status = data.status || transfer.status;
   const direction = transfer.direction;
-  const terminal = ['completed', 'failed', 'rejected', 'cancelled'].includes(status);
+  const terminal = ['completed', 'unconfirmed', 'failed', 'rejected', 'cancelled'].includes(status);
 
   // Batal tersedia untuk pengirim dan penerima selama transfer berjalan.
   const canCancel =
@@ -346,7 +346,7 @@ function updateActions(requestId, data) {
     existingCancel.remove();
   }
 
-  const canRetry = status === 'failed' || status === 'disconnected';
+  const canRetry = status === 'failed' || status === 'unconfirmed' || status === 'disconnected';
   if (canRetry && !existingRetry) {
     const btn = el('button', {
       class: 'btn-mini btn-retry',
@@ -504,7 +504,9 @@ export function pollProgress(requestId, direction, onComplete) {
         state.progressTimers.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'completed',
-          statusText: direction === 'send' ? '✅ Terkirim' : '✅ Selesai diterima',
+          statusText: direction === 'send'
+            ? (prog.reason ? `✅ Terkirim — ${prog.reason}` : '✅ Terkirim')
+            : '✅ Selesai diterima',
           percent: 100,
           transferred,
           total,
@@ -519,12 +521,32 @@ export function pollProgress(requestId, direction, onComplete) {
         return;
       }
 
+      // Byte terkirim semua, tapi penerima tidak mengonfirmasi tersimpan —
+      // jangan bilang "terkirim", itu yang bikin user bingung file-nya hilang.
+      if (prog.status === 'unconfirmed') {
+        clearInterval(timer);
+        state.progressTimers.delete(requestId);
+        finalizeTransfer(requestId, {
+          status: 'unconfirmed',
+          statusText: '⚠️ Terkirim, tapi penerima tidak konfirmasi tersimpan',
+          percent: 100,
+          transferred,
+          total,
+        });
+        showToast(
+          `${prog.fileName} — terkirim, tapi belum dikonfirmasi tersimpan di perangkat penerima`,
+          'error'
+        );
+        if (onComplete) onComplete(prog);
+        return;
+      }
+
       if (prog.status === 'failed') {
         clearInterval(timer);
         state.progressTimers.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'failed',
-          statusText: '❌ Gagal —iksa koneksi',
+          statusText: prog.reason ? `❌ ${prog.reason}` : '❌ Gagal — periksa koneksi',
           percent,
           transferred,
           total,

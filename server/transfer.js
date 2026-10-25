@@ -565,6 +565,11 @@ function startRawReceive(requestId, req) {
           fs.mkdirSync(saveDir, { recursive: true });
         }
 
+        // Fallback ke folder internal = file TIDAK muncul di Galeri perangkat.
+        // Diteruskan ke pengirim lewat ACK supaya user tahu kenapa di Pictures
+        // tidak ada apa-apa.
+        const saveFallback = path.resolve(saveDir) === path.resolve(path.join(getDataDir(), 'downloads'));
+
         let displayName = safeName;
         let finalPath = path.join(saveDir, displayName);
         let partPath = finalPath + PART_SUFFIX;
@@ -713,6 +718,8 @@ function startRawReceive(requestId, req) {
           req.status = p ? p.status : 'disconnected';
         });
 
+        let saveFailReason = null;
+
         writeStream.on('finish', () => {
           const p = transferProgress.get(requestId);
           if (p) {
@@ -779,8 +786,24 @@ function startRawReceive(requestId, req) {
             });
             console.log(`[Transfer] ✅ ${requestId} — ${displayName} diterima (${actualSize} bytes) → ${finalPath}`);
           } catch (renameErr) {
+            saveFailReason = renameErr.message;
             console.error(`[Transfer] Gagal finalisasi ${displayName}: ${renameErr.message} — partial tetap di ${partPath}`);
           }
+          // ACK eksplisit ke pengirim: satu-satunya bukti file ada di disk.
+          if (p && p.savedTo === finalPath) {
+            sendFramedMessage(socket, {
+              type: 'transfer-saved',
+              fileSize: actualSize,
+              savedTo: finalPath,
+              fallback: saveFallback
+            });
+          } else {
+            sendFramedMessage(socket, {
+              type: 'transfer-save-failed',
+              reason: saveFailReason || 'penerima gagal menyimpan file'
+            });
+          }
+
           socket.end(); // sinyal ke pengirim
         });
 
@@ -790,6 +813,7 @@ function startRawReceive(requestId, req) {
           if (p) p.status = 'failed';
           req.status = 'failed';
           persistPart(true); // simpan posisi terakhir buat resume
+          sendFramedMessage(socket, { type: 'transfer-save-failed', reason: err.message });
           socket.end();
         });
       }
@@ -1030,6 +1054,26 @@ async function startFileSend(requestId, filePath) {
   const safeFilePath = assertInsideUploads(filePath);
   if (!fs.existsSync(safeFilePath)) throw new Error(`File not found: ${path.basename(safeFilePath)}`);
 
+  // ===== ACK dari penerima: bukti file benar-benar tersimpan =====
+  //
+  // Dulu pengirim bilang "completed" begitu semua byte masuk buffer socket.
+  // Itu belum tentu benar: kalau penerima gagal menyimpan (rename .part
+  // gagal / write error / proses mati), pengirim tetap bilang "terkirim"
+  // padahal file-nya tidak ada di perangkat penerima. Sekarang penerima
+  // WAJIB kirim frame balik setelah file ada di disk; tanpa frame itu
+  // statusnya 'unconfirmed', bukan 'completed'.
+  const ackParser = new FrameParser((msg) => {
+    if (msg.type === 'transfer-saved') {
+      req.saved = true;
+      req.savedTo = msg.savedTo || null;
+      req.savedFallback = !!msg.fallback;
+    } else if (msg.type === 'transfer-save-failed') {
+      req.saveFailed = msg.reason || 'penerima gagal menyimpan file';
+    }
+  });
+  const ackHandler = (data) => ackParser.feed(data);
+  socket.on('data', ackHandler);
+
   // ===== Transcoding: konversi video yg mungkin gak di-support HP =====
   let sendFilePath = safeFilePath;
   let sendFileName = req.fileName;
@@ -1111,13 +1155,29 @@ async function startFileSend(requestId, filePath) {
       if (req.cancelledByUser) {
         p.status = 'cancelled';
       } else if (p.bytesTransferred >= p.fileSize) {
-        p.status = 'completed';
+        // Semua byte terkirim, tapi itu belum berarti tersimpan. Hanya
+        // frame 'transfer-saved' dari penerima yang membuktikan file ada.
+        if (req.saved) {
+          p.status = 'completed';
+          p.savedTo = req.savedTo || null;
+          if (req.savedFallback) {
+            p.reason = `penerima menyimpan ke folder internal${req.savedTo ? ': ' + req.savedTo : ''}`;
+          }
+        } else if (req.saveFailed) {
+          p.status = 'failed';
+          p.reason = req.saveFailed;
+        } else {
+          p.status = 'unconfirmed';
+          p.reason = 'penerima tidak konfirmasi file tersimpan';
+        }
       } else {
         p.status = 'failed';
       }
     }
     req.status = p ? p.status : 'disconnected';
     console.log(`[Transfer] ${p && p.status === 'completed' ? '✅' : '⚠️'} ${requestId} — transfer ${p ? p.status : 'disconnected'} (${p ? p.bytesTransferred + '/' + p.fileSize : 0} bytes)`);
+
+    if (p && p.reason) console.log(`[Transfer] ℹ️ ${requestId} — ${p.reason}`);
 
     const finalStatus = p && p.status !== 'transferring' ? p.status : 'disconnected';
     if (finalStatus !== 'transferring') {
@@ -1127,6 +1187,8 @@ async function startFileSend(requestId, filePath) {
         fileSize: actualSize,
         peer: req.peerName || req.targetIp,
         status: finalStatus,
+        savedTo: req.savedTo || null,
+        reason: (p && p.reason) || null,
         resumed: resumeOffset > 0
       });
     }
@@ -1245,7 +1307,8 @@ function getTransferProgress(requestId) {
     status: p.status,
     savePath: p.savePath,
     savedTo: p.savedTo,
-    thumbnailId: p.thumbnailId || null
+    thumbnailId: p.thumbnailId || null,
+    reason: p.reason || null
   };
 }
 
