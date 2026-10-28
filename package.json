@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "node server/index.js",
+    "start:debug": "node server/index.js --debug",
     "electron-dev": "electron .",
     "build-win": "electron-builder --win",
     "check": "node scripts/check-js.js",

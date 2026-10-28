@@ -71,11 +71,11 @@ sama. Lihat `docs/adr/0006-tailscale-di-panel-sambung.md`.
 **Tailscale di HP/Termux (tanpa CLI):** aplikasi Tailscale dari Play Store
 cukup — CLI tidak perlu diinstall. Yang perlu dicek: (1) aplikasi Tailscale di
 HP sudah **connected** (bukan cuma terinstall), (2) alamat CGNAT 100.x sudah
-muncul di log Termux (`🔒 Tailscale → http://100.x.x.x:3000`). Kalau Tailscale
-dinyalakan belakangan, alamatnya muncul otomatis beberapa detik kemudian —
-server memantau terus, bukan cuma sekali saat start. CLI cuma dipakai untuk
-mencari peer tailnet duluan; tanpa CLI, HP tetap bisa **ditemukan** desktop
-lewat reply-back.
+muncul di **kartu Status jaringan** (dashboard `/dashboard`) — atau di terminal
+kalau dijalankan dengan `--debug`. Karena Tailscale menyala belakangan,
+alamatnya muncul otomatis beberapa detik kemudian — server memantau terus,
+bukan cuma sekali saat start. CLI cuma dipakai untuk mencari peer tailnet
+duluan; tanpa CLI, HP tetap bisa **ditemukan** desktop lewat reply-back.
 
 **Keamanan:** audit menutup 3 celah remote (bocor file privat via
 `/transfer/send-file`, command injection lewat nama file di Termux, SSRF lewat
@@ -102,6 +102,19 @@ Referensi tes LAN DROP:
 - `npm run e2e` — 2 instance, transfer nyata (port dinamis)
 - `npm run icons` — regenerate ikon PWA
 
+**Log & terminal:** log server hidup di dashboard (`/dashboard`, kartu LOG SERVER)
+— ring buffer 300 baris, bisa disalin dari HP, hilang saat restart. Terminal
+sengaja **diam**: tidak ada lagi banner alamat/LAN/Tailscale yang mengalir di
+Termux. Kalau memang sedang menelusuri masalah dan mau melihatnya di terminal:
+
+```bash
+npm run start:debug        # = node server/index.js --debug
+LANDROP_DEBUG=1 node server/index.js
+```
+
+Level `error` tetap selalu tercetak, dengan atau tanpa flag — kalau servernya
+sendiri gagal jalan (port dipakai), dashboard-nya belum ada untuk dibaca.
+
 ## Troubleshooting: device tidak ditemukan / kirim ke localhost
 
 1. **Buka panel Sambung → blok "Status jaringan".** Di situ kelihatan:
@@ -116,8 +129,9 @@ Referensi tes LAN DROP:
    tidak cukup — hanya jadi klien.
 4. **HP di data seluler (bukan WiFi)** → tidak ada alamat LAN, jadi peer
    hanya bisa dijangkau lewat Tailscale. Pastikan aplikasi Tailscale di HP
-   benar-benar *connected* dan log Termux menunjuk `🔒 Tailscale →
-   http://100.x.x.x:3000`.
+   benar-benar *connected* dan kartu "Status jaringan" di dashboard menunjuk
+   alamat Tailscale (atau `node server/index.js --debug` kalau mau lihat di
+   terminal).
 5. **Kirimannya nyasar ke `localhost`** → sudah diperbaiki (alamat peer
    tidak lagi bisa berupa `localhost`, dan target ke diri sendiri ditolak).
    Kalau masih muncul, cek `npm run check:routes` — skrip itu menguji 2

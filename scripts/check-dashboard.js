@@ -73,6 +73,61 @@ async function get(url) {
 
 // ---------------------------------------------------------------------------
 
+// Server sekali pakai: angkat → tunggu /status → tampung yang tercetak →
+// matikan. Dipakai untuk satu pertanyaan saja: apa yang kelihatan di terminal?
+async function spawnProbe(extraArgs = [], extraEnv = {}) {
+  const root = path.join(os.tmpdir(), `landrop-dbg-${process.pid}-${Math.random().toString(36).slice(2, 7)}`);
+  fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'save'), { recursive: true });
+
+  const [PORT, TRANSFER_PORT, DISCOVERY_PORT] = await Promise.all([
+    findFreePort(3520),
+    findFreePort(3521),
+    findFreePort(3522),
+  ]);
+
+  const env = {
+    ...process.env,
+    PORT: String(PORT),
+    TRANSFER_PORT: String(TRANSFER_PORT),
+    DISCOVERY_PORT: String(DISCOVERY_PORT),
+    LANDROP_DATA_DIR: path.join(root, 'data'),
+    LANDROP_SAVE_DIR: path.join(root, 'save'),
+    DEVICE_NAME: 'Dashboard-Debug',
+  };
+  // "Default" harus benar-benar default: jangan ikut kalau shell-nya sudah
+  // menyetel flag ini.
+  delete env.LANDROP_DEBUG;
+  Object.assign(env, extraEnv);
+
+  const child = spawn(process.execPath, ['server/index.js', ...extraArgs], {
+    cwd: ROOT,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let out = '';
+  child.stdout.on('data', (d) => (out += d.toString()));
+  child.stderr.on('data', (d) => (out += d.toString()));
+
+  for (let i = 0; i < 60; i++) {
+    try {
+      if ((await get(`http://127.0.0.1:${PORT}/status`)).status === 200) break;
+    } catch (_) {
+      await sleep(250);
+    }
+  }
+  await sleep(400); // baris terakhir (mis. error port) diberi waktu
+  try {
+    child.kill();
+  } catch (_) {}
+  await sleep(100);
+  try {
+    fs.rmSync(root, { recursive: true, force: true });
+  } catch (_) {}
+  return out;
+}
+
 async function main() {
   const root = path.join(os.tmpdir(), `landrop-dashboard-${process.pid}`);
   const dataDir = path.join(root, 'data');
@@ -281,6 +336,31 @@ async function main() {
       'sw: /dashboard & /logs tidak pernah di-cache',
       /NEVER_CACHE = \[[^\]]*'\/dashboard'/.test(swSrc) && /NEVER_CACHE = \[[^\]]*'\/logs'/.test(swSrc)
     );
+
+    // 9. Terminal: diam secara default, ramai kalau diminta.
+    // Server di atas dijalankan TANPA flag — stdout-nya sendiri jadi buktinya.
+    const plain = logs.join('');
+    check(
+      'terminal: default diam (tanpa banner alamat/dashboard)',
+      !/📊 Dashboard →|listen di 0\.0\.0\.0/.test(plain),
+      plain.split('\n').filter(Boolean).length + ' baris'
+    );
+    check('terminal: log tetap masuk dashboard walau terminal diam', first.lines.length > 0, `${first.lines.length} baris`);
+
+    const dbgOut = await spawnProbe(['--debug']);
+    check(
+      'terminal: --debug mencetak banner alamat + dashboard',
+      /📊 Dashboard →/.test(dbgOut) && /listen di 0\.0\.0\.0/.test(dbgOut),
+      dbgOut.split('\n').filter(Boolean).length + ' baris'
+    );
+
+    const envOut = await spawnProbe([], { LANDROP_DEBUG: '1' });
+    check('terminal: LANDROP_DEBUG=1 sama seperti --debug', /📊 Dashboard →/.test(envOut), envOut.split('\n').filter(Boolean).length + ' baris');
+
+    // Satu-satunya yang tetap keluar tanpa flag: error. Diuji dengan sengaja
+    // menabrakkan port transfer ke server yang sedang jalan.
+    const errOut = await spawnProbe([], { TRANSFER_PORT: String(TRANSFER_PORT) });
+    check('terminal: error tetap tercetak tanpa flag', /EADDRINUSE|error/i.test(errOut), errOut.trim().split('\n')[0] || '(tidak ada)');
   } finally {
     cleanup();
   }

@@ -27,15 +27,25 @@ allowlist), perangkat online, transfer aktif (dengan tombol batal), riwayat
 
 Log live butuh satu hal baru di server: `server/logbus.js` membajak
 `console.log/warn/error` SEKALI di awal `server/index.js` jadi ring buffer 300
-baris in-memory — stdout tetap utuh, dan `GET /logs?since=<id>` mengirim hanya
-baris baru (id naik monoton; kalau server restart, id klien yang lebih besar
-dari id server dikenali sebagai reset, bukan log yang hilang selamanya).
+baris in-memory — `GET /logs?since=<id>` mengirim hanya baris baru (id naik
+monoton; kalau server restart, id klien yang lebih besar dari id server
+dikenali sebagai reset, bukan log yang hilang selamanya).
+
+Karena log sekarang bisa dibaca di dashboard (dan disalin dari HP), terminal
+tidak perlu lagi jadi tempatnya: stdout **diam** secara default, jadi `node
+server/index.js` di Termux tidak lagi menumpahkan banner alamat setiap start.
+Yang tetap mengalir ke terminal hanya level `error` — kalau servernya sendiri
+gagal jalan (port dipakai, folder tidak bisa ditulis), dashboard-nya belum ada
+untuk dibaca. Mau ramai lagi seperti dulu: `npm run start:debug` (=
+`node server/index.js --debug`) atau `LANDROP_DEBUG=1`.
 
 Endpoint baru: `GET /status`, `GET /logs`, `GET /transfer/active`, route
 `GET /dashboard`. Diverifikasi `scripts/check-dashboard.js` (masuk `npm test`):
-34 pemeriksaan — bentuk tiap endpoint, penyaringan `since`, id log monoton,
+40 pemeriksaan — bentuk tiap endpoint, penyaringan `since`, id log monoton,
 paritas "setiap id yang dicari `dashboard.js` ada di `dashboard.html`" — uji
-terakhir itu yang bikin kartu kosong tanpa satu pun error di console.
+terakhir itu yang bikin kartu kosong tanpa satu pun error di console — plus
+satu bagian khusus terminal: default harus diam, `--debug`/`LANDROP_DEBUG=1`
+harus mencetak banner, dan error harus tetap kelihatan tanpa flag.
 
 Kartu "transfer aktif" diuji dengan transfer sungguhan, bukan data karangan:
 harness membuka soket ke port transfer dan mengirim frame `transfer-request`

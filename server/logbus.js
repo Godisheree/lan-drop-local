@@ -18,6 +18,21 @@ const util = require('util');
 
 const DEPTH = 300;
 
+/**
+ * Apakah log juga dicetak ke terminal.
+ *
+ * Dulu tidak ada pilihan: setiap baris selalu keluar ke stdout. Sekarang
+ * dashboard sudah jadi tempat membaca log (dan bisa disalin dari HP), jadi
+ * terminal-nya dibuat diam — nyalakan kalau memang sedang menelusuri masalah:
+ *
+ *   node server/index.js --debug      (atau LANDROP_DEBUG=1)
+ *
+ * ponytail: satu saklar untuk semua level, bukan daftar level per flag.
+ */
+const DEBUG =
+  ['1', 'true', 'ya', 'yes', 'on'].includes(String(process.env.LANDROP_DEBUG || '').trim().toLowerCase()) ||
+  process.argv.includes('--debug');
+
 const buffer = [];
 let nextId = 1;
 
@@ -41,7 +56,11 @@ for (const [method, level] of Object.entries(LEVELS)) {
   const original = console[method].bind(console);
   console[method] = (...args) => {
     record(level, args);
-    original(...args);
+
+    // Terminal cuma dipakai kalau diminta. Level `error` tetap dicetak:
+    // kalau servernya sendiri gagal jalan (port dipakai, folder tidak bisa
+    // ditulis), dashboard-nya belum ada untuk dibaca.
+    if (DEBUG || level === 'error') original(...args);
   };
 }
 
@@ -63,4 +82,4 @@ function tail(sinceId = 0) {
   };
 }
 
-module.exports = { tail, DEPTH };
+module.exports = { tail, DEPTH, DEBUG };
