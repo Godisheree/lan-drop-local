@@ -341,26 +341,39 @@ async function main() {
     // Server di atas dijalankan TANPA flag — stdout-nya sendiri jadi buktinya.
     const plain = logs.join('');
     check(
-      'terminal: default diam (tanpa banner alamat/dashboard)',
-      !/📊 Dashboard →|listen di 0\.0\.0\.0/.test(plain),
-      plain.split('\n').filter(Boolean).length + ' baris'
+      'terminal: default cuma mencetak tanda "aktif" + alamat dashboard',
+      /✅ LAN DROP aktif — dashboard: http:\/\/(localhost|127\.0\.0\.1):\d+\/dashboard/.test(plain) &&
+        !/\[Server\] Port|📡|🔒/.test(plain),
+      plain.split('\n').filter(Boolean).join(' | ') || '(kosong)'
     );
-    check('terminal: log tetap masuk dashboard walau terminal diam', first.lines.length > 0, `${first.lines.length} baris`);
+    check(
+      'terminal: log tetap masuk dashboard walau terminal nyaris diam',
+      first.lines.length > 0 && first.lines.some((l) => /LAN DROP aktif/.test(l.text)),
+      `${first.lines.length} baris`
+    );
 
     const dbgOut = await spawnProbe(['--debug']);
     check(
-      'terminal: --debug mencetak banner alamat + dashboard',
-      /📊 Dashboard →/.test(dbgOut) && /listen di 0\.0\.0\.0/.test(dbgOut),
+      'terminal: --debug mencetak banner lengkap (alamat, port, tailscale)',
+      /\[Server\] Port .*listen di 0\.0\.0\.0/.test(dbgOut) && /LAN DROP aktif/.test(dbgOut),
       dbgOut.split('\n').filter(Boolean).length + ' baris'
     );
 
     const envOut = await spawnProbe([], { LANDROP_DEBUG: '1' });
-    check('terminal: LANDROP_DEBUG=1 sama seperti --debug', /📊 Dashboard →/.test(envOut), envOut.split('\n').filter(Boolean).length + ' baris');
+    check(
+      'terminal: LANDROP_DEBUG=1 sama seperti --debug',
+      /\[Server\] Port .*listen di 0\.0\.0\.0/.test(envOut),
+      envOut.split('\n').filter(Boolean).length + ' baris'
+    );
 
     // Satu-satunya yang tetap keluar tanpa flag: error. Diuji dengan sengaja
     // menabrakkan port transfer ke server yang sedang jalan.
     const errOut = await spawnProbe([], { TRANSFER_PORT: String(TRANSFER_PORT) });
-    check('terminal: error tetap tercetak tanpa flag', /EADDRINUSE|error/i.test(errOut), errOut.trim().split('\n')[0] || '(tidak ada)');
+    check(
+      'terminal: error tetap tercetak tanpa flag',
+      /EADDRINUSE|error/i.test(errOut),
+      (errOut.split('\n').find((l) => /EADDRINUSE|error/i.test(l)) || '(tidak ada)').trim()
+    );
   } finally {
     cleanup();
   }

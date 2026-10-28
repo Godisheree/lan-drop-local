@@ -104,8 +104,11 @@ Referensi tes LAN DROP:
 
 **Log & terminal:** log server hidup di dashboard (`/dashboard`, kartu LOG SERVER)
 — ring buffer 300 baris, bisa disalin dari HP, hilang saat restart. Terminal
-sengaja **diam**: tidak ada lagi banner alamat/LAN/Tailscale yang mengalir di
-Termux. Kalau memang sedang menelusuri masalah dan mau melihatnya di terminal:
+sengaja **diam**: yang tercetak cuma satu baris tanda siap + alamat dashboard,
+mis. `✅ LAN DROP aktif — dashboard: http://localhost:3000/dashboard • dari
+perangkat lain: http://192.168.1.8:3000/dashboard`. Kalau memang sedang
+menelusuri masalah dan mau banner lengkap (alamat LAN/Tailscale, port, status
+discovery) kembali mengalir:
 
 ```bash
 npm run start:debug        # = node server/index.js --debug

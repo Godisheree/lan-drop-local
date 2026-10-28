@@ -52,6 +52,9 @@ function record(level, args) {
   if (buffer.length > DEPTH) buffer.splice(0, buffer.length - DEPTH);
 }
 
+// Pegangan ke console.log asli, diambil SEBELUM dibajak — dipakai notice().
+const consoleLog = console.log.bind(console);
+
 for (const [method, level] of Object.entries(LEVELS)) {
   const original = console[method].bind(console);
   console[method] = (...args) => {
@@ -62,6 +65,21 @@ for (const [method, level] of Object.entries(LEVELS)) {
     // ditulis), dashboard-nya belum ada untuk dibaca.
     if (DEBUG || level === 'error') original(...args);
   };
+}
+
+/**
+ * Baris yang selalu tercetak ke terminal, walau log sedang diam.
+ *
+ * Dipakai untuk satu hal: menandai bahwa servernya sudah siap dan di alamat
+ * mana dashboard-nya dibuka. Terminal yang diam membuat "sudah jalan" dan
+ * "belum jalan" kelihatan sama — dan pertanyaan pertama setelah start selalu
+ * "udah aktif belum, linknya mana?".
+ *
+ * @param {...any} args argumen seperti console.log
+ */
+function notice(...args) {
+  record('info', args);
+  consoleLog(...args);
 }
 
 /**
@@ -82,4 +100,4 @@ function tail(sinceId = 0) {
   };
 }
 
-module.exports = { tail, DEPTH, DEBUG };
+module.exports = { tail, DEPTH, DEBUG, notice };

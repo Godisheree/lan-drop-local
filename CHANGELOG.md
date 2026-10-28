@@ -32,12 +32,21 @@ monoton; kalau server restart, id klien yang lebih besar dari id server
 dikenali sebagai reset, bukan log yang hilang selamanya).
 
 Karena log sekarang bisa dibaca di dashboard (dan disalin dari HP), terminal
-tidak perlu lagi jadi tempatnya: stdout **diam** secara default, jadi `node
-server/index.js` di Termux tidak lagi menumpahkan banner alamat setiap start.
-Yang tetap mengalir ke terminal hanya level `error` — kalau servernya sendiri
-gagal jalan (port dipakai, folder tidak bisa ditulis), dashboard-nya belum ada
-untuk dibaca. Mau ramai lagi seperti dulu: `npm run start:debug` (=
-`node server/index.js --debug`) atau `LANDROP_DEBUG=1`.
+tidak perlu lagi jadi tempatnya: stdout **nyaris diam** secara default, jadi
+`node server/index.js` di Termux tidak lagi menumpahkan banner alamat setiap
+start. Satu baris tetap dicetak — tanda servernya sudah siap sekaligus alamat
+dashboard-nya, karena terminal yang benar-benar kosong membuat "sudah jalan"
+dan "belum jalan" kelihatan sama:
+
+```
+✅ LAN DROP aktif — dashboard: http://localhost:3000/dashboard  •  dari perangkat lain: http://192.168.1.8:3000/dashboard
+```
+
+Baris itu dibuat lewat `logbus.notice()`, dan tetap ikut masuk log dashboard.
+Yang tetap mengalir ke terminal tanpa diminta juga level `error` — kalau
+servernya sendiri gagal jalan (port dipakai, folder tidak bisa ditulis),
+dashboard-nya belum ada untuk dibaca. Mau ramai lagi seperti dulu:
+`npm run start:debug` (= `node server/index.js --debug`) atau `LANDROP_DEBUG=1`.
 
 Endpoint baru: `GET /status`, `GET /logs`, `GET /transfer/active`, route
 `GET /dashboard`. Diverifikasi `scripts/check-dashboard.js` (masuk `npm test`):

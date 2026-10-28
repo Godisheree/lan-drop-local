@@ -528,8 +528,15 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 
   console.log(`[Server] Port ${PORT} (HTTP) & ${transfer.TRANSFER_PORT} (transfer) listen di 0.0.0.0 — device lain di jaringan yang sama bisa menghubungi`);
   console.log('[Server] Device kedua harus menjalankan LAN DROP-nya sendiri supaya dua arah (kirim & terima)');
-  console.log(`📊 Dashboard → http://localhost:${PORT}/dashboard`);
-  console.log();
+
+  // Satu-satunya baris yang tetap tercetak saat log sedang diam: tanda "sudah
+  // aktif" + alamat dashboard-nya. Ditaruh paling akhir supaya artinya benar —
+  // semua listener sudah jalan saat baris ini keluar.
+  const otherAddr = (ips[0] && ips[0].address) || tsIP;
+  logbus.notice(
+    `✅ LAN DROP aktif — dashboard: http://localhost:${PORT}/dashboard` +
+      (otherAddr ? `  •  dari perangkat lain: http://${otherAddr}:${PORT}/dashboard` : '')
+  );
 });
 
 // ===================== Graceful Shutdown =====================
