@@ -15,7 +15,7 @@
  */
 import { api, postJson } from './core/api.js';
 import { el, clear, byId } from './core/dom.js';
-import { formatBytes, formatDuration, formatDateTime, formatTime } from './core/format.js';
+import { formatBytes, formatDuration, formatDateTime, formatTime, formatSpeed } from './core/format.js';
 
 // ---------------------------------------------------------------------------
 // Konstanta
@@ -29,7 +29,7 @@ const POLL_MS = {
   disk: 15000,
   auto: 15000,
   peers: 2500,
-  active: 2000,
+  active: 1000, // kartu progres: di atas 1 dtk kelihatan seperti gambar mati
   history: 5000,
   log: 2000,
 };
@@ -70,8 +70,21 @@ const busy = new Set();
 
 let logLines = []; // seluruh baris yang kita punya (maks 300 dari server)
 let lastLogId = 0; // id terakhir — dipakai `?since=` supaya polling ringan
+let logPrimed = false; // log lama (300 baris pertama) jangan dianggap "error baru"
+let lastSeenErrorId = 0;
+let unseenErrors = 0; // error yang belum dibaca user — angka ini muncul di judul tab
 let historyRows = [];
 let errorShown = false;
+
+// Jawaban /status terakhir. Uptime tidak ditampilkan apa adanya: yang disimpan
+// adalah "uptime saat jawaban itu tiba" + kapan tiba, lalu detiknya ditambah
+// sendiri tiap detik oleh browser. Tanpa ini angkanya beku sampai polling
+// berikutnya (10 dtk) — di HP kelihatan seperti macet.
+let serverStatus = null;
+
+const uptimeDd = el('dd'); // node tetap yang ditulis ulang tiap detik (lihat paintUptime)
+const transferSnapshots = new Map(); // requestId → { bytes, at } buat hitung kecepatan
+const openDetails = new Set(); // baris riwayat yang sedang dibuka (bertahan walau refresh)
 
 const $ = {
   device: byId('dashDevice'),
@@ -105,6 +118,7 @@ const $ = {
   logErrorsOnly: byId('logErrorsOnly'),
   logCopy: byId('logCopy'),
   logPane: byId('logPane'),
+  toasts: byId('dashToasts'),
 };
 
 // ---------------------------------------------------------------------------
@@ -115,12 +129,50 @@ const $ = {
 const dash = (value) => (value === null || value === undefined || value === '' ? '—' : String(value));
 
 /** Umur waktu yang manusiawi: "3 dtk lalu", "2 mnt 5 dtk lalu". */
-function ago(ts) {
+function agoText(ts) {
   if (!ts) return '—';
   const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
   if (seconds < 5) return 'baru saja';
   if (seconds < 60) return `${seconds} dtk lalu`;
   return `${formatDuration(seconds)} lalu`;
+}
+
+/**
+ * Umur waktu sebagai ELEMEN, bukan string: `data-ts` disimpan supaya bisa
+ * dihitung ulang tiap detik tanpa memanggil server. Dulu "terakhir terlihat"
+ * beku di angka lama sampai polling kartu itu berikutnya (5 dtk) — persis
+ * keluhan "harus refresh dulu baru update".
+ */
+function ago(ts) {
+  return el('span', { class: 'dash-ago', dataset: { ts: ts ? String(ts) : '' }, text: agoText(ts) });
+}
+
+/** Segarkan semua label umur waktu (dipanggil tiap detik). */
+function tickAges() {
+  for (const node of document.querySelectorAll('.dash-ago')) {
+    const ts = Number(node.dataset.ts);
+    if (!ts) continue;
+    const text = agoText(ts);
+    if (node.textContent !== text) node.textContent = text;
+  }
+}
+
+/** Jam dengan detik — biar kelihatan halamannya hidup, bukan tangkapan layar. */
+function clockWithSeconds(ts) {
+  return new Date(ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/** Uptime berjalan: angka server + selisih waktu sejak jawaban itu tiba. */
+function liveUptime() {
+  if (!serverStatus) return null;
+  return serverStatus.seconds + (Date.now() - serverStatus.at) / 1000;
+}
+
+/** Pesan singkat yang muncul lalu hilang sendiri — umpan balik aksi user. */
+function toast(message, level = 'ok') {
+  const node = el('div', { class: 'dash-toast', dataset: { level }, role: 'status', text: message });
+  $.toasts.appendChild(node);
+  setTimeout(() => node.remove(), level === 'err' ? 6000 : 3000);
 }
 
 /** Tag status berwarna (lihat .dash-tag[data-state] di dashboard.css). */
@@ -194,8 +246,9 @@ function guard(key, fn) {
 async function refreshStatus() {
   const s = await api('/status');
 
+  serverStatus = { seconds: Number(s.uptimeSeconds) || 0, at: Date.now(), startedAt: s.startedAt };
   $.device.textContent = s.deviceName || '—';
-  $.uptime.textContent = `up ${formatDuration(s.uptimeSeconds)}`;
+  paintUptime();
 
   fillKv($.statusKv, [
     ['Perangkat', dash(s.deviceName)],
@@ -204,13 +257,26 @@ async function refreshStatus() {
     ['Proses', `pid ${dash(s.pid)}`],
     ['Node', el('span', { class: 'dash-mono', text: dash(s.node) })],
     ['Platform', dash(s.platform)],
-    ['Uptime', `${formatDuration(s.uptimeSeconds)} (sejak ${formatDateTime(s.startedAt)})`],
+    ['Uptime', uptimeDd],
     ['Port HTTP', dash(s.port)],
     ['Port transfer', dash(s.transferPort)],
     ['Port discovery', dash(s.discoveryPort)],
     ['Folder simpan', el('span', { class: 'dash-mono', text: dash(s.saveDir) })],
     ['Folder data', el('span', { class: 'dash-mono', text: dash(s.dataDir) })],
   ]);
+}
+
+/** Tulis uptime ke pil header + baris tabel. Dipanggil tiap detik, bukan tiap polling. */
+function paintUptime() {
+  const seconds = liveUptime();
+  if (seconds === null) return;
+
+  const text = formatDuration(seconds);
+  const pill = `up ${text}`;
+  if ($.uptime.textContent !== pill) $.uptime.textContent = pill;
+
+  const detail = `${text} (sejak ${formatDateTime(serverStatus.startedAt)})`;
+  if (uptimeDd.textContent !== detail) uptimeDd.textContent = detail;
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +387,7 @@ async function saveAuto() {
     });
 
     autoDirty = false;
+    toast(saved.enabled ? 'Terima otomatis: aktif' : 'Terima otomatis: mati');
     $.autoInfo.textContent = saved.enabled
       ? `Tersimpan ${formatTime(Date.now())} — aktif untuk ${saved.peers.length ? saved.peers.join(', ') : 'semua peer'}`
       : `Tersimpan ${formatTime(Date.now())} — terima otomatis mati`;
@@ -355,19 +422,51 @@ async function refreshPeers() {
 // 6. Transfer aktif
 // ---------------------------------------------------------------------------
 
+/**
+ * Kecepatan & sisa waktu dari selisih dua polling. Server cuma memberi
+ * `bytesTransferred` (angka keras), jadi kecepatannya dihitung di sini — tanpa
+ * ini kartu cuma bilang "45%", dan "45%"-nya diam 2 menit tidak bisa dibedakan
+ * antara lambat atau macet.
+ */
+function measure(t) {
+  const now = Date.now();
+  const bytes = Number(t.bytesTransferred) || 0;
+  const prev = transferSnapshots.get(t.requestId);
+  transferSnapshots.set(t.requestId, { bytes, at: now });
+
+  if (!prev || bytes <= prev.bytes || now <= prev.at) return { speed: 0, eta: 0 };
+
+  const speed = ((bytes - prev.bytes) / (now - prev.at)) * 1000;
+  const remaining = Math.max(0, (Number(t.fileSize) || 0) - bytes);
+  return { speed, eta: speed > 0 ? remaining / speed : 0 };
+}
+
 async function refreshActive() {
   const transfers = await api('/transfer/active');
 
   $.activeCount.textContent = String(transfers.length);
 
+  // Snapshot transfer yang sudah tidak ada dibuang — kalau tidak, peta ini
+  // tumbuh terus sepanjang umur halaman.
+  const alive = new Set(transfers.map((t) => t.requestId));
+  for (const id of transferSnapshots.keys()) if (!alive.has(id)) transferSnapshots.delete(id);
+
   const rows = transfers.map((t) => {
     const percent = Number(t.percent) || 0;
+    const { speed, eta } = measure(t);
+
     const progress = el('div', { class: 'dash-progress' }, [
       el('div', { class: 'dash-progress-track' }, [
         el('span', { class: 'dash-progress-fill', style: { width: `${percent}%` } }),
       ]),
       el('span', { class: 'dash-mono', text: `${percent}%` }),
     ]);
+
+    if (speed > 0) {
+      progress.appendChild(
+        el('span', { class: 'dash-mono dash-speed', text: `${formatSpeed(speed)} • sisa ${formatDuration(eta)}` })
+      );
+    }
 
     const cancel = el('button', {
       class: 'dash-btn dash-btn-danger',
@@ -394,6 +493,7 @@ async function cancelTransfer(requestId, role, button) {
   button.disabled = true;
   try {
     await postJson(`/transfer/cancel/${encodeURIComponent(requestId)}`, { role });
+    toast(role === 'receive' ? 'Transfer masuk dibatalkan' : 'Transfer dibatalkan');
     await refreshActive();
   } catch (err) {
     button.disabled = false;
@@ -418,8 +518,14 @@ function renderHistory() {
 
   $.histCount.textContent = `${visible.length}/${historyRows.length}`;
 
-  const rows = visible.map((entry) =>
-    row([
+  const rows = [];
+  for (const entry of visible) {
+    // Kunci stabil supaya baris yang sedang dibuka tetap terbuka setelah
+    // polling riwayat berikutnya (kartu ini di-refresh tiap 5 dtk).
+    const key = `${entry.ts}-${entry.fileName}-${entry.direction}`;
+    const isOpen = openDetails.has(key);
+
+    const main = row([
       formatDateTime(entry.ts),
       entry.direction === 'receive' ? '⬇️ Terima' : '⬆️ Kirim',
       statusTag(entry.status),
@@ -429,8 +535,55 @@ function renderHistory() {
       entry.savedTo
         ? el('span', { class: 'dash-mono', text: entry.savedTo })
         : entry.reason || '—',
-    ])
-  );
+    ]);
+    main.classList.add('dash-row-click');
+    main.tabIndex = 0;
+    main.setAttribute('aria-expanded', String(isOpen));
+
+    // Tabel 7 kolom tidak kebaca di HP: satu klik buka rinciannya di bawah
+    // baris, bukan tooltip atau halaman baru.
+    const detail = el('tr', { class: 'dash-detail', hidden: !isOpen }, [
+      el('td', { colspan: '7' }, [
+        el('dl', { class: 'dash-kv' }, [
+          el('dt', { text: 'Waktu' }),
+          el('dd', { text: formatDateTime(entry.ts) }),
+          el('dt', { text: 'Arah' }),
+          el('dd', { text: entry.direction === 'receive' ? 'Terima' : 'Kirim' }),
+          el('dt', { text: 'Status' }),
+          el('dd', {}, [
+            statusTag(entry.status),
+            entry.reason ? el('span', { class: 'dash-detail-reason', text: entry.reason }) : null,
+          ]),
+          el('dt', { text: 'File' }),
+          el('dd', { class: 'dash-mono', text: dash(entry.fileName) }),
+          el('dt', { text: 'Ukuran' }),
+          el('dd', { text: entry.fileSize ? formatBytes(entry.fileSize) : '—' }),
+          el('dt', { text: 'Peer' }),
+          el('dd', { text: dash(entry.peer) }),
+          el('dt', { text: 'Tersimpan di' }),
+          el('dd', { class: 'dash-mono', text: dash(entry.savedTo) }),
+        ]),
+      ]),
+    ]);
+
+    const toggle = () => {
+      const nowOpen = detail.hidden;
+      detail.hidden = !nowOpen;
+      main.setAttribute('aria-expanded', String(nowOpen));
+      if (nowOpen) openDetails.add(key);
+      else openDetails.delete(key);
+    };
+
+    main.addEventListener('click', toggle);
+    main.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggle();
+    });
+
+    rows.push(main, detail);
+  }
+
   fillTable($.histBody, 7, rows, 'Belum ada riwayat yang cocok dengan filter ini.');
 
   renderGallery();
@@ -469,6 +622,7 @@ async function clearHistory() {
     await postJson('/history/clear', {});
     historyRows = [];
     renderHistory();
+    toast('Riwayat dihapus');
   } finally {
     $.histClear.disabled = false;
   }
@@ -515,7 +669,51 @@ async function refreshLog() {
     logLines = logLines.concat(data.lines).slice(-data.depth);
     lastLogId = data.lastId;
   }
+
+  if (logPrimed) {
+    notifyNewErrors();
+  } else {
+    // Muat pertama: 300 baris lama itu sejarah, bukan "error baru" — jangan
+    // memunculkan 100 pesan sekaligus.
+    logPrimed = true;
+    lastSeenErrorId = data.lastId;
+  }
+
   renderLog();
+}
+
+/**
+ * Error baru = hal yang paling dicari orang, tapi kartunya paling bawah.
+ * Jadi: pesan singkat + angka di judul tab, sekali per baris.
+ */
+function notifyNewErrors() {
+  let notified = 0;
+
+  for (const line of logLines) {
+    if (line.id <= lastSeenErrorId) continue;
+    lastSeenErrorId = line.id;
+    if (line.level !== 'error') continue;
+    notified += 1;
+    unseenErrors += 1;
+    toast(`Error baru: ${line.text.slice(0, 90)}`, 'err');
+  }
+
+  if (notified) paintErrorBadge();
+}
+
+function paintErrorBadge() {
+  const title = unseenErrors ? `(${unseenErrors}) LAN DROP — Dashboard` : 'LAN DROP — Dashboard';
+  if (document.title !== title) document.title = title;
+
+  $.logCount.dataset.state = unseenErrors ? 'err' : '';
+  $.logCount.title = unseenErrors ? `${unseenErrors} error belum dibaca` : '';
+}
+
+/** User sudah lihat lognya — angka di judul tab tidak perlu lagi. */
+function markErrorsRead() {
+  if (!unseenErrors) return;
+  unseenErrors = 0;
+  paintErrorBadge();
 }
 
 /** Salin log yang terlihat ke clipboard (dengan fallback untuk HTTP di LAN). */
@@ -537,6 +735,7 @@ async function copyLog() {
   }
 
   $.logCopy.textContent = 'Tersalin';
+  toast('Log disalin ke clipboard');
   setTimeout(() => {
     $.logCopy.textContent = 'Salin log';
   }, 1500);
@@ -571,8 +770,10 @@ function stopPolling() {
 }
 
 /** Jam server diperbarui — dipakai buat lihat sendiri "dashboard ini hidup". */
-function tickClock() {
-  $.clock.textContent = formatTime(Date.now());
+function tick() {
+  $.clock.textContent = clockWithSeconds(Date.now());
+  paintUptime();
+  tickAges();
 }
 
 // ---------------------------------------------------------------------------
@@ -584,11 +785,18 @@ byId('dashReload').addEventListener('click', () => {
   // terakhir ikut tampil walau sebelumnya sempat bolong).
   logLines = [];
   lastLogId = 0;
+  logPrimed = false; // log yang diambil ulang = sejarah, bukan "error baru"
+  lastSeenErrorId = 0;
+  unseenErrors = 0;
+  paintErrorBadge();
+  transferSnapshots.clear(); // angka kecepatan lama jangan dihitung ulang
   errorShown = false;
   $.error.hidden = true;
 
   stopPolling(); // tanpa ini tiap klik menambah satu set interval baru
   startPolling();
+  tick();
+  toast('Data dimuat ulang dari server');
 });
 
 $.histFilter.addEventListener('change', renderHistory);
@@ -602,7 +810,14 @@ $.histClear.addEventListener('click', () => {
 $.logFollow.addEventListener('change', () => {
   if ($.logFollow.checked) renderLog();
 });
-$.logErrorsOnly.addEventListener('change', renderLog);
+$.logErrorsOnly.addEventListener('change', () => {
+  if ($.logErrorsOnly.checked) markErrorsRead();
+  renderLog();
+});
+// Menyentuh lognya = sudah dibaca. Angka merah di judul tab ikut hilang.
+$.logPane.addEventListener('click', markErrorsRead);
+$.logPane.addEventListener('focus', markErrorsRead);
+$.logCount.addEventListener('click', markErrorsRead);
 $.logCopy.addEventListener('click', () => {
   copyLog().catch(() => {});
 });
@@ -622,15 +837,43 @@ $.autoSave.addEventListener('click', () => {
 // Tab disembunyikan → berhenti polling (dashboard dibiarkan terbuka seharian).
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopPolling();
-  else startPolling();
+  else {
+    startPolling();
+    tick(); // jam, uptime, dan umur waktu jangan ketinggalan selama tab disembunyikan
+  }
 });
 
 // ---------------------------------------------------------------------------
 // Mulai
 // ---------------------------------------------------------------------------
 
-startPolling();
-tickClock();
-setInterval(tickClock, 1000);
+// Pintasan keyboard: dipakai sambil kerja, jangan sampai harus membidik tombol
+// kecil di layar.
+document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-document.title = 'LAN DROP — Dashboard';
+  const tag = event.target instanceof HTMLElement ? event.target.tagName : '';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+  const key = event.key.toLowerCase();
+  if (key === 'r') {
+    byId('dashReload').click();
+  } else if (key === 'e') {
+    $.logErrorsOnly.checked = !$.logErrorsOnly.checked;
+    if ($.logErrorsOnly.checked) markErrorsRead();
+    renderLog();
+    toast($.logErrorsOnly.checked ? 'Log: error saja' : 'Log: semua baris');
+  } else if (key === 'f') {
+    $.logFollow.checked = !$.logFollow.checked;
+    renderLog();
+    toast($.logFollow.checked ? 'Log: ikut otomatis' : 'Log: berhenti mengikuti');
+  } else if (key === 'c') {
+    copyLog().catch(() => {});
+  }
+});
+
+startPolling();
+tick();
+setInterval(tick, 1000);
+
+paintErrorBadge();

@@ -467,3 +467,89 @@ body.dash {
 .dash-log-time {
   color: var(--text-muted);
 }
+
+/* --- Riwayat yang bisa dibuka & pesan singkat ------------------------------- */
+
+.dash-row-click {
+  cursor: pointer;
+}
+
+.dash-row-click:hover td {
+  background: var(--bg-sunken);
+}
+
+.dash-row-click:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+
+.dash-detail td {
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-sunken);
+}
+
+.dash-detail .dash-kv {
+  grid-template-columns: minmax(7rem, auto) 1fr;
+}
+
+.dash-detail-reason {
+  margin-left: 0.5rem;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.dash-speed {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dash-toasts {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.dash-toast {
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  animation: dash-toast-in var(--duration-fast) ease;
+}
+
+.dash-toast[data-level="ok"] {
+  border-color: var(--success);
+  color: var(--success-text);
+}
+
+.dash-toast[data-level="err"] {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+@keyframes dash-toast-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-toast {
+    animation: none;
+  }
+}

@@ -26,7 +26,7 @@
 
     <div class="dash-header-right">
       <span class="dash-pill" id="dashClock" title="Waktu server diperbarui">—</span>
-      <button class="dash-btn" type="button" id="dashReload">Muat ulang</button>
+      <button class="dash-btn" type="button" id="dashReload" title="Muat ulang semua data (tombol R)">Muat ulang</button>
       <a class="dash-btn" href="/">Buka UI kirim file</a>
     </div>
   </header>
@@ -190,19 +190,23 @@
       </h2>
       <div class="dash-toolbar">
         <label class="dash-switch dash-switch-inline">
-          <input type="checkbox" id="logFollow" checked>
+          <input type="checkbox" id="logFollow" checked title="Tombol F">
           <span>Ikuti otomatis</span>
         </label>
         <label class="dash-switch dash-switch-inline">
-          <input type="checkbox" id="logErrorsOnly">
+          <input type="checkbox" id="logErrorsOnly" title="Tombol E">
           <span>Error saja</span>
         </label>
-        <button class="dash-btn" type="button" id="logCopy">Salin log</button>
+        <button class="dash-btn" type="button" id="logCopy" title="Salin log yang terlihat (tombol C)">Salin log</button>
         <span class="dash-note dash-note-inline">Log hidup di memori server (300 baris terakhir). Restart = log kosong.</span>
       </div>
       <pre class="dash-log" id="logPane" tabindex="0" aria-label="Log server"></pre>
     </section>
   </main>
+
+  <!-- Pesan singkat aksi user (disalin, disimpan, dibatalkan). Dibuat lewat
+       el() di dashboard.js — tidak ada string HTML di sini. -->
+  <div class="dash-toasts" id="dashToasts" aria-live="polite"></div>
 
   <script type="module" src="/js/dashboard.js"></script>
 </body>

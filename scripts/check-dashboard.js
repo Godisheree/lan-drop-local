@@ -231,6 +231,11 @@ async function main() {
       JSON.stringify(incoming[0] || null)
     );
     check('transfer/active: masih menunggu konfirmasi', incoming[0] && incoming[0].status === 'pending');
+    check(
+      'transfer/active: bawa fileSize + bytesTransferred (buat hitung kecepatan & sisa waktu)',
+      typeof incoming[0].fileSize === 'number' && typeof incoming[0].bytesTransferred === 'number',
+      JSON.stringify({ fileSize: incoming[0].fileSize, bytesTransferred: incoming[0].bytesTransferred })
+    );
 
     // 5c. Tombol Batal di kartu transfer = POST /transfer/cancel (role receive)
     const cancel = await fetch(`${base}/transfer/cancel/${incoming[0].requestId}`, {

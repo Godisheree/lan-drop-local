@@ -54,6 +54,46 @@ dashboard — buka app tanpa koneksi, yang muncul layar pantau, bukan UI kirim
 file. Sekarang hanya URL root yang mengisi shell; `CACHE_VERSION` naik ke
 `landrop-shell-v8` (index.html berubah: ada tautan kecil 📊 di header).
 
+### Changed — dashboard: angka yang berdetak, bukan tangkapan layar
+
+Keluhan pertama setelah dipakai: "uptime-nya gak jalan, harus refresh dulu".
+Penyebabnya bukan bug tampilan — server memang cuma mengirim `uptimeSeconds`
+saat polling (10 dtk), jadi angkanya melompat 10 dtk sekali dan diam di
+antaranya. Sekarang browser yang menghitung sendiri: yang disimpan adalah
+"uptime saat jawaban itu tiba" + kapan tiba, lalu detiknya ditambah tiap detik
+lewat detak lokal 1 dtk. Detak yang sama menghidupkan jam (sampai detik) dan
+SEMUA label umur waktu — "terakhir terlihat 8 dtk lalu" tidak lagi beku sampai
+polling kartu berikutnya. Nol request tambahan: semuanya di memori browser.
+
+Yang ikut dibuat hidup:
+
+- **Kartu transfer** di-poll 1 dtk (dulu 2) dan sekarang menampilkan kecepatan
+  + sisa waktu, dihitung dari selisih dua polling (`bytesTransferred`).
+  "45%" yang diam dua menit tadinya tidak bisa dibedakan antara lambat atau
+  macet; sekarang tertulis "507,4 KB/s • sisa 18 dtk". Snapshot per requestId
+  dibuang saat transfernya hilang, jadi petanya tidak tumbuh sepanjang umur
+  halaman.
+- **Riwayat bisa diklik** — satu baris terbuka jadi rincian (waktu, arah,
+  status + alasan, nama file, ukuran, peer, folder tujuan). Tabel 7 kolom tidak
+  kebaca di HP; rincian ini juga yang membuat "Tersimpan di" bisa dibaca utuh,
+  bukan terpotong. Baris yang sedang dibuka bertahan melewati refresh 5 dtk.
+  Bisa juga lewat keyboard (Enter/Spasi), bukan cuma klik.
+- **Pesan singkat (toast)** untuk aksi user: log disalin, setelan disimpan,
+  transfer dibatalkan, riwayat dihapus. Sebelumnya umpan baliknya cuma berubah
+  di dalam kartunya sendiri — di HP kelihatan seperti tidak terjadi apa-apa.
+- **Error baru muncul sendiri**: toast + angka di judul tab, sekali per baris,
+  lalu hilang begitu lognya disentuh. Ini yang paling dicari orang, tapi
+  kartunya paling bawah — dan muat pertama tidak dihitung "error baru"
+  (300 baris sejarah bukan notifikasi).
+- **Pintasan keyboard** R (muat ulang), E (error saja), F (ikuti otomatis),
+  C (salin log).
+
+Diukur di browser sungguhan, bukan diklaim: uptime 17 mnt 36 dtk → 38 → 40
+dalam dua detik tanpa satu pun reload; satu transfer lambat buatan (peer palsu
+12 MB, dikirim 512 KB tiap 0,7 dtk) terbaca 25% → 96% dengan kecepatan
+507 KB/s–1,0 MB/s dan sisa 18 dtk → 1 dtk, filenya mendarat utuh 12.582.912
+byte.
+
 ### Fixed — "terkirim" sekarang berarti file benar-benar tersimpan
 
 Keluhan: kirim lewat Tailscale, aplikasi bilang terkirim, tapi di Pictures
