@@ -14,7 +14,7 @@
  *      user bisa melihat UI versi lama setelah update.
  */
 
-const CACHE_VERSION = 'landrop-shell-v8';
+const CACHE_VERSION = 'landrop-shell-v9';
 
 const SHELL_ASSETS = [
   '/',
@@ -58,6 +58,12 @@ const SHELL_ASSETS = [
  */
 const NEVER_CACHE = [
   '/dashboard',
+  // Kode layar pantau sengaja TIDAK di-cache. Aset statis lain pakai
+  // stale-while-revalidate, artinya perubahan baru terpakai pada muat KEDUA —
+  // dan itu bikin "sudah pull tapi tampilannya masih lama". Dua file ini kecil
+  // dan cuma diambil di jaringan lokal, jadi selalu ambil dari server.
+  '/js/dashboard.js',
+  '/css/dashboard.css',
   '/devices',
   '/me',
   '/history',
