@@ -1292,6 +1292,92 @@ function respondToRequest(requestId, accepted, message) {
   return { requestId, status: req.status, message: req.rejectMessage };
 }
 
+// ===================== Monitoring (dashboard) =====================
+
+// Status yang masih "jalan". Status terminal tidak diikutkan — itu wilayah
+// riwayat (/history), dan kalau ikut, dashboard penuh baris mati.
+const ACTIVE_STATUSES = new Set(['pending', 'accepted', 'transferring']);
+
+/**
+ * Transfer yang sedang berjalan, dua arah, untuk dashboard monitoring.
+ *
+ * Kenapa endpoint sendiri: `getPendingRequests()` cuma request MASUK, dan
+ * `getTransferProgress()` butuh requestId yang sudah diketahui lebih dulu —
+ * tidak ada cara menjawab "sekarang sedang ada transfer apa saja" tanpa ini.
+ *
+ * Satu requestId bisa muncul di lebih dari satu Map (pending + progress,
+ * atau outgoing + progress), jadi hasilnya digabung per id — kalau tidak,
+ * satu transfer tampil sebagai dua baris.
+ *
+ * @returns {Array<{requestId: string, direction: 'send'|'receive', fileName: string, fileSize: number, peer: string, status: string, createdAt: number|null, bytesTransferred: number, percent: number, resumed: boolean}>}
+ */
+function getActiveTransfers() {
+  const rows = new Map();
+
+  // Sisi pengirim.
+  for (const [id, req] of outgoingRequests) {
+    if (!ACTIVE_STATUSES.has(req.status)) continue;
+    rows.set(id, {
+      requestId: id,
+      direction: 'send',
+      fileName: req.fileName,
+      fileSize: req.fileSize,
+      peer: req.peerName || req.targetIp,
+      status: req.status,
+      createdAt: req.createdAt || null,
+      bytesTransferred: 0,
+      percent: 0,
+      resumed: false,
+    });
+  }
+
+  // Sisi penerima.
+  for (const [id, req] of pendingRequests) {
+    if (!ACTIVE_STATUSES.has(req.status)) continue;
+    if (rows.has(id)) continue;
+    rows.set(id, {
+      requestId: id,
+      direction: 'receive',
+      fileName: req.fileName,
+      fileSize: req.fileSize,
+      peer: req.senderName || '?',
+      status: req.status,
+      createdAt: req.createdAt || null,
+      bytesTransferred: 0,
+      percent: 0,
+      resumed: false,
+    });
+  }
+
+  // Byte yang benar-benar mengalir (entri ini dibuat saat frame file-start).
+  for (const [id, p] of transferProgress) {
+    if (!ACTIVE_STATUSES.has(p.status)) continue;
+
+    const row = rows.get(id) || {
+      requestId: id,
+      direction: outgoingRequests.has(id) ? 'send' : 'receive',
+      fileName: p.fileName,
+      fileSize: p.fileSize,
+      peer: '?',
+      status: p.status,
+      createdAt: null,
+      bytesTransferred: 0,
+      percent: 0,
+      resumed: false,
+    };
+
+    row.fileName = p.fileName || row.fileName;
+    row.fileSize = p.fileSize || row.fileSize;
+    row.bytesTransferred = p.bytesTransferred || 0;
+    row.percent = p.fileSize > 0 ? Math.round((p.bytesTransferred / p.fileSize) * 100) : 0;
+    row.status = p.status;
+    row.resumed = !!p.resumed;
+    rows.set(id, row);
+  }
+
+  return Array.from(rows.values());
+}
+
 // ===================== Progress =====================
 function getTransferProgress(requestId) {
   const p = transferProgress.get(requestId);
@@ -1386,6 +1472,7 @@ function cancelOutgoingTransfer(requestId) {
   const p = transferProgress.get(requestId);
   if (p) p.status = 'cancelled';
   outgoingRequests.delete(requestId);
+  console.log(`[Transfer] 🚫 Transfer keluar ${requestId} dibatalkan user (${req.fileName} ke ${req.peerName || req.targetIp || '?'})`);
 }
 
 function cancelIncomingTransfer(requestId) {
@@ -1399,6 +1486,9 @@ function cancelIncomingTransfer(requestId) {
   const p = transferProgress.get(requestId);
   if (p) p.status = 'cancelled';
   pendingRequests.delete(requestId);
+  // Perlu di-log: yang muncul di layar cuma "transfernya hilang". Tanpa baris
+  // ini, "kenapa berhenti" tidak bisa dijawab dari dashboard.
+  console.log(`[Transfer] 🚫 Transfer masuk ${requestId} dibatalkan user (${req.fileName} dari ${req.senderName || '?'})`);
 }
 
 function stopTransferServer() {
@@ -1426,6 +1516,7 @@ module.exports = {
   startTextSend,
   getTransferProgress,
   getPendingRequests,
+  getActiveTransfers,
   getReceivedTexts,
   consumeReceivedText,
   getRequestStatus,

@@ -14,7 +14,7 @@
  *      user bisa melihat UI versi lama setelah update.
  */
 
-const CACHE_VERSION = 'landrop-shell-v7';
+const CACHE_VERSION = 'landrop-shell-v8';
 
 const SHELL_ASSETS = [
   '/',
@@ -57,9 +57,12 @@ const SHELL_ASSETS = [
  * Kalau sebuah path API masuk daftar precache, data basi akan tampil.
  */
 const NEVER_CACHE = [
+  '/dashboard',
   '/devices',
   '/me',
   '/history',
+  '/logs',
+  '/status',
   '/transfer/',
   '/thumbnail/',
   '/events',
@@ -120,12 +123,21 @@ self.addEventListener('fetch', (event) => {
   if (!isCacheable(url.pathname)) return;
 
   // Navigasi: network-first, fallback ke shell.
+  //
+  // HANYA URL root yang mengisi shell. Halaman lain (mis. /dashboard) tidak
+  // boleh menulis ke entri '/': kalau tidak, shell offline user berubah jadi
+  // dashboard — buka app tanpa koneksi, yang muncul layar pantau, bukan UI
+  // kirim file.
   if (request.mode === 'navigate') {
+    const isShell = url.pathname === '/';
+
     event.respondWith((async () => {
       try {
         const fresh = await fetch(request);
-        const cache = await caches.open(CACHE_VERSION);
-        cache.put('/', fresh.clone());
+        if (isShell) {
+          const cache = await caches.open(CACHE_VERSION);
+          cache.put('/', fresh.clone());
+        }
         return fresh;
       } catch (_) {
         const cached = await caches.match('/');

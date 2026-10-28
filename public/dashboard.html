@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#F7F7F9">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Dashboard monitoring server LAN DROP — discovery, peer, transfer, log.">
+  <meta name="robots" content="noindex">
+
+  <title>LAN DROP — Dashboard</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body class="dash">
+  <header class="dash-header">
+    <div class="dash-header-left">
+      <span class="dash-logo"><span aria-hidden="true">📊</span> LAN DROP</span>
+      <span class="dash-sub" id="dashDevice">—</span>
+      <span class="dash-pill" id="dashUptime" title="Uptime server">—</span>
+    </div>
+
+    <div class="dash-header-right">
+      <span class="dash-pill" id="dashClock" title="Waktu server diperbarui">—</span>
+      <button class="dash-btn" type="button" id="dashReload">Muat ulang</button>
+      <a class="dash-btn" href="/">Buka UI kirim file</a>
+    </div>
+  </header>
+
+  <div class="dash-error" id="dashError" role="alert" hidden></div>
+
+  <main class="dash-grid">
+    <!-- 1. Status server -->
+    <section class="dash-card" aria-labelledby="hStatus">
+      <h2 class="dash-card-title" id="hStatus">Status server</h2>
+      <dl class="dash-kv" id="statusKv"></dl>
+    </section>
+
+    <!-- 2. Kesehatan discovery -->
+    <section class="dash-card" aria-labelledby="hDiscovery">
+      <h2 class="dash-card-title" id="hDiscovery">
+        Kesehatan discovery
+        <span class="dash-badge" id="discReady" role="status">—</span>
+      </h2>
+
+      <div class="dash-scroll">
+        <table class="dash-table" id="discTable">
+          <thead>
+            <tr>
+              <th scope="col">Interface</th>
+              <th scope="col">Broadcast</th>
+              <th scope="col">Terikat</th>
+              <th scope="col">Terakhir kirim</th>
+              <th scope="col">Error</th>
+            </tr>
+          </thead>
+          <tbody id="discBody"></tbody>
+        </table>
+      </div>
+
+      <dl class="dash-kv" id="discKv"></dl>
+    </section>
+
+    <!-- 3. Ruang disk -->
+    <section class="dash-card" aria-labelledby="hDisk">
+      <h2 class="dash-card-title" id="hDisk">Ruang simpan</h2>
+      <div class="dash-big" id="diskValue">—</div>
+      <div class="dash-bar" id="diskBar" hidden><span class="dash-bar-fill" id="diskBarFill"></span></div>
+      <dl class="dash-kv" id="diskKv"></dl>
+    </section>
+
+    <!-- 4. Terima otomatis -->
+    <section class="dash-card" aria-labelledby="hAuto">
+      <h2 class="dash-card-title" id="hAuto">Terima otomatis</h2>
+      <label class="dash-switch">
+        <input type="checkbox" id="autoToggle">
+        <span>Terima file masuk tanpa konfirmasi</span>
+      </label>
+      <label class="dash-field">
+        <span class="dash-field-label">Hanya peer ini (kosong = semua peer)</span>
+        <input type="text" id="autoPeers" placeholder="CPH2579, Laptop-Kerja" autocomplete="off">
+      </label>
+      <p class="dash-note">
+        Nama peer harus <strong>persis sama</strong> (huruf besar/kecil dihitung) —
+        nama yang hampir sama bikin file jatuh ke konfirmasi manual.
+      </p>
+      <button class="dash-btn dash-btn-primary" type="button" id="autoSave">Simpan</button>
+      <p class="dash-note" id="autoInfo" role="status"></p>
+    </section>
+
+    <!-- 5. Perangkat online -->
+    <section class="dash-card dash-span" aria-labelledby="hPeers">
+      <h2 class="dash-card-title" id="hPeers">
+        Perangkat online
+        <span class="dash-badge" id="peerCount">0</span>
+      </h2>
+      <div class="dash-scroll">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th scope="col">Perangkat</th>
+              <th scope="col">Alamat</th>
+              <th scope="col">Jalur</th>
+              <th scope="col">Port HTTP</th>
+              <th scope="col">Port transfer</th>
+              <th scope="col">Terakhir terlihat</th>
+            </tr>
+          </thead>
+          <tbody id="peerBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 6. Transfer aktif -->
+    <section class="dash-card dash-span" aria-labelledby="hActive">
+      <h2 class="dash-card-title" id="hActive">
+        Transfer aktif
+        <span class="dash-badge" id="activeCount">0</span>
+      </h2>
+      <div class="dash-scroll">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th scope="col">Arah</th>
+              <th scope="col">File</th>
+              <th scope="col">Ukuran</th>
+              <th scope="col">Peer</th>
+              <th scope="col">Status</th>
+              <th scope="col">Progres</th>
+              <th scope="col">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="activeBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 7. Riwayat -->
+    <section class="dash-card dash-span" aria-labelledby="hHistory">
+      <h2 class="dash-card-title" id="hHistory">Riwayat transfer</h2>
+      <div class="dash-toolbar">
+        <label class="dash-field dash-field-inline">
+          <span class="dash-field-label">Tampilkan</span>
+          <select id="histFilter">
+            <option value="all">Semua</option>
+            <option value="send">Kirim</option>
+            <option value="receive">Terima</option>
+            <option value="completed">Berhasil</option>
+            <option value="failed">Gagal</option>
+            <option value="unconfirmed">Belum dikonfirmasi</option>
+          </select>
+        </label>
+        <span class="dash-pill" id="histCount">0</span>
+        <button class="dash-btn dash-btn-danger" type="button" id="histClear">Hapus riwayat</button>
+      </div>
+      <div class="dash-scroll dash-scroll-tall">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th scope="col">Waktu</th>
+              <th scope="col">Arah</th>
+              <th scope="col">Status</th>
+              <th scope="col">File</th>
+              <th scope="col">Ukuran</th>
+              <th scope="col">Peer</th>
+              <th scope="col">Tersimpan di</th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 8. Galeri -->
+    <section class="dash-card dash-span" aria-labelledby="hGallery">
+      <h2 class="dash-card-title" id="hGallery">Galeri terakhir</h2>
+      <div class="dash-gallery" id="gallery"></div>
+      <p class="dash-note" id="galleryEmpty">Belum ada file dengan thumbnail.</p>
+    </section>
+
+    <!-- 9. Log server -->
+    <section class="dash-card dash-span" aria-labelledby="hLog">
+      <h2 class="dash-card-title" id="hLog">
+        Log server
+        <span class="dash-badge" id="logCount">0</span>
+      </h2>
+      <div class="dash-toolbar">
+        <label class="dash-switch dash-switch-inline">
+          <input type="checkbox" id="logFollow" checked>
+          <span>Ikuti otomatis</span>
+        </label>
+        <label class="dash-switch dash-switch-inline">
+          <input type="checkbox" id="logErrorsOnly">
+          <span>Error saja</span>
+        </label>
+        <button class="dash-btn" type="button" id="logCopy">Salin log</button>
+        <span class="dash-note dash-note-inline">Log hidup di memori server (300 baris terakhir). Restart = log kosong.</span>
+      </div>
+      <pre class="dash-log" id="logPane" tabindex="0" aria-label="Log server"></pre>
+    </section>
+  </main>
+
+  <script type="module" src="/js/dashboard.js"></script>
+</body>
+</html>

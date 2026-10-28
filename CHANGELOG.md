@@ -7,6 +7,53 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Added — dashboard monitoring di `/dashboard`
+
+Log server cuma lewat di stdout: begitu terminal ditutup (atau lampu mati),
+jejak "kenapa peer-nya gak muncul" dan "transfer gagal karena apa" ikut hilang.
+Pertanyaan itu tidak bisa dijawab lagi padahal jawabannya tadi ada di layar.
+
+Dashboard ini layar pantau terpisah — sengaja beda dari UI utama yang tombolnya
+gede buat satu tangan dari HP. Bedanya cuma kepadatan: tabel, banyak kolom,
+desktop. Yang TIDAK berbeda: `tokens.css` (warna literal = dark mode rusak),
+`core/dom.js` `el()` (nama file & nama peer itu input tak tepercaya, string
+HTML dilarang), `core/api.js`, dan `core/format.js`.
+
+9 kartu: status proses (versi, commit yang sedang jalan, uptime, port, folder
+simpan/data), kesehatan discovery per interface (broadcast, terikat, error
+terakhir, listener, peer tailnet), ruang disk, terima otomatis (toggle +
+allowlist), perangkat online, transfer aktif (dengan tombol batal), riwayat
+(dengan filter + hapus), galeri 12 thumbnail terakhir, dan log server live.
+
+Log live butuh satu hal baru di server: `server/logbus.js` membajak
+`console.log/warn/error` SEKALI di awal `server/index.js` jadi ring buffer 300
+baris in-memory — stdout tetap utuh, dan `GET /logs?since=<id>` mengirim hanya
+baris baru (id naik monoton; kalau server restart, id klien yang lebih besar
+dari id server dikenali sebagai reset, bukan log yang hilang selamanya).
+
+Endpoint baru: `GET /status`, `GET /logs`, `GET /transfer/active`, route
+`GET /dashboard`. Diverifikasi `scripts/check-dashboard.js` (masuk `npm test`):
+34 pemeriksaan — bentuk tiap endpoint, penyaringan `since`, id log monoton,
+paritas "setiap id yang dicari `dashboard.js` ada di `dashboard.html`" — uji
+terakhir itu yang bikin kartu kosong tanpa satu pun error di console.
+
+Kartu "transfer aktif" diuji dengan transfer sungguhan, bukan data karangan:
+harness membuka soket ke port transfer dan mengirim frame `transfer-request`
+(soketnya ditahan terbuka — server membuang entri pending begitu pengirim
+terputus), lalu memastikan barisnya muncul sebagai arah TERIMA, namanya benar,
+dan tombol Batal-nya (`POST /transfer/cancel` role `receive`) memang
+mengosongkan kartu lagi. Ketemu satu celah di situ: pembatalan dulu tidak
+meninggalkan
+jejak sama sekali di log, jadi pertanyaan "transfer ini kenapa berhenti" tetap
+tidak terjawab walau lognya sudah ada — sekarang `cancelIncomingTransfer()` dan
+`cancelOutgoingTransfer()` masing-masing mencatat satu baris.
+
+Ikut diperbaiki: service worker dulu menulis SETIAP navigasi ke entri shell
+`'/'`, jadi membuka `/dashboard` sekali membuat shell offline user berisi
+dashboard — buka app tanpa koneksi, yang muncul layar pantau, bukan UI kirim
+file. Sekarang hanya URL root yang mengisi shell; `CACHE_VERSION` naik ke
+`landrop-shell-v8` (index.html berubah: ada tautan kecil 📊 di header).
+
 ### Fixed — "terkirim" sekarang berarti file benar-benar tersimpan
 
 Keluhan: kirim lewat Tailscale, aplikasi bilang terkirim, tapi di Pictures

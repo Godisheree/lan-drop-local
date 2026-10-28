@@ -49,6 +49,14 @@
         </button>
 
         <div class="device-name" id="deviceName" title="Nama perangkat ini">—</div>
+
+        <!-- Dashboard monitoring: layar pantau untuk desktop (log live,
+             discovery, disk). Dipisah dari UI ini supaya shell PWA di HP
+             tidak ikut mengangkut halaman admin — lihat public/dashboard.html. -->
+        <a class="icon-btn" href="/dashboard" title="Dashboard monitoring"
+           aria-label="Buka dashboard monitoring">
+          <span aria-hidden="true">📊</span>
+        </a>
       </div>
     </header>
 

@@ -1,3 +1,7 @@
+// Paling atas, sebelum require lain: logbus membajak console.* supaya log
+// startup modul-modul lain (discovery, transfer, tailscale) ikut terekam dan
+// bisa dibaca ulang lewat GET /logs.
+const logbus = require('./logbus');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -9,7 +13,7 @@ const history = require('./history');
 const settings = require('./settings');
 const thumbnail = require('./thumbnail');
 const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
-const { listLANIPv4, getDeviceName } = require('./platform');
+const { listLANIPv4, getDeviceName, getDataDir, getSaveDirRoot } = require('./platform');
 
 // Generate device name dari hostname atau environment variable
 const DEVICE_NAME = getDeviceName();
@@ -58,6 +62,15 @@ app.get('/sw.js', (req, res) => {
   res.set('Cache-Control', 'no-cache');
   res.set('Service-Worker-Allowed', '/');
   res.sendFile(path.join(__dirname, '../public/sw.js'));
+});
+
+// Dashboard monitoring — halaman terpisah dari UI utama.
+//
+// UI utama dipakai dari HP buat kirim file (tombol besar, satu tangan);
+// halaman ini dipakai dari layar lebar buat mantau (tabel padat, log live).
+// Dipisah supaya shell PWA di HP tidak ikut mengangkut halaman admin.
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/dashboard.html'));
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
@@ -112,6 +125,64 @@ app.get('/discovery/status', (req, res) => {
     deviceName: DEVICE_NAME,
     ...discovery.getDiagnostics(),
   });
+});
+
+// Commit yang sedang dijalankan, dibaca langsung dari .git (tanpa shell-out).
+// Null kalau bukan repo git (mis. hasil build Electron/NSIS) — dashboard
+// menampilkannya sebagai "—".
+//
+// Kenapa berguna: instance yang sudah jalan memakai kode saat dia di-start,
+// jadi server lama bikin bug yang sudah difix kelihatan belum difix.
+function readCommit() {
+  try {
+    const gitDir = path.join(__dirname, '..', '.git');
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf-8').trim();
+    if (!head.startsWith('ref:')) return head.slice(0, 7);
+
+    const refPath = path.join(gitDir, ...head.slice(4).trim().split('/'));
+    return fs.readFileSync(refPath, 'utf-8').trim().slice(0, 7);
+  } catch (_) {
+    return null;
+  }
+}
+
+// GET /status — identitas proses server (read-only).
+app.get('/status', (req, res) => {
+  let version = '';
+  try {
+    version = require('../package.json').version;
+  } catch (_) {}
+
+  const uptimeSeconds = Math.round(process.uptime());
+
+  res.json({
+    deviceName: DEVICE_NAME,
+    version,
+    commit: readCommit(),
+    pid: process.pid,
+    node: process.version,
+    platform: process.platform,
+    uptimeSeconds,
+    startedAt: Date.now() - uptimeSeconds * 1000,
+    port: Number(PORT),
+    transferPort: transfer.TRANSFER_PORT,
+    discoveryPort: discovery.getDiagnostics().listener.port,
+    saveDir: getSaveDirRoot(),
+    dataDir: getDataDir(),
+  });
+});
+
+// GET /logs?since=<id> — log server terakhir (ring buffer, read-only).
+//
+// `since` = id terakhir yang sudah dimiliki klien, jadi polling cukup
+// mengirim baris baru — bukan 300 baris berulang tiap 2 detik.
+app.get('/logs', (req, res) => {
+  res.json(logbus.tail(parseInt(req.query.since, 10) || 0));
+});
+
+// GET /transfer/active — transfer yang sedang berjalan (kirim & terima).
+app.get('/transfer/active', (req, res) => {
+  res.json(transfer.getActiveTransfers());
 });
 
 // GET /devices — daftar peer.
@@ -457,6 +528,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 
   console.log(`[Server] Port ${PORT} (HTTP) & ${transfer.TRANSFER_PORT} (transfer) listen di 0.0.0.0 — device lain di jaringan yang sama bisa menghubungi`);
   console.log('[Server] Device kedua harus menjalankan LAN DROP-nya sendiri supaya dua arah (kirim & terima)');
+  console.log(`📊 Dashboard → http://localhost:${PORT}/dashboard`);
   console.log();
 });
 
