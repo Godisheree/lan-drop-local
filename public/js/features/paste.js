@@ -69,7 +69,7 @@ export function setupPaste(handlers) {
       // tidak menjalankan paste native (mis. membuka file di tab baru),
       // lalu kasih tahu user.
       event.preventDefault();
-      showToast('📋 Belum ada perangkat tujuan — tunggu peer muncul di daftar', 'warning');
+      showToast('Belum ada perangkat tujuan. Tunggu sampai perangkat muncul di daftar.', 'warning');
       return;
     }
 

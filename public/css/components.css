@@ -57,18 +57,28 @@
   text-overflow: ellipsis;
 }
 
-/* Tombol tema: ikon bulan (saat terang) & matahari (saat gelap).
+/* Tombol tema: ikon digambar CSS (tanpa emoji) supaya tetap tajam di
+   semua font. Bulan separuh = tema terang, cakram penuh = tema gelap.
    Mode gelap aktif bila OS gelap DAN user belum memilih terang,
    ATAU user memilih gelap manual. */
-#btnTheme .theme-icon-dark { display: none; }
+#btnTheme .theme-icon {
+  display: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+#btnTheme .theme-icon-light { background: linear-gradient(90deg, currentColor 0 50%, transparent 50% 100%); }
+#btnTheme .theme-icon-dark { background: currentColor; }
 
 @media (prefers-color-scheme: dark) {
   :root:not(.theme-light) #btnTheme .theme-icon-light { display: none; }
-  :root:not(.theme-light) #btnTheme .theme-icon-dark { display: inline; }
+  :root:not(.theme-light) #btnTheme .theme-icon-dark { display: block; }
 }
 
 :root.theme-dark #btnTheme .theme-icon-light { display: none; }
-:root.theme-dark #btnTheme .theme-icon-dark { display: inline; }
+:root.theme-dark #btnTheme .theme-icon-dark { display: block; }
 
 /* --- Panel Sambung (popover) --------------------------------------------- */
 
@@ -653,8 +663,6 @@
   font-size: var(--text-base);
 }
 
-.tf-name .tf-emoji { flex-shrink: 0; }
-
 .tf-name .tf-filename {
   min-width: 0;
   overflow: hidden;
@@ -903,8 +911,6 @@
   font-size: var(--text-sm);
 }
 
-.history-item .h-icon { flex-shrink: 0; line-height: 1.4; }
-
 .history-item .h-body {
   flex: 1;
   min-width: 0;
@@ -938,7 +944,6 @@
   font-size: var(--text-sm);
 }
 
-.empty-state .empty-icon { font-size: 1.6rem; opacity: 0.7; }
 .empty-state .empty-title { font-weight: 650; color: var(--text-secondary); }
 .empty-state .empty-hint { max-width: 34ch; line-height: 1.55; }
 
@@ -1301,14 +1306,7 @@
   to { opacity: 1; transform: none; }
 }
 
-.toast-icon { flex-shrink: 0; }
-
 .toast-success { border-left: 3px solid var(--success); }
 .toast-error { border-left: 3px solid var(--danger); }
 .toast-warning { border-left: 3px solid var(--warning); }
 .toast-info { border-left: 3px solid var(--accent); }
-
-.toast-success .toast-icon { color: var(--success-text); }
-.toast-error .toast-icon { color: var(--danger-text); }
-.toast-warning .toast-icon { color: var(--warning-text); }
-.toast-info .toast-icon { color: var(--accent-strong); }

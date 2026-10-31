@@ -7,6 +7,26 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [1.2.0] — 2026-11-01
 
+### Changed — bahasa UI: tanpa emoji, satu istilah untuk satu hal
+
+Teks yang dilihat user terbaca seperti aplikasi chat, bukan seperti alat: emoji di 22
+tempat (`📡 LAN DROP`, `📥 Permintaan Masuk`, `⚡ Terima otomatis aktif`, `❌ Tolak` /
+`✅ Terima`), judul kartu campur Title Case dan sentence case (`Perangkat Online` di
+halaman kirim vs `Perangkat online` di dashboard), satu hal dipanggil dengan tiga nama
+(`Aktivitas Transfer` → `Transfer aktif` → `Riwayat transfer`), dan istilah teknis
+nyelip ke layar user (`Kesehatan discovery`, `Buka UI kirim file`, `Interface`,
+`Mengupload`, `WiFi`).
+
+Sekarang `public/` tidak memuat emoji sama sekali. Ikon tema digambar CSS (separuh
+lingkaran = tema terang, cakram penuh = tema gelap), ikon tipe berkas dan ikon hiasan
+dihapus, status transfer ditulis sebagai kata (`Selesai`, `Gagal`, `Dibatalkan`, `Belum
+dikonfirmasi`), dan baris riwayat jadi `Kirim ke <nama>` / `Terima dari <nama>`.
+Istilah diseragamkan: `Transfer berjalan`, `Perangkat terhubung`, `Penemuan perangkat`,
+`Penyimpanan`, `Galeri`, `Antarmuka`, `Wi-Fi`, `Mengunggah`. Aturannya dicatat di
+`docs/guides/bahasa-ui.md` lengkap dengan pemeriksaan `grep` supaya teks baru tidak
+menyimpang lagi. Salah ketik `perangkat mungkinmati` → `mungkin mati` ikut diperbaiki.
+Karena shell PWA berubah, `CACHE_VERSION` di `public/sw.js` naik ke `landrop-shell-v12`.
+
 ### Added — halaman pantau (/dashboard) dikunci PIN, UI kirim file tetap bebas
 
 Sebelum ini siapa pun yang bisa njangkau portnya bisa membuka `/dashboard`: riwayat
@@ -19,7 +39,7 @@ buka, dan itu janji produknya (ADR-0007). Keputusannya dicatat di ADR-0009.
 Cara kerjanya: PIN 4-8 angka, bawaannya `123456` dan **ditampilkan** (hint di halaman
 login + notice di terminal) sampai user menggantinya — PIN yang tidak diketahui siapa
 pun berakhir jadi "saya terkunci dari server saya sendiri". Sekali masuk, browser itu
-diingat 30 hari lewat cookie `HttpOnly; SameSite=Lax` yang hidup di memori (restart
+diingat 24 jam lewat cookie `HttpOnly; SameSite=Lax` yang hidup di memori (restart
 server = semua browser minta PIN lagi, jadi "keluar" benar-benar berarti). Percobaan
 PIN dibatasi 10/menit per IP, PIN dibandingkan dengan `crypto.timingSafeEqual`, dan
 mengganti PIN mencabut semua sesi — termasuk sesi yang barusan dipakai mengganti.

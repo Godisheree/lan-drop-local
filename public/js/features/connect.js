@@ -177,7 +177,7 @@ export function renderConnectPanel() {
   if (lanUrls.length === 0) {
     frame.className = 'qr-frame is-error';
     frame.textContent =
-      'Tidak ada alamat yang terdeteksi. Pastikan perangkat terhubung ke WiFi, lalu muat ulang halaman.';
+      'Tidak ada alamat yang terdeteksi. Pastikan perangkat terhubung ke Wi-Fi, lalu muat ulang halaman.';
     return;
   }
 
@@ -206,7 +206,7 @@ export function renderConnectPanel() {
   // ("kok namanya deviceku sama dengan laptop?").
   const owner = getState().deviceName || 'server ini';
   const twoWay =
-    `Halaman ini milik "${owner}". Supaya dua arah, device kedua juga harus ` +
+    `Halaman ini milik "${owner}". Supaya dua arah, perangkat kedua juga harus ` +
     'menjalankan LAN DROP-nya sendiri — membuka halaman saja tidak cukup.';
 
   const hint = maybeById('urlHint');
@@ -214,12 +214,12 @@ export function renderConnectPanel() {
     if (primary.via === 'tailscale') {
       hint.textContent =
         'Pindai QR ini dengan kamera HP. Alamat Tailscale bisa dibuka dari mana saja ' +
-        'selama HP-nya terhubung ke tailnet yang sama — tidak harus WiFi yang sama. ' +
+        'selama HP-nya terhubung ke tailnet yang sama — tidak harus Wi-Fi yang sama. ' +
         twoWay;
     } else {
       hint.textContent =
         'Pindai QR ini dengan kamera HP, atau buka alamat di bawah. ' +
-        'Pastikan kedua perangkat di WiFi yang sama. ' +
+        'Pastikan kedua perangkat di Wi-Fi yang sama. ' +
         twoWay;
     }
   }

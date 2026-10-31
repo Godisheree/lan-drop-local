@@ -198,7 +198,6 @@ export function renderInstallSection() {
   // Sudah terpasang — tidak perlu menawarkan apa-apa.
   if (installed) {
     container.appendChild(el('div', { class: 'install-status is-installed' }, [
-      el('span', { 'aria-hidden': 'true', text: '✅' }),
       el('span', { text: 'Aplikasi sudah terpasang di layar utama.' }),
     ]));
     return;
@@ -210,7 +209,7 @@ export function renderInstallSection() {
       class: 'btn btn-accent install-button',
       type: 'button',
       onclick: () => promptInstall(),
-    }, '📲 Pasang aplikasi'));
+    }, 'Pasang aplikasi'));
     return;
   }
 

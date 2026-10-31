@@ -12,7 +12,7 @@ import { showToast } from './notify.js';
 
 /** Ambil label jaringan dari field `via` milik discovery. */
 function viaLabel(via) {
-  return via === 'tailscale' ? '🔒 Tailscale' : 'WiFi langsung';
+  return via === 'tailscale' ? 'Tailscale' : 'Wi-Fi langsung';
 }
 
 /**
@@ -55,7 +55,7 @@ function buildCard(device, handlers) {
     el('span', { text: 'tersambung' }),
   ]);
 
-  const dropHint = el('p', { class: 'drop-hint', text: '📤 Seret file ke sini, atau Ctrl+V untuk menempel' });
+  const dropHint = el('p', { class: 'drop-hint', text: 'Seret file ke sini, atau tekan Ctrl+V untuk menempel' });
 
   const actions = el('div', { class: 'btn-file-row' }, [
     el('button', {
@@ -63,19 +63,19 @@ function buildCard(device, handlers) {
       type: 'button',
       dataset: { action: 'media', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickMedia(device),
-    }, '📷 Foto/Video'),
+    }, 'Foto atau video'),
     el('button', {
       class: 'btn-file-pick',
       type: 'button',
       dataset: { action: 'file', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickFile(device),
-    }, '📁 File Lain'),
+    }, 'File lain'),
     el('button', {
       class: 'btn-file-pick btn-text-pick',
       type: 'button',
       dataset: { action: 'text', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickText(device),
-    }, '✏️ Teks'),
+    }, 'Teks'),
   ]);
 
   return el('article', {
@@ -105,11 +105,10 @@ export function renderDevices(devices, handlers) {
   if (listDevices.length === 0) {
     clear(list);
     list.appendChild(el('div', { class: 'empty-state' }, [
-      el('span', { class: 'empty-icon', 'aria-hidden': 'true', text: '📡' }),
       el('span', { class: 'empty-title', text: 'Belum ada perangkat lain' }),
       el('span', {
         class: 'empty-hint',
-        text: 'Pastikan perangkat lain terhubung ke WiFi yang sama, lalu buka alamat yang tertera di panel Sambung.',
+        text: 'Pastikan perangkat lain terhubung ke Wi-Fi yang sama, lalu buka alamat yang tertera di panel Sambung.',
       }),
     ]));
     setState({ devices: new Map() });

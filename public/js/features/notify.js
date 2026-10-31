@@ -74,10 +74,7 @@ export function showToast(message, type = 'info') {
     host.removeChild(host.firstChild);
   }
 
-  const icon = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' }[type] || 'ℹ️';
-
   const toast = el('div', { class: `toast toast-${type}`, role: 'status' }, [
-    el('span', { class: 'toast-icon', 'aria-hidden': 'true', text: icon }),
     el('span', { class: 'toast-message', text: message }),
   ]);
 

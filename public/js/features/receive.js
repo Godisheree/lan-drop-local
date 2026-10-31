@@ -6,7 +6,7 @@
  */
 
 import { el, clear, byId } from '../core/dom.js';
-import { formatBytes, fileEmoji } from '../core/format.js';
+import { formatBytes } from '../core/format.js';
 import { getState, setState } from '../core/state.js';
 import { showToast, notify, announce } from './notify.js';
 import { openModal, closeModal } from './a11y.js';
@@ -38,7 +38,7 @@ export async function pollPending() {
           fileSize: req.fileSize,
           senderName: req.senderName,
           status: 'transferring',
-          statusText: '⚡ Diterima otomatis',
+          statusText: 'Diterima otomatis',
           batchId: req.batchId,
         });
         pollProgress(req.requestId, 'receive');
@@ -85,7 +85,7 @@ export async function pollPending() {
       if (!stillPending && !byId('requestModal').classList.contains('hidden')) {
         const senderName = state.currentGroup.senderName || 'Pengirim';
         dismissModal();
-        showToast(`📴 ${senderName} membatalkan kiriman`, 'info');
+        showToast(`${senderName} membatalkan kiriman`, 'info');
       }
     }
 
@@ -113,7 +113,6 @@ function renderGroup(group) {
       ' ingin mengirim file:',
     ]));
     info.appendChild(el('div', { class: 'file-list-row' }, [
-      el('span', { 'aria-hidden': 'true', text: fileEmoji(files[0].fileName) }),
       el('span', { class: 'fl-name', text: files[0].fileName }),
       el('span', { class: 'modal-fsize', text: formatBytes(files[0].fileSize) }),
     ]));
@@ -128,7 +127,6 @@ function renderGroup(group) {
     const list = el('div', { class: 'file-list' });
     for (const file of files) {
       list.appendChild(el('div', { class: 'file-list-row' }, [
-        el('span', { 'aria-hidden': 'true', text: fileEmoji(file.fileName) }),
         el('span', { class: 'fl-name', text: file.fileName }),
         el('span', { class: 'modal-fsize', text: formatBytes(file.fileSize) }),
       ]));
@@ -219,7 +217,7 @@ export async function acceptCurrent() {
         fileSize: request.fileSize,
         senderName: group.senderName,
         status: 'transferring',
-        statusText: '⏳ Menunggu pengirim...',
+        statusText: 'Menunggu pengirim...',
         batchId: group.requests.length > 1 ? group.batchId : undefined,
         batchSize: group.requests.length,
         batchLabel: `Dari ${group.senderName}`,
@@ -227,13 +225,13 @@ export async function acceptCurrent() {
 
       pollProgress(request.requestId, 'receive');
     } catch (err) {
-      showToast(`❌ Gagal menerima ${request.fileName}: ${err.message}`, 'error');
+      showToast(`Gagal menerima ${request.fileName}: ${err.message}`, 'error');
     }
   }
 
   const count = group.requests.length;
   showToast(
-    count === 1 ? '✅ Diterima, menunggu file...' : `✅ ${count} file diterima, menunggu file...`,
+    count === 1 ? 'Diterima, menunggu file...' : `${count} file diterima, menunggu file...`,
     'success'
   );
 

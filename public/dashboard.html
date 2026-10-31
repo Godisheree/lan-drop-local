@@ -19,7 +19,7 @@
 <body class="dash">
   <header class="dash-header">
     <div class="dash-header-left">
-      <span class="dash-logo"><span aria-hidden="true">📊</span> LAN DROP</span>
+      <span class="dash-logo">LAN DROP</span>
       <span class="dash-sub" id="dashDevice">—</span>
       <span class="dash-pill" id="dashUptime" title="Uptime server">—</span>
     </div>
@@ -27,7 +27,7 @@
     <div class="dash-header-right">
       <span class="dash-pill" id="dashClock" title="Waktu server diperbarui">—</span>
       <button class="dash-btn" type="button" id="dashReload" title="Muat ulang semua data (tombol R)">Muat ulang</button>
-      <a class="dash-btn" href="/">Buka UI kirim file</a>
+      <a class="dash-btn" href="/">Buka halaman kirim</a>
     </div>
   </header>
 
@@ -40,10 +40,10 @@
       <dl class="dash-kv" id="statusKv"></dl>
     </section>
 
-    <!-- 2. Kesehatan discovery -->
+    <!-- 2. Penemuan perangkat -->
     <section class="dash-card" aria-labelledby="hDiscovery">
       <h2 class="dash-card-title" id="hDiscovery">
-        Kesehatan discovery
+        Penemuan perangkat
         <span class="dash-badge" id="discReady" role="status">—</span>
       </h2>
 
@@ -51,7 +51,7 @@
         <table class="dash-table" id="discTable">
           <thead>
             <tr>
-              <th scope="col">Interface</th>
+              <th scope="col">Antarmuka</th>
               <th scope="col">Broadcast</th>
               <th scope="col">Terikat</th>
               <th scope="col">Terakhir kirim</th>
@@ -67,7 +67,7 @@
 
     <!-- 3. Ruang disk -->
     <section class="dash-card" aria-labelledby="hDisk">
-      <h2 class="dash-card-title" id="hDisk">Ruang simpan</h2>
+      <h2 class="dash-card-title" id="hDisk">Penyimpanan</h2>
       <div class="dash-big" id="diskValue">—</div>
       <div class="dash-bar" id="diskBar" hidden><span class="dash-bar-fill" id="diskBarFill"></span></div>
       <dl class="dash-kv" id="diskKv"></dl>
@@ -81,11 +81,11 @@
         <span>Terima file masuk tanpa konfirmasi</span>
       </label>
       <label class="dash-field">
-        <span class="dash-field-label">Hanya peer ini (kosong = semua peer)</span>
+        <span class="dash-field-label">Hanya perangkat ini (kosong = semua)</span>
         <input type="text" id="autoPeers" placeholder="CPH2579, Laptop-Kerja" autocomplete="off">
       </label>
       <p class="dash-note">
-        Nama peer harus <strong>persis sama</strong> (huruf besar/kecil dihitung) —
+        Nama perangkat harus <strong>persis sama</strong> (huruf besar/kecil dihitung) —
         nama yang hampir sama bikin file jatuh ke konfirmasi manual.
       </p>
       <button class="dash-btn dash-btn-primary" type="button" id="autoSave">Simpan</button>
@@ -118,10 +118,10 @@
       <p class="dash-note" id="pinMsg" role="status"></p>
     </section>
 
-    <!-- 5. Perangkat online -->
+    <!-- 5. Perangkat terhubung -->
     <section class="dash-card dash-span" aria-labelledby="hPeers">
       <h2 class="dash-card-title" id="hPeers">
-        Perangkat online
+        Perangkat terhubung
         <span class="dash-badge" id="peerCount">0</span>
       </h2>
       <div class="dash-scroll">
@@ -141,10 +141,10 @@
       </div>
     </section>
 
-    <!-- 6. Transfer aktif -->
+    <!-- 6. Transfer berjalan -->
     <section class="dash-card dash-span" aria-labelledby="hActive">
       <h2 class="dash-card-title" id="hActive">
-        Transfer aktif
+        Transfer berjalan
         <span class="dash-badge" id="activeCount">0</span>
       </h2>
       <div class="dash-scroll">
@@ -203,9 +203,9 @@
 
     <!-- 8. Galeri -->
     <section class="dash-card dash-span" aria-labelledby="hGallery">
-      <h2 class="dash-card-title" id="hGallery">Galeri terakhir</h2>
+      <h2 class="dash-card-title" id="hGallery">Galeri</h2>
       <div class="dash-gallery" id="gallery"></div>
-      <p class="dash-note" id="galleryEmpty">Belum ada file dengan thumbnail.</p>
+      <p class="dash-note" id="galleryEmpty">Belum ada gambar atau video.</p>
     </section>
 
     <!-- 9. Log server -->
@@ -221,7 +221,7 @@
         </label>
         <label class="dash-switch dash-switch-inline">
           <input type="checkbox" id="logErrorsOnly" title="Tombol E">
-          <span>Error saja</span>
+          <span>Hanya error</span>
         </label>
         <button class="dash-btn" type="button" id="logCopy" title="Salin log yang terlihat (tombol C)">Salin log</button>
         <span class="dash-note dash-note-inline">Log hidup di memori server (300 baris terakhir). Restart = log kosong. Terminal cuma mencetak satu baris tanda aktif + alamat dashboard — jalankan server dengan <code>--debug</code> kalau mau semuanya ikut tercetak di sana.</span>

@@ -101,21 +101,6 @@ export function formatDateTime(ts) {
 }
 
 /**
- * Emoji per kategori file.
- * @param {string} fileName
- * @returns {string}
- */
-export function fileEmoji(fileName) {
-  const ext = String(fileName || '').split('.').pop().toLowerCase();
-  if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus'].includes(ext)) return '🎵';
-  if (['mp4', 'mkv', 'avi', 'mov', 'webm', 'mpeg', 'mpg', '3gp', 'flv', 'ts'].includes(ext)) return '🎬';
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'avif'].includes(ext)) return '🖼️';
-  if (['zip', 'rar', '7z', 'tar', 'gz', 'apk', 'exe', 'msi'].includes(ext)) return '📦';
-  if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md'].includes(ext)) return '📝';
-  return '📄';
-}
-
-/**
  * Format path folder tujuan supaya tidak memenuhi layar.
  * @param {string} path
  * @param {number} [maxLength=48]

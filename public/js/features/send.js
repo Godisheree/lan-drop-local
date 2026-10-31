@@ -89,7 +89,7 @@ export async function sendBatch(target, files) {
     fileSize: files.reduce((sum, f) => sum + f.size, 0),
     targetName: target.targetName,
     status: 'waiting',
-    statusText: `📤 Mengupload ${files.length} file (0%)…`,
+    statusText: `Mengunggah ${files.length} file (0%)…`,
     batchId: files.length > 1 ? batchId : undefined,
     batchSize: files.length,
     batchLabel: `Kirim ke ${target.targetName}`,
@@ -101,7 +101,7 @@ export async function sendBatch(target, files) {
       files,
       (percent) => {
         updateTransferItem(placeholderId, {
-          statusText: `📤 Mengupload ${files.length} file (${percent}%)…`,
+          statusText: `Mengunggah ${files.length} file (${percent}%)…`,
         });
       },
       controller.signal
@@ -111,7 +111,7 @@ export async function sendBatch(target, files) {
     const aborted = err.name === 'AbortError';
     updateTransferItem(placeholderId, {
       status: aborted ? 'cancelled' : 'failed',
-      statusText: aborted ? '🚫 Upload dibatalkan' : '❌ Gagal upload: ' + err.message,
+      statusText: aborted ? 'Upload dibatalkan' : 'Gagal mengunggah: ' + err.message,
     });
     if (aborted) showToast('Upload dibatalkan', 'info');
     else showToast('Gagal upload: ' + err.message, 'error');
@@ -151,8 +151,8 @@ export async function sendBatch(target, files) {
 
   showToast(
     sent.length === 1
-      ? '📤 Permintaan dikirim, menunggu diterima...'
-      : `📤 ${sent.length} file dikirim, menunggu diterima...`,
+      ? 'Permintaan dikirim, menunggu diterima...'
+      : `${sent.length} file dikirim, menunggu diterima...`,
     'info'
   );
 
@@ -164,7 +164,7 @@ export async function sendBatch(target, files) {
       fileSize: item.fileSize,
       targetName: target.targetName,
       status: 'waiting',
-      statusText: '⏳ Menunggu diterima...',
+      statusText: 'Menunggu diterima...',
       batchId: sent.length > 1 ? batchId : undefined,
       batchSize: sent.length,
       batchLabel: `Kirim ke ${target.targetName}`,
@@ -201,7 +201,7 @@ async function waitForAccept(item) {
       clearInterval(timer);
       updateTransferItem(item.requestId, {
         status: 'failed',
-        statusText: '❌ Penerima tidak merespons dalam 60 detik',
+        statusText: 'Penerima tidak merespons dalam 60 detik',
       });
       showToast('Penerima tidak merespons', 'error');
       return;
@@ -225,7 +225,7 @@ async function waitForAccept(item) {
         } else {
           updateTransferItem(item.requestId, {
             status: 'transferring',
-            statusText: '📤 Mengirim file...',
+            statusText: 'Mengirim file...',
           });
         }
 
@@ -238,7 +238,7 @@ async function waitForAccept(item) {
         } catch (err) {
           updateTransferItem(item.requestId, {
             status: 'failed',
-            statusText: '❌ Gagal kirim: ' + err.message,
+            statusText: 'Gagal kirim: ' + err.message,
           });
           showToast('Gagal kirim file', 'error');
         }
@@ -253,7 +253,7 @@ async function waitForAccept(item) {
         // user mengira orangnya yang menolak.
         updateTransferItem(item.requestId, {
           status: 'rejected',
-          statusText: st.reason ? `❌ ${st.reason}` : '❌ Ditolak penerima',
+          statusText: st.reason ? st.reason : 'Ditolak penerima',
         });
         showToast(st.reason || 'Permintaan ditolak', 'error');
         return;
@@ -264,7 +264,7 @@ async function waitForAccept(item) {
         state.waitStartedAt.delete(item.requestId);
         updateTransferItem(item.requestId, {
           status: 'failed',
-          statusText: '❌ Koneksi ke perangkat terputus',
+          statusText: 'Koneksi ke perangkat terputus',
         });
         showToast('Koneksi ke perangkat terputus', 'error');
         return;
@@ -276,7 +276,7 @@ async function waitForAccept(item) {
         state.waitStartedAt.delete(item.requestId);
         updateTransferItem(item.requestId, {
           status: 'failed',
-          statusText: '❌ Permintaan hilang — perangkat mungkinmati',
+          statusText: 'Permintaan hilang — perangkat mungkin mati',
         });
         showToast('Permintaan hilang', 'error');
         return;
@@ -306,7 +306,7 @@ export function cancelUpload(batchId) {
 export async function sendText(target, text) {
   const { postJson, fetchRequestStatus } = await import('../core/api.js');
 
-  showToast('📤 Mengirim teks...', 'info');
+  showToast('Mengirim teks...', 'info');
 
   try {
     const reqRes = await postJson('/transfer/request-text', {
@@ -343,9 +343,9 @@ export async function sendText(target, text) {
     });
 
     await postJson('/transfer/send-text', { requestId: reqRes.requestId, text });
-    showToast('✅ Teks terkirim', 'success');
+    showToast('Teks terkirim', 'success');
     announce('Teks terkirim');
   } catch (err) {
-    showToast('❌ Gagal kirim teks: ' + err.message, 'error');
+    showToast('Gagal kirim teks: ' + err.message, 'error');
   }
 }

@@ -6,7 +6,7 @@
  */
 
 import { el, byId } from '../core/dom.js';
-import { formatBytes, formatSpeed, formatDuration, fileEmoji, formatPath } from '../core/format.js';
+import { formatBytes, formatSpeed, formatDuration, formatPath } from '../core/format.js';
 import { getState, updateSpeed } from '../core/state.js';
 import { showToast, announce } from './notify.js';
 import { attachThumbnail } from './thumbnail.js';
@@ -39,7 +39,6 @@ function ensureEmptyState() {
   if (list.querySelector('.transfer-item, .transfer-batch')) return;
 
   list.appendChild(el('div', { class: 'empty-state' }, [
-    el('span', { class: 'empty-icon', 'aria-hidden': 'true', text: '📦' }),
     el('span', { class: 'empty-title', text: 'Belum ada transfer' }),
     el('span', {
       class: 'empty-hint',
@@ -122,7 +121,6 @@ function buildItem(requestId, data) {
     : `← ${data.senderName || '?'}`;
 
   const name = el('span', { class: 'tf-filename truncate', text: data.fileName || '?' });
-  const emoji = el('span', { class: 'tf-emoji', 'aria-hidden': 'true', text: fileEmoji(data.fileName) });
 
   const actions = el('div', { class: 'tf-actions' }, [
     // Salin nama file. Setelah kirim/terima, nama file sering dibutuhkan untuk
@@ -135,11 +133,11 @@ function buildItem(requestId, data) {
       title: 'Salin nama file',
       'aria-label': `Salin nama file ${data.fileName || 'transfer'}`,
       onclick: () => copyText(data.fileName || '', 'Nama file disalin'),
-    }, '📋 Nama'),
+    }, 'Salin nama'),
   ]);
 
   const header = el('div', { class: 'tf-header' }, [
-    el('span', { class: 'tf-name' }, [emoji, name]),
+    el('span', { class: 'tf-name' }, [name]),
     el('span', { class: `tf-direction ${dirClass}`, text: dirLabel }),
     actions,
   ]);
@@ -293,7 +291,6 @@ export function updateTransferItem(requestId, data) {
     let pathRow = item.querySelector('.tf-path');
     if (!pathRow) {
       pathRow = el('div', { class: 'tf-path' }, [
-        el('span', { 'aria-hidden': 'true', text: '📁' }),
         el('span', { class: 'tf-path-value', title: data.savedTo, text: formatPath(data.savedTo) }),
         el('button', {
           class: 'tf-path-copy',
@@ -490,7 +487,7 @@ export function pollProgress(requestId, direction, onComplete) {
         state.progressTimers.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'cancelled',
-          statusText: '🚫 Dibatalkan',
+          statusText: 'Dibatalkan',
           percent,
           transferred,
           total,
@@ -505,8 +502,8 @@ export function pollProgress(requestId, direction, onComplete) {
         finalizeTransfer(requestId, {
           status: 'completed',
           statusText: direction === 'send'
-            ? (prog.reason ? `✅ Terkirim — ${prog.reason}` : '✅ Terkirim')
-            : '✅ Selesai diterima',
+            ? (prog.reason ? `Terkirim — ${prog.reason}` : 'Terkirim')
+            : 'Selesai diterima',
           percent: 100,
           transferred,
           total,
@@ -528,7 +525,7 @@ export function pollProgress(requestId, direction, onComplete) {
         state.progressTimers.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'unconfirmed',
-          statusText: '⚠️ Terkirim, tapi penerima tidak konfirmasi tersimpan',
+          statusText: 'Terkirim, tapi penerima tidak konfirmasi tersimpan',
           percent: 100,
           transferred,
           total,
@@ -546,7 +543,7 @@ export function pollProgress(requestId, direction, onComplete) {
         state.progressTimers.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'failed',
-          statusText: prog.reason ? `❌ ${prog.reason}` : '❌ Gagal — periksa koneksi',
+          statusText: prog.reason ? `${prog.reason}` : 'Gagal — periksa koneksi',
           percent,
           transferred,
           total,
@@ -556,8 +553,8 @@ export function pollProgress(requestId, direction, onComplete) {
       }
 
       const statusText = direction === 'send'
-        ? `📤 Mengirim ${formatBytes(transferred)} / ${formatBytes(total)}`
-        : `📥 Menerima ${formatBytes(transferred)} / ${formatBytes(total)}`;
+        ? `Mengirim ${formatBytes(transferred)} / ${formatBytes(total)}`
+        : `Menerima ${formatBytes(transferred)} / ${formatBytes(total)}`;
 
       updateTransferItem(requestId, {
         status: 'transferring',
@@ -577,7 +574,7 @@ export function pollProgress(requestId, direction, onComplete) {
         state.sawProgress.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'failed',
-          statusText: '❌ Gagal — transfer tidak ditemukan di-peer',
+          statusText: 'Gagal — transfer tidak ditemukan di-peer',
           percent: 0,
         });
         return;
@@ -620,7 +617,7 @@ export async function cancelTransfer(requestId, role) {
 
   try {
     await postJson(`/transfer/cancel/${encodeURIComponent(requestId)}`, { role });
-    finalizeTransfer(requestId, { status: 'cancelled', statusText: '🚫 Dibatalkan' });
+    finalizeTransfer(requestId, { status: 'cancelled', statusText: 'Dibatalkan' });
     state.activeTransfers.delete(requestId);
     showToast('Transfer dibatalkan', 'info');
   } catch (err) {
@@ -666,7 +663,7 @@ export async function retryTransfer(requestId, onResent) {
       fileSize: info.fileSize,
       targetName: info.targetName,
       status: 'waiting',
-      statusText: '⏳ Menunggu diterima...',
+      statusText: 'Menunggu diterima...',
       batchId: info.batchId,
       filePath: info.filePath,
       ip: info.ip,

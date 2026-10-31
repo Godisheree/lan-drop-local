@@ -1,7 +1,7 @@
 {
-  "name": "LAN DROP — Kirim File di WiFi yang Sama",
+  "name": "LAN DROP — Kirim File di Wi-Fi yang Sama",
   "short_name": "LAN DROP",
-  "description": "Kirim file, foto, video, dan teks antar perangkat di WiFi yang sama. Tanpa cloud, tanpa akun.",
+  "description": "Kirim file, foto, video, dan teks antar perangkat di Wi-Fi yang sama. Tanpa cloud, tanpa akun.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

@@ -180,6 +180,14 @@ a {
   color: var(--text-primary);
 }
 
+/* Tautan teks di header: tinggi tetap sama dengan tombol ikon. */
+.icon-btn-text {
+  width: auto;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
 /* Tombol ikon: target sentuh minimal 44px, label selalu untuk screen reader. */
 .icon-btn {
   display: inline-flex;

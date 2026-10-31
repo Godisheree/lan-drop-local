@@ -287,7 +287,7 @@ function paintUptime() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Kesehatan discovery
+// 2. Penemuan perangkat
 // ---------------------------------------------------------------------------
 
 async function refreshDiscovery() {
@@ -316,10 +316,10 @@ async function refreshDiscovery() {
   fillKv($.discKv, [
     ['Listener', `port ${dash(listener.port)} — ${listener.bound ? 'terikat' : 'TIDAK terikat'}`],
     ['Error listener', listener.error ? el('span', { class: 'dash-tag', dataset: { state: 'err' }, text: listener.error }) : '—'],
-    ['Peer dikenal', `${dash(peers.count)} — announce terakhir ${peers.lastAnnounceAt ? ago(peers.lastAnnounceAt) : 'belum ada'}`],
+    ['Perangkat dikenal', `${dash(peers.count)} — sinyal terakhir ${peers.lastAnnounceAt ? ago(peers.lastAnnounceAt) : 'belum ada'}`],
     ['Tailscale', ts.selfIp ? `ip ${ts.selfIp}` : 'tidak aktif'],
     ['Tailscale CLI', ts.cliFound ? 'ada' : 'tidak ada (normal di HP)'],
-    ['Peer tailnet', dash(ts.peerCount)],
+    ['Perangkat tailnet', dash(ts.peerCount)],
   ]);
 }
 
@@ -475,7 +475,7 @@ async function refreshPeers() {
     row([
       dash(peer.deviceName),
       el('span', { class: 'dash-mono', text: dash(peer.ip) }),
-      peer.via === 'tailscale' ? '🔒 Tailscale' : '📶 LAN',
+      peer.via === 'tailscale' ? 'Tailscale' : 'LAN',
       dash(peer.port),
       dash(peer.transferPort),
       ago(peer.lastSeen),
@@ -543,7 +543,7 @@ async function refreshActive() {
     });
 
     return row([
-      t.direction === 'receive' ? '⬇️ Terima' : '⬆️ Kirim',
+      t.direction === 'receive' ? 'Terima' : 'Kirim',
       el('div', { class: 'dash-file', text: dash(t.fileName), title: dash(t.fileName) }),
       formatBytes(t.fileSize),
       dash(t.peer),
@@ -593,7 +593,7 @@ function renderHistory() {
 
     const main = row([
       formatDateTime(entry.ts),
-      entry.direction === 'receive' ? '⬇️ Terima' : '⬆️ Kirim',
+      entry.direction === 'receive' ? 'Terima' : 'Kirim',
       statusTag(entry.status),
       el('div', { class: 'dash-file', text: dash(entry.fileName), title: dash(entry.fileName) }),
       entry.fileSize ? formatBytes(entry.fileSize) : '—',

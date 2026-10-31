@@ -28,12 +28,6 @@
 
 .sticky-progress.is-visible { display: flex; }
 
-.sticky-progress .sp-icon {
-  flex-shrink: 0;
-  font-size: var(--text-md);
-  animation: pulse-dot 1.6s ease-in-out infinite;
-}
-
 .sticky-progress .sp-body {
   flex: 1;
   min-width: 0;

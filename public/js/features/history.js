@@ -26,7 +26,6 @@ export function renderHistory(items) {
 
   if (list.length === 0) {
     container.appendChild(el('div', { class: 'empty-state' }, [
-      el('span', { class: 'empty-icon', 'aria-hidden': 'true', text: '🗂️' }),
       el('span', { class: 'empty-title', text: 'Belum ada riwayat' }),
       el('span', {
         class: 'empty-hint',
@@ -37,22 +36,20 @@ export function renderHistory(items) {
   }
 
   for (const item of list.slice(0, 30)) {
-    const icon = item.status === 'completed' ? '✅'
-      : item.status === 'unconfirmed' ? '⚠️'
-      : item.status === 'cancelled' ? '🚫'
-      : '❌';
-    const dirIcon = item.direction === 'send' ? '📤' : '📥';
+    const dirText = item.direction === 'send' ? 'Kirim ke' : 'Terima dari';
 
     const metaParts = [
-      `${dirIcon} ${item.peer || '?'}`,
+      `${dirText} ${item.peer || '?'}`,
       formatBytes(item.fileSize),
       formatTime(item.ts),
     ];
     if (item.resumed) metaParts.push('dilanjutkan');
+    if (item.status === 'unconfirmed') metaParts.push('belum dikonfirmasi');
+    else if (item.status === 'cancelled') metaParts.push('dibatalkan');
+    else if (item.status === 'failed') metaParts.push('gagal');
     if (item.reason) metaParts.push(item.reason);
 
     const row = el('div', { class: 'history-item' }, [
-      el('span', { class: 'h-icon', 'aria-hidden': 'true', text: icon }),
       el('div', { class: 'h-body' }, [
         el('span', { class: 'h-name', text: item.fileName || '?' }),
         el('span', { class: 'h-meta', text: metaParts.join(' · ') }),

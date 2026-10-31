@@ -146,7 +146,7 @@ export function showTextOverlay(text) {
   body.textContent = text.text;
 
   const copyBtn = byId('btnCopyText');
-  copyBtn.textContent = '📋 Salin';
+  copyBtn.textContent = 'Salin';
 
   openModal('textOverlay', {
     onEscape: () => hideTextOverlay(),
@@ -193,13 +193,13 @@ export async function copyCurrentText() {
   const btn = byId('btnCopyText');
   const setLabel = (label, ms) => {
     btn.textContent = label;
-    window.setTimeout(() => { btn.textContent = '📋 Salin'; }, ms);
+    window.setTimeout(() => { btn.textContent = 'Salin'; }, ms);
   };
 
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
-      setLabel('✅ Disalin!', 1500);
+      setLabel('Disalin!', 1500);
       return;
     }
   } catch (_) {
@@ -215,9 +215,9 @@ export async function copyCurrentText() {
   ta.select();
   try {
     document.execCommand('copy');
-    setLabel('✅ Disalin!', 1500);
+    setLabel('Disalin!', 1500);
   } catch (_) {
-    setLabel('⚠️ Gagal copy', 3000);
+    setLabel('Gagal copy', 3000);
   }
   document.body.removeChild(ta);
 }
@@ -255,7 +255,7 @@ export async function pollReceivedTexts() {
       if (isComposerActive()) {
         state.textOverlayQueue.push(text);
         showToast(
-          `💬 Teks dari ${text.senderName || '?'} — ditampilkan setelah selesai mengetik`,
+          `Teks dari ${text.senderName || '?'} — ditampilkan setelah selesai mengetik`,
           'info'
         );
       } else if (state.textOverlayQueue.length === 0 && !state.currentText && isOverlayIdle()) {
