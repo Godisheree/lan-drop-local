@@ -95,8 +95,9 @@ sebelum dan sesudah diperbaiki:
   (`ensureThumbnail` mengembalikan berkas asli saat ffmpeg tidak dipakai). Sekarang
   `/thumbnail/*` → `401` tanpa sesi, dan `/history` tanpa sesi kehilangan `savedTo` +
   `thumbnailId` — panel riwayat di UI utama tetap hidup (nama file, peer, arah, status),
-  galeri thumbnail-nya yang hilang dan cuma ada di dashboard. Tombol "hapus riwayat"
-  ikut pindah ke dashboard karena endpoint-nya butuh PIN.
+  dan galeri di halaman itu hanya terisi untuk browser yang **sudah login PIN** (itemnya
+  dibangun dari `thumbnailId`, jadi jendela anonim melihat riwayat saja). Versi lengkap —
+  plus tombol hapus — ada di dashboard.
 - **HIGH — `GET /dashboard/pin-info` membocorkan PIN-nya sendiri.** Balas
   `{"default":true,"hint":"123456"}` ke siapa pun di LAN → gerbang PIN nol nilai selama
   PIN belum diganti; tak perlu brute force, tinggal baca. Sekarang hint hanya untuk
@@ -122,6 +123,23 @@ Sisa 7 temuan berlevel LOW/INFO sengaja tidak diubah — dua di antaranya karena
 batas yang diambil ADR-0007: rate limit PIN dihitung per IP (bukan per PIN), dan
 `/devices`, `/status`, `/history` (versi ringkas) tetap terbuka karena dipakai UI kirim
 file. `sw.js` naik ke `landrop-shell-v11` supaya UI lama tidak nyangkut di cache.
+
+### Diuji di jalur Wi-Fi nyata, bukan cuma loopback
+
+`scripts/check-routes.js` menjalankan dua instance sungguhan di tiga interface mesin ini —
+loopback (`127.0.0.1`), Wi-Fi (`192.168.1.6`, SSID ZAKA WIFI, WPA2), dan Tailscale
+(`100.97.37.73`) — lalu menguji transfer file dua arah, transfer teks dua arah, dan
+regresi "file jangan mendarat di pengirim": **8/8 PASS di jalur Wi-Fi, 7/7 di loopback,
+7/7 di Tailscale**. Ditambah satu pemeriksaan baru: `/discovery/status` harus menunjukkan
+broadcast benar-benar keluar dari adapter Wi-Fi (`192.168.1.6 → 192.168.1.255`,
+`error=null`) — kalau broadcast mati, transfer manual masih jalan tapi HP tidak akan
+menemukan laptop.
+
+Bukti dari perangkat lain yang nyata: riwayat instance produksi mencatat penerimaan
+**45.550 byte foto + satu pesan teks dari peer `CPH2579`** (HP Android) lewat Wi-Fi yang
+sama, tersimpan utuh di `Downloads\LAN-DROP\Pictures`. Yang **tidak** bisa dibuktikan
+dari satu mesin: kalau router kos memakai *client isolation*, dua perangkat memang tidak
+bisa saling menghubungi — itu sifat jaringannya, bukan aplikasinya.
 
 ### Changed — dependency: 2 kerentanan high hilang
 

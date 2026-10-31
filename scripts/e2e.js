@@ -10,6 +10,14 @@
  *   - teks terkirim & diterima
  *
  * Usage: node scripts/e2e.js [--keep]
+ *
+ * BUTUH TERMINAL TTY. Kalau stdout/stdin di-redirect ke file (`> log.txt`,
+ * `< /dev/null`), Chrome/CDP gagal start dan run mati dengan
+ * "stdin is not a tty". Jalankan apa adanya: `npm run e2e`.
+ *
+ * Seluruh lalu lintas di sini lewat 127.0.0.1 (loopback) — itu menguji logika
+ * aplikasi, bukan adapter Wi-Fi. Untuk jalur jaringan nyata (Wi-Fi/Tailscale)
+ * pakai `node scripts/check-routes.js`.
  */
 const fs = require('fs');
 const path = require('path');
@@ -45,7 +53,30 @@ function findFreePort(startPort) {
 }
 
 /**
- * Alokasikan 4 port bebas (HTTP + transfer untuk dua instance).
+ * Cari port bebas untuk UDP (discovery). TCP tidak bisa dipakai sebagai
+ * patokan: port UDP 41234 bisa saja sedang dipegang LAN DROP milik operator,
+ * dan listener discovery instance uji lalu DILEWATI — status check-nya gagal
+ * bukan karena bug, cuma karena ada server asli yang hidup.
+ * @param {number} startPort
+ * @returns {Promise<number>}
+ */
+function findFreeUdpPort(startPort) {
+  return new Promise((resolve, reject) => {
+    const sock = require('dgram').createSocket('udp4');
+    sock.unref();
+    sock.on('error', () => {
+      if (startPort < 65000) findFreeUdpPort(startPort + 1).then(resolve, reject);
+      else reject(new Error('Tidak ada port UDP bebas'));
+    });
+    sock.bind(startPort, '0.0.0.0', () => {
+      const { port } = sock.address();
+      sock.close(() => resolve(port));
+    });
+  });
+}
+
+/**
+ * Alokasikan 6 port bebas (HTTP + transfer + discovery untuk dua instance).
  * @returns {Promise<Object>}
  */
 async function allocatePorts() {
@@ -53,7 +84,9 @@ async function allocatePorts() {
   const TRANSFER_A = await findFreePort(3111);
   const PORT_B = await findFreePort(3120);
   const TRANSFER_B = await findFreePort(3121);
-  return { PORT_A, TRANSFER_A, PORT_B, TRANSFER_B };
+  const DISC_A = await findFreeUdpPort(41240);
+  const DISC_B = await findFreeUdpPort(41241);
+  return { PORT_A, TRANSFER_A, PORT_B, TRANSFER_B, DISC_A, DISC_B };
 }
 
 const results = [];
@@ -229,10 +262,10 @@ async function main() {
   // Kedua instance satu host: peer didaftarkan manual (UDP broadcast tidak
   // bisa dipakai karena satu listener per port).
   const ports = await allocatePorts();
-  const { PORT_A, TRANSFER_A, PORT_B, TRANSFER_B } = ports;
+  const { PORT_A, TRANSFER_A, PORT_B, TRANSFER_B, DISC_A, DISC_B } = ports;
 
-  const serverA = startServer(PORT_A, TRANSFER_A, 'MesinA', 41234, `MesinB@127.0.0.1:${PORT_B}@${TRANSFER_B}`);
-  const serverB = startServer(PORT_B, TRANSFER_B, 'MesinB', 41235, `MesinA@127.0.0.1:${PORT_A}@${TRANSFER_A}`);
+  const serverA = startServer(PORT_A, TRANSFER_A, 'MesinA', DISC_A, `MesinB@127.0.0.1:${PORT_B}@${TRANSFER_B}`);
+  const serverB = startServer(PORT_B, TRANSFER_B, 'MesinB', DISC_B, `MesinA@127.0.0.1:${PORT_A}@${TRANSFER_A}`);
 
   let pageA, pageB;
 
@@ -652,11 +685,19 @@ async function main() {
     }
     check('Cancel: status akhir = cancelled', cancelStatus === 'cancelled', String(cancelStatus));
 
-    // --- Thumbnail: kirim file PNG, receiver harus dapat pratinjau ---
+    // --- Gambar + thumbnail: sejak audit kedua, pratinjau hidup di dashboard ---
+    // Endpoint `/thumbnail/<id>` sekarang wajib sesi PIN, jadi UI kirim file
+    // tidak lagi memasang gambar pratinjau. Yang diuji di sini:
+    //   1. UI kirim file tetap menampilkan baris transfernya, tanpa pratinjau
+    //   2. `/history` tanpa sesi tidak membocorkan `thumbnailId` + `savedTo`
+    //   3. dengan sesi PIN: thumbnailId ada, `/thumbnail/<id>` balas gambar utuh,
+    //      tanpa sesi 401, id ngawur ditolak
+    //   4. dashboard ber-sesi memuat grid galeri
     // Fixture PNG dibuat server-side (scripts/generate-icons.js sudah
     // menghasilkan yang valid) lalu dikirim sebagai file biasa.
     const pngFixture = path.join(__dirname, '..', 'public', 'icons', 'icon-192.png');
     const pngBytes = fs.readFileSync(pngFixture);
+    const imgName = 'e2e-gambar.png';
 
     await pageA.cdp.eval(`(async () => {
       const mod = await import('/js/features/send.js');
@@ -665,7 +706,7 @@ async function main() {
       const bytes = new Uint8Array(${JSON.stringify(Array.from(pngBytes))});
       await mod.sendBatch(
         { ip: peer.ip, port: peer.transferPort, targetName: peer.deviceName },
-        [new File([bytes], 'e2e-gambar.png', { type: 'image/png' })]
+        [new File([bytes], '${imgName}', { type: 'image/png' })]
       );
     })()`);
 
@@ -709,57 +750,98 @@ async function main() {
       await sleep(500);
     }
 
-    check('Thumbnail: item receiver punya pratinjau', Boolean(thumbItem && thumbItem.hasThumb),
-      thumbItem ? thumbItem.src : 'tidak ada item');
-    check('Thumbnail: src menunjuk endpoint /thumbnail/',
-      Boolean(thumbItem && thumbItem.src && thumbItem.src.startsWith('/thumbnail/')),
-      thumbItem ? String(thumbItem.src) : '-');
+    check('UI kirim file: baris gambar tetap tampil & selesai',
+      Boolean(thumbItem && thumbItem.status === 'completed'),
+      thumbItem ? thumbItem.status : 'tidak ada item');
+    check('UI kirim file: TIDAK memasang pratinjau (galeri pindah ke dashboard)',
+      Boolean(thumbItem && thumbItem.hasThumb === false),
+      thumbItem ? `src=${thumbItem.src}` : 'tidak ada item');
 
-    // Endpoint thumbnail harus benar-benar mengembalikan gambar.
-    if (thumbItem && thumbItem.src) {
-      const thumbStatus = await pageB.cdp.eval(
-        `(async () => {
-          try {
-            const res = await fetch(${JSON.stringify(thumbItem.src)});
-            const buf = await res.arrayBuffer();
-            return JSON.stringify({
-              status: res.status,
-              type: res.headers.get('content-type'),
-              bytes: buf.byteLength,
-            });
-          } catch (err) {
-            return JSON.stringify({ error: err.message });
-          }
-        })()`
-      );
-      const thumb = JSON.parse(thumbStatus);
-      check('Thumbnail: endpoint mengembalikan gambar',
-        thumb.status === 200 && thumb.bytes > 0 && String(thumb.type).startsWith('image/'),
-        JSON.stringify(thumb));
+    // Riwayat tanpa sesi: kunci ke isi file tidak boleh ikut.
+    const anonHist = await (await fetch(`http://127.0.0.1:${PORT_B}/history`)).json();
+    const anonRows = Array.isArray(anonHist) ? anonHist : [];
+    check('Riwayat tanpa sesi: tidak ada thumbnailId',
+      anonRows.length > 0 && anonRows.every((r) => !('thumbnailId' in r)), `${anonRows.length} baris`);
+    check('Riwayat tanpa sesi: tidak ada savedTo',
+      anonRows.every((r) => !('savedTo' in r)));
+
+    // Login seperti user, lalu baca riwayat versi lengkap.
+    const loginRes = await fetch(`http://127.0.0.1:${PORT_B}/dashboard/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '123456' }),
+    });
+    const sessionCookie = (loginRes.headers.get('set-cookie') || '').split(';')[0];
+    check('Login PIN dashboard dapat sesi', loginRes.status === 200 && sessionCookie.startsWith('landrop_dash='),
+      `status ${loginRes.status}`);
+
+    const withSession = (p) => fetch(`http://127.0.0.1:${PORT_B}${p}`, { headers: { Cookie: sessionCookie } });
+    const meHist = await (await withSession('/history')).json();
+    const imgRow = (Array.isArray(meHist) ? meHist : []).find((r) => r.fileName && r.fileName.includes('e2e-gambar'));
+    check('Riwayat ber-sesi: baris gambar punya thumbnailId + savedTo',
+      Boolean(imgRow && imgRow.thumbnailId && imgRow.savedTo),
+      imgRow ? `${imgRow.thumbnailId} → ${imgRow.savedTo}` : 'baris tidak ketemu');
+
+    if (imgRow && imgRow.thumbnailId) {
+      const thumbRes = await withSession(`/thumbnail/${imgRow.thumbnailId}`);
+      const thumbBuf = Buffer.from(await thumbRes.arrayBuffer());
+      check('Thumbnail ber-sesi: 200 + byte utuh (berkas asli, bukan pratinjau kecil)',
+        thumbRes.status === 200 && thumbBuf.length === pngBytes.length,
+        `${thumbRes.status} ${thumbBuf.length}/${pngBytes.length} byte`);
+      check('Thumbnail ber-sesi: Cache-Control private',
+        String(thumbRes.headers.get('cache-control') || '').includes('private'),
+        String(thumbRes.headers.get('cache-control')));
+
+      const anonThumb = await fetch(`http://127.0.0.1:${PORT_B}/thumbnail/${imgRow.thumbnailId}`);
+      check('Thumbnail tanpa sesi: 401', anonThumb.status === 401, `status ${anonThumb.status}`);
+
+      const badId = await withSession('/thumbnail/0000000000000000');
+      check('Thumbnail ber-sesi: id tidak ada ditolak', badId.status === 404, `status ${badId.status}`);
+      const nonHex = await fetch(`http://127.0.0.1:${PORT_B}/thumbnail/..%2f..%2fetc%2fpasswd`);
+      check('Thumbnail: id non-hex ditolak', nonHex.status === 400 || nonHex.status === 404, `status ${nonHex.status}`);
     } else {
-      check('Thumbnail: endpoint mengembalikan gambar', false, 'tidak ada src');
+      check('Thumbnail ber-sesi: 200 + byte utuh (berkas asli, bukan pratinjau kecil)', false, 'tidak ada thumbnailId');
+      check('Thumbnail ber-sesi: Cache-Control private', false, 'tidak ada thumbnailId');
+      check('Thumbnail tanpa sesi: 401', false, 'tidak ada thumbnailId');
+      check('Thumbnail ber-sesi: id tidak ada ditolak', false, 'tidak ada thumbnailId');
+      check('Thumbnail: id non-hex ditolak', false, 'tidak ada thumbnailId');
     }
 
-    // Galeri harus memuat media yang diterima.
-    // Galeri dibangun dari riwayat, yang di-poll tiap 5 detik — jadi tunggu.
-    let galleryCount = 0;
-    for (let i = 0; i < 30; i++) {
-      galleryCount = await pageB.cdp.eval(
-        `document.querySelectorAll('#galleryGrid .gallery-item').length`
-      );
-      if (galleryCount > 0) break;
-      await sleep(500);
-    }
-    check('Galeri: media diterima tampil di grid', galleryCount > 0, `${galleryCount} item`);
+    // Dashboard ber-sesi: galeri (yang dulunya di UI kirim file) harus terisi.
+    if (sessionCookie) {
+      await pageB.cdp.send('Network.enable');
+      await pageB.cdp.send('Network.setCookie', {
+        name: sessionCookie.split('=')[0],
+        value: sessionCookie.split('=').slice(1).join('='),
+        url: `http://localhost:${PORT_B}/`,
+        path: '/',
+      });
+      await pageB.cdp.send('Page.navigate', { url: `http://localhost:${PORT_B}/dashboard` });
+      await sleep(2500);
+      let dashGallery = 0;
+      for (let i = 0; i < 30; i++) {
+        dashGallery = await pageB.cdp.eval(`document.querySelectorAll('#gallery img').length`);
+        if (dashGallery > 0) break;
+        await sleep(500);
+      }
+      check('Dashboard ber-sesi: grid galeri memuat media yang diterima', dashGallery > 0, `${dashGallery} item`);
 
-    // Path traversal harus ditolak.
-    const traversal = await pageB.cdp.eval(
-      `(async () => {
-        const res = await fetch('/thumbnail/0000000000000000');
-        return res.status;
-      })()`
-    );
-    check('Thumbnail: id asing ditolak', traversal === 404 || traversal === 400, `status ${traversal}`);
+      // Galeri di UI kirim file ikut butuh sesi: item-nya dibangun dari
+      // `thumbnailId`, dan field itu cuma dikirim ke pemanggil ber-sesi. Jadi
+      // buang cookie dulu, baru pastikan halaman anonim tidak menampilkan apa pun.
+      await pageB.cdp.send('Network.deleteCookies', { name: 'landrop_dash', url: `http://localhost:${PORT_B}/` });
+      await pageB.cdp.send('Page.navigate', { url: `http://localhost:${PORT_B}/` });
+      await sleep(2500);
+      const anonGallery = Number(await pageB.cdp.eval(`document.querySelectorAll('#galleryGrid .gallery-item').length`));
+      check('UI kirim file tanpa sesi: galeri kosong & section disembunyikan', anonGallery === 0,
+        `${anonGallery} item`);
+      check('UI kirim file tanpa sesi: riwayat tetap tampil (bukan ikut hilang)',
+        Number(await pageB.cdp.eval(`document.querySelectorAll('#historyList > *').length`)) > 0);
+    } else {
+      check('Dashboard ber-sesi: grid galeri memuat media yang diterima', false, 'tanpa sesi');
+      check('UI kirim file tanpa sesi: galeri kosong & section disembunyikan', false, 'tanpa sesi');
+      check('UI kirim file tanpa sesi: riwayat tetap tampil (bukan ikut hilang)', false, 'tanpa sesi');
+    }
 
     // --- Hardening mobile ---
     const mobileProbe = await pageA.cdp.eval(`(async () => {

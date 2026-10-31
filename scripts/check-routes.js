@@ -359,6 +359,14 @@ async function main() {
     const lan = listLANIPv4()[0];
     if (lan) {
       await runRoute('wifi', a, b, lan.address, procs);
+
+      // Transfer manual bisa jalan sementara HP tetap TIDAK menemukan laptop:
+      // itu tanda broadcast discovery tidak keluar dari adapter Wi-Fi.
+      const disc = await getJson(`http://127.0.0.1:${b.port}/discovery/status`);
+      const iface = ((disc && disc.interfaces) || []).find((i) => i.address === lan.address);
+      check('wifi: broadcast discovery memakai adapter Wi-Fi (tanpa error)',
+        Boolean(iface && iface.bound && !iface.lastError),
+        iface ? `${iface.address} -> ${iface.broadcast}, error=${iface.lastError}` : 'interface Wi-Fi tidak terdaftar');
     } else {
       skip('wifi: file & teks dua arah', 'tidak ada interface LAN di mesin ini');
     }

@@ -115,6 +115,9 @@ Referensi tes LAN DROP:
 - `npm run verify:qr` — QR di-decode OpenCV
 - `npm run verify:pwa` — manifest, ikon, service worker
 - `npm run e2e` — 2 instance, transfer nyata (port dinamis)
+  - **butuh terminal TTY**: jangan redirect stdout/stdin ke file (`< /dev/null`, `> log.txt`), nanti mati `stdin is not a tty`
+  - port UDP discovery dialokasikan dinamis (`findFreeUdpPort`) — `41234`/`41235` dipakai server operator sendiri, kalau dipaksa, listener instance uji tak terpasang dan check discovery gagal palsu
+- `node scripts/check-routes.js` — jalur loopback + Wi-Fi + Tailscale (file & teks dua arah, broadcast discovery)
 - `npm run icons` — regenerate ikon PWA
 
 **Log & terminal:** log server hidup di dashboard (`/dashboard`, kartu LOG SERVER)

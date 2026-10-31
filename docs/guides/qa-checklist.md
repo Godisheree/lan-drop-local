@@ -79,7 +79,7 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 - [ ] Buka `/logs` di jendela privat → 401 "Perlu PIN dashboard" (bukan isi log)
 - [ ] Buka `/thumbnail/<id>` (ambil id dari `/history` saat sudah login) di jendela privat → 401
 - [ ] Buka `/history` di jendela privat → tetap 200, tapi **tanpa** `savedTo` dan `thumbnailId`
-- [ ] Panel **Riwayat** + **Galeri** di `/` (tanpa PIN): riwayat tetap tampil, galeri tidak muncul, tombol hapus tidak ada
+- [ ] Panel **Riwayat** di `/` (tanpa PIN): riwayat tetap tampil **tanpa** path simpan & tanpa gambar; galeri di halaman itu hanya terisi kalau browser tadi sudah login PIN; tombol hapus tidak ada
 - [ ] Panel Sambung di `/` → **tidak ada lagi toggle "Terima file tanpa konfirmasi"**, cuma catatan kecil ke Dashboard
 - [ ] Kirim teks dari HP → overlay menampilkan peringatan "nama pengirim cuma klaim" + alamat IP pengirim
 - [ ] Aktifkan terima otomatis **di dashboard** → badge "terima otomatis" muncul di header `/` (buka dua tab)
@@ -165,6 +165,7 @@ dipakai lewat pemeriksaan berikut. Lihat
 - [ ] Kartu device menampilkan alamat yang sesuai jalur yang dipakai (WiFi → 192.168.x.x, Tailscale → 100.x.x.x)
 - [ ] Alamat di kartu **tidak berubah-ubah** dalam 30 detik
 - [ ] HP di data seluler (Tailscale): peer tetap ditemukan, kiriman lewat 100.x
+- [ ] Kalau HP **tidak menemukan laptop** padahal dua-duanya di Wi-Fi yang sama: cek `http://<ip-laptop>:3000/status` dari HP. Bisa dibuka = jaringan nyambung, masalahnya broadcast (AP/client isolation di Wi-Fi kos/kantor). Transfer manual lewat pilih perangkat masih jalan.
 
 ## Sebelum commit
 
@@ -177,7 +178,8 @@ dipakai lewat pemeriksaan berikut. Lihat
 - [ ] `node scripts/check-routes.js` — semua jalur lolos (loopback, WiFi, Tailscale)
 - [ ] `node scripts/smoke.js` — "SEMUA BERSIH"
 - [ ] `node scripts/verify-pwa.js` — semua PASS
-- [ ] `node scripts/e2e.js` — semua PASS
+- [ ] `node scripts/e2e.js` — semua PASS (**butuh terminal TTY**: jangan redirect stdout/stdin ke file, nanti mati dengan `stdin is not a tty`)
+- [ ] `node scripts/check-routes.js` — semua jalur lolos (loopback + Wi-Fi + Tailscale), termasuk broadcast discovery di adapter Wi-Fi
 - [ ] `git diff` dibaca: tidak ada `console.log`, tidak ada hardcoded URL/CDN
 - [ ] [CHANGELOG.md](../../CHANGELOG.md) diperbarui
 - [ ] Tidak ada secret yang ter-commit
