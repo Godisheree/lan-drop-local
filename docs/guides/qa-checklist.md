@@ -72,6 +72,17 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 - [ ] Textarea composer bisa diketik, counter karakter jalan
 - [ ] Tidak ada scroll horizontal di halaman mana pun
 
+## Manual — halaman PIN dashboard (1.2.0)
+
+- [ ] Buka `/dashboard` di jendela privat → yang muncul **halaman PIN**, bukan dashboard
+- [ ] PIN `123456` → masuk ke dashboard; browser lain diingat, tidak diminta lagi
+- [ ] PIN salah → pesan jelas, kolom kosong, kursor balik ke kolom (coba 10× cepat → pesan "terlalu banyak percobaan")
+- [ ] Hint "PIN bawaan: 123456" muncul **hanya** selama PIN belum diganti
+- [ ] Kartu **PIN dashboard** menyebut status; "Ganti PIN" nonaktif saat kurang dari 4 angka
+- [ ] Ganti PIN → pesan sukses, lalu otomatis balik ke halaman PIN; PIN lama tidak bisa lagi
+- [ ] Tombol **Keluar** → balik ke halaman PIN
+- [ ] `/` (UI kirim file) tetap terbuka **tanpa** PIN, dan kirim file dari HP tetap jalan
+
 ## PWA & shortcut
 
 - [ ] Panel Sambung menampilkan bagian "Aplikasi" + daftar pintasan

@@ -37,7 +37,12 @@ lan-drop
 2. Terminal menampilkan alamat dashboard, mis. `http://localhost:3000/dashboard`.
    Buka itu di browser PC, atau alamat LAN-nya (`http://192.168.x.x:3000/dashboard`)
    dari HP yang tersambung ke WiFi yang sama.
-3. Kirim / terima file dari dashboard.
+3. **Halaman pantau (`/dashboard`) minta PIN.** PIN bawaannya `123456` — halaman
+   login menampilkan hint-nya selama kamu belum menggantinya. Ganti di dashboard
+   (kartu PIN) supaya orang lain di WiFi yang sama tidak bisa membuka riwayat
+   transfer dan log. Sekali masuk, browser itu diingat 30 hari.
+4. Kirim / terima file dari UI utama (`http://192.168.x.x:3000/`) — halaman ini
+   **tidak** dikunci, jadi HP tidak perlu mengetik apa pun buat mengirim.
 
 Stop: `Ctrl+C` di terminal. Ganti port: `PORT=4000 lan-drop`. Kalau port itu
 sudah dipakai aplikasi lain, LAN DROP pindah sendiri ke port kosong berikutnya

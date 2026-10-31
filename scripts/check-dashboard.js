@@ -61,14 +61,28 @@ function findFreePort(startPort) {
   });
 }
 
-async function get(url) {
-  const res = await fetch(url);
+async function get(url, cookie = '') {
+  const res = await fetch(url, cookie ? { headers: { Cookie: cookie } } : undefined);
   const text = await res.text();
   let json = null;
   try {
     json = JSON.parse(text);
   } catch (_) {}
   return { status: res.status, type: res.headers.get('content-type') || '', text, json };
+}
+
+/** POST JSON + ambil cookie sesi dari Set-Cookie (dipakai uji gerbang PIN). */
+async function postJson(url, body, cookie = '') {
+  const headers = { 'Content-Type': 'application/json' };
+  if (cookie) headers.Cookie = cookie;
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const text = await res.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch (_) {}
+  const setCookie = res.headers.get('set-cookie') || '';
+  return { status: res.status, json, text, setCookie, cookie: setCookie.split(';')[0] };
 }
 
 // ---------------------------------------------------------------------------
@@ -182,14 +196,42 @@ async function main() {
     check('server jalan dan /status membalas', ready, ready ? `${base}/status` : logs.join('').slice(-300));
     if (!ready) return;
 
-    // 2. Halaman dashboard
-    const page = await get(`${base}/dashboard`);
-    check('/dashboard membalas HTML', page.status === 200 && page.type.includes('text/html'), `HTTP ${page.status}`);
+    // 2. Gerbang PIN + halaman dashboard
+    //
+    // Halaman pantau dikunci PIN (ADR-0009). Yang diuji PERILAKUNYA, bukan
+    // nama id di HTML: halaman login bebas diubah desainnya tanpa bikin
+    // ujian ini kuning, tapi gerbangnya sendiri tidak boleh diam-diam hilang.
+    const locked = await get(`${base}/dashboard`);
+    check('/dashboard tanpa sesi membalas HTML', locked.status === 200 && locked.type.includes('text/html'), `HTTP ${locked.status}`);
+    check('tanpa sesi: isi dashboard tidak bocor', !locked.text.includes('id="logPane"'));
+    check(
+      'tanpa sesi: yang dikirim halaman PIN',
+      /inputmode="numeric"|type="password"|pin/i.test(locked.text)
+    );
+
+    const info = (await get(`${base}/dashboard/pin-info`)).json || {};
+    check('pin-info: PIN masih bawaan + hint ditampilkan', info.default === true && info.hint === '123456', JSON.stringify(info));
+
+    const wrong = await postJson(`${base}/dashboard/login`, { pin: '000000' });
+    check('PIN salah ditolak', wrong.status === 401, `HTTP ${wrong.status}`);
+
+    const login = await postJson(`${base}/dashboard/login`, { pin: '123456' });
+    check(
+      'PIN benar menerbitkan cookie HttpOnly',
+      login.status === 200 && /^landrop_dash=.+/.test(login.cookie) && /HttpOnly/i.test(login.setCookie),
+      `HTTP ${login.status}`
+    );
+
+    const page = await get(`${base}/dashboard`, login.cookie);
+    check('/dashboard dengan sesi membalas HTML', page.status === 200 && page.type.includes('text/html'), `HTTP ${page.status}`);
     check(
       'halaman memuat script dashboard + pane log',
       page.text.includes('/js/dashboard.js') && page.text.includes('id="logPane"')
     );
     check('halaman tidak diindex mesin pencari', page.text.includes('name="robots" content="noindex"'));
+
+    const logout = await postJson(`${base}/dashboard/logout`, {}, login.cookie);
+    check('logout mencabut sesi', logout.status === 200 && !(await get(`${base}/dashboard`, login.cookie)).text.includes('id="logPane"'));
 
     // 3. /status — semua yang dipakai kartu "Status server"
     const st = (await get(`${base}/status`)).json || {};

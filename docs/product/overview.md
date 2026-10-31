@@ -40,6 +40,7 @@ login, tidak ada data yang keluar dari jaringan lokal.
 
 - **Hanya** jalan di jaringan yang sama. WiFi publik dengan *AP isolation* tidak bisa — ini bukan bug.
 - Protokol HTTP tanpa TLS → **jangan** dipakai di jaringan tidak tepercaya. Nama file & teks terenkripsi di transit, tidak.
+- Halaman pantau (`/dashboard`) dikunci **PIN** (bawaan `123456`, bisa diganti). UI kirim file tetap tanpa setup — gerbangnya cuma di halaman yang memperlihatkan riwayat & log. PIN ini menutup pengintaian lewat browser, bukan penyerang yang menjangkau API mentah (ADR-0009).
 - Tablet/Termux punya jalur simpan berbeda (Android shared storage) dan butuh izin storage.
 
 ## Metrik "berhasil" (qualitative, product-level)

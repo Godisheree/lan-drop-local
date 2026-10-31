@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F7F7F9">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex">
+  <title>LAN DROP — PIN Dashboard</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body class="dash">
+  <main class="pin-gate">
+    <div class="pin-card">
+      <p class="pin-logo"><span aria-hidden="true">🔒</span> LAN DROP</p>
+      <h1 class="pin-title">Dashboard terkunci PIN</h1>
+      <p class="pin-sub">
+        Halaman pantau dijaga PIN. Masukkan 4-8 angka.
+      </p>
+
+      <form id="pinForm" class="pin-form" autocomplete="off">
+        <label class="visually-hidden" for="pinInput">PIN dashboard</label>
+        <input id="pinInput" class="pin-input" type="password" inputmode="numeric"
+               maxlength="8" autocomplete="off" aria-describedby="pinMessage pinHint">
+        <button class="btn btn-accent" type="submit" id="pinSubmit">Buka dashboard</button>
+      </form>
+
+      <p class="pin-message" id="pinMessage" role="status"></p>
+      <p class="pin-hint" id="pinHint" hidden></p>
+
+      <p class="pin-foot">
+        Kirim file tidak dikunci — <a href="/">buka UI kirim file</a>.
+      </p>
+    </div>
+  </main>
+
+  <script src="/js/login.js"></script>
+</body>
+</html>

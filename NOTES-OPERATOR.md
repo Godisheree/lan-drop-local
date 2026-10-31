@@ -80,8 +80,14 @@ duluan; tanpa CLI, HP tetap bisa **ditemukan** desktop lewat reply-back.
 **Keamanan:** audit menutup 3 celah remote (bocor file privat via
 `/transfer/send-file`, command injection lewat nama file di Termux, SSRF lewat
 ffmpeg) + menambah security header, rate limit, batas upload, dan pembatasan
-target IP ke LAN/Tailscale. Autentikasi **sengaja tidak** ditambahkan (kontrak
-"nol setup") — lihat `docs/adr/0007-keamanan-berlapis-tanpa-autentikasi.md`.
+target IP ke LAN/Tailscale. Autentikasi di alur kirim file **sengaja tidak**
+ditambahkan (kontrak "nol setup") — lihat
+`docs/adr/0007-keamanan-berlapis-tanpa-autentikasi.md`. Satu pengecualian:
+**halaman pantau `/dashboard` dikunci PIN** (bawaan `123456`, diingat 30 hari
+per browser, 10 percobaan/menit) karena isinya riwayat transfer + log server —
+lihat `docs/adr/0009-pin-dashboard.md`. UI kirim file di `/` tetap bebas, jadi
+alur kirim dari HP tidak berubah. Kalau PIN lupa: hapus nilai `dashboardPin` di
+`settings.json` (= kembali ke `123456`).
 Regression check: `npm run check:security`.
 
 **Yang sengaja ditunda ke Fase 5:** SSE untuk progres transfer. Alasannya

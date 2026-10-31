@@ -5,6 +5,58 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.0] — 2026-11-01
+
+### Added — halaman pantau (/dashboard) dikunci PIN, UI kirim file tetap bebas
+
+Sebelum ini siapa pun yang bisa njangkau portnya bisa membuka `/dashboard`: riwayat
+transfer, nama peer, dan seluruh isi log server. Di Wi-Fi rumah itu tidak apa-apa; di
+kos, kantor, atau kafe — jaringan yang dipakai orang lain — halaman itu jadi jendela
+yang memperlihatkan apa saja yang lewat. Sekarang `/dashboard` minta PIN, sementara
+UI kirim file (`/`) tetap tanpa langkah tambahan: mengirim dari HP harus tetap sekali
+buka, dan itu janji produknya (ADR-0007). Keputusannya dicatat di ADR-0009.
+
+Cara kerjanya: PIN 4-8 angka, bawaannya `123456` dan **ditampilkan** (hint di halaman
+login + notice di terminal) sampai user menggantinya — PIN yang tidak diketahui siapa
+pun berakhir jadi "saya terkunci dari server saya sendiri". Sekali masuk, browser itu
+diingat 30 hari lewat cookie `HttpOnly; SameSite=Lax` yang hidup di memori (restart
+server = semua browser minta PIN lagi, jadi "keluar" benar-benar berarti). Percobaan
+PIN dibatasi 10/menit per IP, PIN dibandingkan dengan `crypto.timingSafeEqual`, dan
+mengganti PIN mencabut semua sesi — termasuk sesi yang barusan dipakai mengganti.
+PIN disimpan di `settings.json` (`dashboardPin`); lupa PIN = hapus/edit nilai itu.
+
+### Added — halaman PIN dan kartu "PIN dashboard"
+
+Gerbang PIN untuk `/dashboard` (ADR-0009) sekarang punya tampilannya sendiri.
+Sebelumnya halaman login cuma bentuk dasar supaya gerbangnya bisa diuji: satu
+kartu di tengah dengan bahasa visual yang sama seperti UI lain (token dari
+`tokens.css`, tanpa palet baru), kolom PIN besar berhuruf mono dengan spasi
+lebar, tombol yang mengunci diri sambil menunggu balasan server, dan pesan yang
+membedakan "PIN salah" dari "terlalu banyak percobaan" — dua hal yang butuh
+tindakan berbeda dari user. Hint PIN bawaan cuma muncul selama server bilang
+PIN-nya masih bawaan.
+
+Di dashboard, kartu **PIN dashboard** menampilkan status PIN (masih bawaan /
+sudah diganti), kolom PIN baru dengan validasi 4-8 angka di sisi klien, tombol
+**Ganti PIN**, dan tombol **Keluar**. Sesudah PIN diganti, server mencabut
+semua sesi — termasuk sesi yang barusan dipakai mengganti — jadi halaman
+diberi jeda 1,5 detik menampilkan pesannya, lalu kembali ke `/dashboard` yang
+otomatis jadi halaman login lagi.
+
+`/js/login.js` masuk daftar `NEVER_CACHE` service worker, sama seperti
+`/js/dashboard.js`: halaman gerbang tidak boleh menyajikan versi lama setelah
+update.
+
+### Diukur, bukan diperkirakan
+
+Gerbangnya diuji lewat HTTP sungguhan (`scripts/check-dashboard.js`, 47 PASS / 0 FAIL)
+dan sekaligus dari browser pada instance terpisah (Edge headless, 390×844): tanpa sesi
+`/dashboard` mengirim halaman PIN dan `logPane` tidak ikut terkirim, PIN salah →
+HTTP 401, PIN bawaan → cookie `HttpOnly` + dashboard, `POST /dashboard/pin`
+`{"pin":"246810"}` → PIN lama ditolak / PIN baru diterima / `pin-info` berubah jadi
+`{"default":false,"hint":null}`, logout → balik ke halaman PIN. `npm test` EXIT=0
+(59/59 sintaks, 11/11 auto-approve, 9/9 settings, 9/9 routing, 24/24 TUI).
+
 ## [1.1.1] — 2026-11-01
 
 ### Fixed — port terpakai bikin server mati / jalur transfer bisu

@@ -103,6 +103,13 @@ const $ = {
   autoPeers: byId('autoPeers'),
   autoSave: byId('autoSave'),
   autoInfo: byId('autoInfo'),
+  pinStatus: byId('pinStatus'),
+  pinStatusText: byId('pinStatusText'),
+  pinInfo: byId('pinInfo'),
+  pinNew: byId('pinNew'),
+  pinSave: byId('pinSave'),
+  pinLogout: byId('pinLogout'),
+  pinMsg: byId('pinMsg'),
   peerCount: byId('peerCount'),
   peerBody: byId('peerBody'),
   activeCount: byId('activeCount'),
@@ -394,6 +401,65 @@ async function saveAuto() {
   } finally {
     $.autoSave.disabled = false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 4b. PIN dashboard
+// ---------------------------------------------------------------------------
+
+// Status diambil sekali saat halaman dibuka, bukan lewat polling: PIN cuma
+// berubah kalau user di halaman ini sendiri yang menggantinya. Kartu ini juga
+// bukan data yang perlu "segar" — nilai basi di sini tidak menyesatkan.
+async function refreshPin() {
+  const info = await api('/dashboard/pin-info');
+
+  $.pinStatus.dataset.state = info.default ? 'warn' : 'ok';
+  $.pinStatusText.textContent = info.default ? 'Masih PIN bawaan' : 'Sudah diganti';
+  $.pinInfo.textContent = info.default
+    ? 'PIN masih bawaan (123456). Siapa pun di Wi-Fi yang sama bisa membuka dashboard ini — sebaiknya segera diganti.'
+    : 'PIN bawaan sudah tidak dipakai. Angka PIN tidak ditampilkan di sini.';
+}
+
+/** PIN valid menurut aturan server: 4-8 angka. */
+const pinValid = (value) => /^\d{4,8}$/.test(value);
+
+function syncPinButton() {
+  $.pinSave.disabled = !pinValid($.pinNew.value);
+}
+
+async function savePin() {
+  const pin = $.pinNew.value;
+  if (!pinValid(pin)) return;
+
+  $.pinSave.disabled = true;
+  $.pinMsg.textContent = 'Menyimpan…';
+
+  try {
+    await postJson('/dashboard/pin', { pin });
+
+    // Server mencabut SEMUA sesi, termasuk yang barusan dipakai mengganti —
+    // jadi halaman ini sudah tidak punya izin apa pun lagi. Diberi jeda 1,5 dtk
+    // supaya pesannya sempat terbaca sebelum halaman login muncul.
+    $.pinMsg.textContent = 'PIN diganti. Semua browser harus masuk ulang.';
+    $.pinNew.value = '';
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 1500);
+  } catch (err) {
+    $.pinMsg.textContent = `Gagal mengganti PIN: ${err.message}`;
+    $.pinSave.disabled = false;
+  }
+}
+
+async function logout() {
+  $.pinLogout.disabled = true;
+  try {
+    await postJson('/dashboard/logout', {});
+  } catch (_) {
+    // Sesi dicabut server lewat cookie; kalau pun balasannya gagal terbaca,
+    // muat ulang tetap membawa user ke halaman login.
+  }
+  window.location.href = '/dashboard';
 }
 
 // ---------------------------------------------------------------------------
@@ -822,6 +888,23 @@ $.logCopy.addEventListener('click', () => {
   copyLog().catch(() => {});
 });
 
+$.pinNew.addEventListener('input', () => {
+  // PIN cuma angka: buang karakter lain di sini supaya user tidak menekan
+  // "Ganti PIN" lalu ditolak server tanpa tahu kenapa.
+  const digits = $.pinNew.value.replace(/\D/g, '').slice(0, 8);
+  if (digits !== $.pinNew.value) $.pinNew.value = digits;
+  syncPinButton();
+});
+$.pinSave.addEventListener('click', () => {
+  savePin().catch((err) => {
+    $.pinMsg.textContent = `Gagal mengganti PIN: ${err.message}`;
+    $.pinSave.disabled = false;
+  });
+});
+$.pinLogout.addEventListener('click', () => {
+  logout().catch(() => {});
+});
+
 $.autoToggle.addEventListener('change', () => {
   autoDirty = true;
 });
@@ -873,6 +956,10 @@ document.addEventListener('keydown', (event) => {
 });
 
 startPolling();
+// Status PIN diambil sekali saja (bukan lewat schedule): nilainya cuma berubah
+// kalau user di halaman ini sendiri yang menggantinya.
+guard('pin', refreshPin);
+syncPinButton();
 tick();
 setInterval(tick, 1000);
 

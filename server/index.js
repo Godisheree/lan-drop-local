@@ -11,6 +11,7 @@ const transfer = require('./transfer');
 const tailscale = require('./tailscale');
 const history = require('./history');
 const settings = require('./settings');
+const pin = require('./pin');
 const thumbnail = require('./thumbnail');
 const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
 const { listLANIPv4, getDeviceName, getDataDir, getSaveDirRoot, openBrowser } = require('./platform');
@@ -64,13 +65,73 @@ app.get('/sw.js', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/sw.js'));
 });
 
+// Percobaan PIN dashboard. Jauh lebih ketat dari limiter lain: PIN 6 angka
+// cuma 1 juta kemungkinan, jadi kecepatan coba-coba adalah satu-satunya hal
+// yang bikin PIN ini ada gunanya.
+const pinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: 'Terlalu banyak percobaan PIN. Tunggu sebentar.',
+});
+
 // Dashboard monitoring — halaman terpisah dari UI utama.
 //
 // UI utama dipakai dari HP buat kirim file (tombol besar, satu tangan);
 // halaman ini dipakai dari layar lebar buat mantau (tabel padat, log live).
 // Dipisah supaya shell PWA di HP tidak ikut mengangkut halaman admin.
+//
+// Halaman ini terkunci PIN (lihat pin.js): riwayat transfer, nama peer, dan
+// isi log bukan hal yang pantas dibaca sembarang orang di Wi-Fi yang sama.
+// UI kirim file tetap bebas — itu pintu masuknya.
 app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/dashboard.html'));
+  const page = pin.isAuthorized(req) ? 'dashboard.html' : 'dashboard-login.html';
+  res.sendFile(path.join(__dirname, '../public', page));
+});
+
+// GET /dashboard/pin-info — dipakai halaman login buat nampilin hint.
+//
+// PIN bawaan (`123456`) memang ditampilkan: kalau user belum pernah ganti,
+// menyembunyikannya cuma bikin dia mentok di layar terkunci. Begitu PIN
+// diganti, hint-nya hilang sendiri.
+app.get('/dashboard/pin-info', (req, res) => {
+  const isDefault = pin.isDefaultPin();
+  res.json({ default: isDefault, hint: isDefault ? pin.getPin() : null });
+});
+
+// POST /dashboard/login — { pin } → cookie sesi.
+//
+// Dibatasi 10 percobaan/menit per IP: PIN 6 angka tanpa pembatas bisa
+// dihabiskan brute-force dalam hitungan menit dari browser sebelah.
+app.post('/dashboard/login', pinLimiter, (req, res) => {
+  if (!pin.verify(req.body && req.body.pin)) {
+    return res.status(401).json({ ok: false, error: 'PIN salah' });
+  }
+  res.set('Set-Cookie', pin.cookieHeader(pin.createSession(), pin.TTL_SECONDS));
+  res.json({ ok: true });
+});
+
+// POST /dashboard/logout — cabut sesi browser yang sekarang.
+app.post('/dashboard/logout', (req, res) => {
+  pin.destroySession(pin.readCookie(req, pin.COOKIE_NAME));
+  res.set('Set-Cookie', pin.cookieHeader('', 0));
+  res.json({ ok: true });
+});
+
+// POST /dashboard/pin — ganti PIN dashboard. Harus sudah login.
+//
+// Semua sesi dimatikan setelah ganti (termasuk sesi yang barusan dipakai
+// mengganti), jadi client harus balik ke halaman login.
+app.post('/dashboard/pin', pinLimiter, (req, res) => {
+  if (!pin.isAuthorized(req)) return res.status(401).json({ error: 'Belum login' });
+
+  const next = String((req.body && req.body.pin) || '').trim();
+  if (!/^\d{4,8}$/.test(next)) {
+    return res.status(400).json({ error: 'PIN harus 4-8 angka' });
+  }
+
+  settings.setDashboardPin(next);
+  pin.revokeAll();
+  res.json({ ok: true });
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
@@ -578,6 +639,10 @@ function onListening() {
     console.log(`🔒 Tailscale → http://${tsIP}:${ports.http}`);
   } else {
     console.log('🔒 Tailscale belum terdeteksi — nyalakan Tailscale dulu (HP: aplikasi Play Store juga bisa). Kalau aktif belakangan, alamatnya muncul otomatis di log ini.');
+  }
+
+  if (pin.isDefaultPin()) {
+    logbus.notice(`🔑 PIN dashboard masih bawaan: ${pin.getPin()} — ganti di dashboard supaya tetangga Wi-Fi tidak bisa buka riwayat transfer.`);
   }
 
   console.log(`[Server] Port ${ports.http} (HTTP) & ${ports.transfer} (transfer) listen di 0.0.0.0 — device lain di jaringan yang sama bisa menghubungi`);

@@ -8,12 +8,30 @@ const { getDataDir } = require('./platform');
 
 const dataFile = path.join(getDataDir(), 'settings.json');
 
+// PIN bawaan dashboard. Ditampilkan apa adanya ke user selama belum diganti
+// (lihat pin.js) — kalau disembunyikan, orang cuma lihat halaman terkunci dan
+// tidak tahu harus ngapain.
+const DEFAULT_PIN = '123456';
+
 const DEFAULTS = {
   // Terima otomatis: kalau enabled, permintaan file dari peer diterima
   // tanpa modal. `peers` kosong = semua peer boleh; kalau diisi, hanya
   // nama perangkat di daftar itu.
   autoApprove: { enabled: false, peers: [] },
+
+  // PIN buka /dashboard. Disimpan apa adanya (bukan hash): PIN ini cuma
+  // pagar sopan-santun antar-tetangga Wi-Fi, bukan kredensial akun — kalau
+  // penyerang sudah bisa baca file ini di disk, dia sudah punya mesinnya.
+  // ponytail: plaintext di settings.json, ganti ke hash kalau nanti ada
+  // sinkronisasi setting antar perangkat.
+  dashboardPin: DEFAULT_PIN,
 };
+
+/** PIN harus 4-8 angka; apa pun di luar itu jatuh ke PIN bawaan. */
+function normalizePin(value) {
+  const text = String(value == null ? '' : value).trim();
+  return /^\d{4,8}$/.test(text) ? text : DEFAULT_PIN;
+}
 
 let cache = null;
 
@@ -31,9 +49,15 @@ function load() {
   if (cache) return cache;
   try {
     const raw = JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
-    cache = { autoApprove: normalizeAutoApprove(raw && raw.autoApprove) };
+    cache = {
+      autoApprove: normalizeAutoApprove(raw && raw.autoApprove),
+      dashboardPin: normalizePin(raw && raw.dashboardPin),
+    };
   } catch (_) {
-    cache = { autoApprove: normalizeAutoApprove(DEFAULTS.autoApprove) };
+    cache = {
+      autoApprove: normalizeAutoApprove(DEFAULTS.autoApprove),
+      dashboardPin: DEFAULT_PIN,
+    };
   }
   return cache;
 }
@@ -89,4 +113,27 @@ function isAutoApprovePeer(senderName) {
   return peers.includes(String(senderName || '').trim());
 }
 
-module.exports = { getAutoApprove, setAutoApprove, isAutoApprovePeer, DEFAULTS };
+function getDashboardPin() {
+  return load().dashboardPin;
+}
+
+/**
+ * Ganti PIN dashboard. Sesi yang sedang login dimatikan di pemanggil
+ * (`pin.revokeAll()`) supaya browser lama ikut minta PIN baru.
+ */
+function setDashboardPin(value) {
+  const next = normalizePin(value);
+  load().dashboardPin = next;
+  writeNow();
+  return next;
+}
+
+module.exports = {
+  getAutoApprove,
+  setAutoApprove,
+  isAutoApprovePeer,
+  getDashboardPin,
+  setDashboardPin,
+  DEFAULT_PIN,
+  DEFAULTS,
+};

@@ -92,6 +92,32 @@
       <p class="dash-note" id="autoInfo" role="status"></p>
     </section>
 
+    <!-- 4b. PIN dashboard — status, ganti, dan keluar -->
+    <section class="dash-card" aria-labelledby="hPin">
+      <h2 class="dash-card-title" id="hPin">PIN dashboard</h2>
+
+      <div class="pin-state">
+        <p class="pin-status" id="pinStatus" data-state="">
+          <span class="pin-status-dot" aria-hidden="true"></span>
+          <span id="pinStatusText">—</span>
+        </p>
+        <p class="dash-note" id="pinInfo"></p>
+      </div>
+
+      <label class="dash-field">
+        <span class="dash-field-label">PIN baru (4-8 angka)</span>
+        <input type="password" id="pinNew" inputmode="numeric" maxlength="8"
+               autocomplete="new-password" placeholder="••••••">
+      </label>
+
+      <div class="pin-change-row">
+        <button class="dash-btn dash-btn-primary" type="button" id="pinSave" disabled>Ganti PIN</button>
+        <button class="dash-btn" type="button" id="pinLogout">Keluar</button>
+      </div>
+
+      <p class="dash-note" id="pinMsg" role="status"></p>
+    </section>
+
     <!-- 5. Perangkat online -->
     <section class="dash-card dash-span" aria-labelledby="hPeers">
       <h2 class="dash-card-title" id="hPeers">
