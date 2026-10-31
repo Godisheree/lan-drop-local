@@ -1,9 +1,17 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Tray, Menu, clipboard, shell, nativeImage } = require('electron');
 const path = require('path');
 
 // ===================== State =====================
 let mainWindow = null;
+let tray = null;
 let serverStarted = false;
+
+// Mode tray: proses hidup tanpa jendela, cuma jadi ikon di pojok kanan bawah.
+// Dipakai launcher `tui.js` (`electron . --tray`) supaya terminal boleh
+// ditutup sementara LAN DROP tetap melayani perangkat lain.
+const TRAY_MODE = process.argv.includes('--tray') || process.env.LANDROP_TRAY === '1';
+
+const PORT = parseInt(process.env.PORT, 10) || 3000;
 
 // ===================== Start Express Server =====================
 function startServer() {
@@ -20,6 +28,12 @@ function startServer() {
 
 // ===================== Create Window =====================
 function createWindow() {
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
@@ -35,7 +49,7 @@ function createWindow() {
 
   // Beri jeda agar Express server siap sebelum load URL
   setTimeout(() => {
-    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.loadURL(`http://localhost:${PORT}`);
   }, 800);
 
   mainWindow.on('closed', () => {
@@ -43,14 +57,51 @@ function createWindow() {
   });
 }
 
+// ===================== Tray (mode background) =====================
+function ownDashboardUrl() {
+  try {
+    const { listLANIPv4 } = require('./server/platform');
+    const ips = listLANIPv4();
+    if (ips.length) return `http://${ips[0].address}:${PORT}/dashboard`;
+  } catch (_) {}
+  return `http://localhost:${PORT}/dashboard`;
+}
+
+function createTray() {
+  // Ikon yang sudah ada dipakai apa adanya (public/icons/icon-192.png): aset
+  // PWA dan ikon tray berasal dari bentuk yang sama, jadi tidak ada gambar
+  // kedua yang harus ikut dirawat.
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'public', 'icons', 'icon-192.png'));
+
+  tray = new Tray(icon);
+  tray.setToolTip('LAN DROP — jalan di background');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Buka LAN DROP', click: () => createWindow() },
+      {
+        label: `Buka dashboard di browser (http://localhost:${PORT}/dashboard)`,
+        click: () => shell.openExternal(`http://localhost:${PORT}/dashboard`),
+      },
+      { label: 'Salin alamat dashboard', click: () => clipboard.writeText(ownDashboardUrl()) },
+      { type: 'separator' },
+      { label: 'Keluar', click: () => app.quit() },
+    ])
+  );
+
+  // Klik kiri ikon = buka jendela (kebiasaan app tray di Windows).
+  tray.on('click', () => createWindow());
+}
+
 // ===================== App Lifecycle =====================
 app.whenReady().then(() => {
   startServer();
-  createWindow();
+  if (TRAY_MODE) createTray();
+  else createWindow();
 });
 
 app.on('window-all-closed', () => {
-  app.quit();
+  // Di mode tray jendela memang boleh tidak ada — proses harus tetap hidup.
+  if (!TRAY_MODE) app.quit();
 });
 
 // Jendela ditutup = proses utama ikut mati, jadi timer debounce di

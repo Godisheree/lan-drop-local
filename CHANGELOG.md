@@ -7,6 +7,47 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Added — launcher menu + ikon tray (jalan lepas dari terminal)
+
+`npm start` dulu langsung menumpahkan server ke terminal. Sekarang ada dua cara
+jalan yang sama-sama sah, dan pilihannya harus dibaca dulu: menu `↑/↓` di
+terminal. Pilihan "Jalan di background + ikon tray" melepas proses dari
+terminal — jendela boleh ditutup, LAN DROP tetap melayani perangkat lain, dan
+matiinnya dari ikon di pojok kanan bawah.
+
+- **`tui.js`** — menu panah tanpa dependency (`process.stdin.setRawMode` +
+  escape sequence ANSI, alternate screen). Escape sequence yang tiba terpotong
+  antar chunk disambung (`\x1b` dulu, `[B` belakangan) — kalau tidak, panah
+  bawah terasa "kadang jalan kadang tidak".
+- Pilihan tray **disembunyikan** kalau Electron belum ada (HP/Termux), bukan
+  ditampilkan lalu gagal saat dipilih. Cek-nya `fs.existsSync` ke
+  `node_modules/electron/dist/`, bukan `require('electron')` — index.js paket
+  itu men-download binary ~240 MB kalau `dist/` kosong.
+- **`npm run server` = `node server/index.js`** — yang diketik di Termux tidak
+  berubah sama sekali. stdin yang bukan TTY (dipipe/skrip) juga melewati menu
+  dan langsung jalankan server.
+- Port yang sudah dipakai dicek dulu: LAN DROP yang sudah jalan tidak bikin
+  ikon tray kedua yang diam-diam gagal.
+- Ikon tray memakai `public/icons/icon-192.png` yang sudah ada — satu gambar
+  untuk PWA dan tray, tidak ada aset kedua yang ikut dirawat.
+- **`main.js` mode tray** (`--tray` / `LANDROP_TRAY=1`): proses hidup tanpa
+  jendela; menu ikon = Buka LAN DROP, buka dashboard di browser, salin alamat
+  dashboard, keluar. `window-all-closed` tidak lagi mematikan proses di mode
+  ini, dan `PORT` tidak lagi hardcode di `loadURL`.
+- `npm run check:tui` — uji `tui.js` tanpa terminal sungguhan (23 kasus).
+
+#### Verification
+
+| Uji | Hasil |
+|---|---|
+| `npm run check:tui` | 23/23 lolos — panah atas/bawah, Enter, Ctrl+C, escape terpotong, lingkar menu |
+| `npm test` | lolos |
+| Panah sungguhan di terminal (pty) | `↑/↓` menggeser sorotan baris; Enter di baris 2 → launcher keluar, proses lepas |
+| Hidup tanpa terminal | launcher mati, proses Electron tetap hidup; `GET /dashboard` → 200 dan `/me` tetap menjawab |
+| Ikon tray | probe `Tray.getBounds()` = `{x:1344,y:824,w:24,h:40}` — ikon benar-benar dapat tempat di notification area |
+
+---
+
 ### Added — dashboard monitoring di `/dashboard`
 
 Log server cuma lewat di stdout: begitu terminal ditutup (atau lampu mati),

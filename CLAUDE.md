@@ -21,6 +21,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm install
+npm start                          # menu launcher (↑/↓) — pilih terminal / tray
+npm run server                     # langsung server (ini yang dipakai di Termux)
 node server/index.js              # http://localhost:3000
 PORT=4000 TRANSFER_PORT=4001 node server/index.js   # second instance for testing
 npm run electron-dev               # desktop app via Electron
@@ -38,6 +40,7 @@ npm run check:identity # regression check nama device
 npm run check:routing  # regression check routing peer (LAN vs Tailscale)
 npm run check:routes   # 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
 npm run check:autoapprove # terima otomatis: fail-closed saat ukuran mencurigakan
+npm run check:tui      # menu launcher tui.js (panah, Enter, escape terpotong) — tanpa tty
 npm run smoke          # 3 viewport + cek error console (butuh server jalan)
 npm run verify:qr      # decode QR dengan OpenCV, cocokkan dengan URL di UI
 npm run verify:pwa     # manifest + ikon + service worker
@@ -184,6 +187,11 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 
 ### Electron Wrapper (`main.js` + `preload.js`)
 `main.js` requires Express server directly in the main process (not child process). Sets `LANDROP_UPLOAD_DIR` to `app.getPath('temp')/landrop-uploads/` before requiring server — critical for ASAR compatibility. `preload.js` is intentionally empty (UI communicates via HTTP fetch, same as browser). On close, `app.quit()` prevents orphan node.exe.
+
+**Mode tray** (`electron . --tray` atau `LANDROP_TRAY=1`, dijalankan launcher `tui.js`): tidak ada jendela sama sekali, cuma ikon di notification area. Menu ikon: buka jendela, buka dashboard di browser, salin alamat dashboard, keluar. `window-all-closed` di mode ini **tidak** mematikan proses — kalau mematikan, tray-nya ikut hilang begitu jendela pertama ditutup. Ikon memakai `public/icons/icon-192.png` (aset PWA yang sudah ada).
+
+### Launcher (`tui.js`)
+`npm start` menampilkan menu `↑/↓` (tanpa dependency: `setRawMode` + ANSI), lalu memilih: server di terminal ini (`node server/index.js`, sama dengan `npm run server`) atau proses lepas **detached** (`spawn(..., {detached:true, stdio:'ignore'})` + `unref()`) yang hidup di ikon tray. stdin bukan TTY (dipipe, skrip, Termux tanpa tty) = menu dilewati, server langsung jalan. Logika tombol & menu dipisah sebagai fungsi murni supaya bisa diuji tanpa terminal (`npm run check:tui`).
 
 ### Routing
 

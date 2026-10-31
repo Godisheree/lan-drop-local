@@ -50,7 +50,7 @@ public/
 
 ES modules dipilih (bukan bundler) karena:
 
-- **Tanpa build step** — `npm start` tetap `node server/index.js`. Tidak ada webpack/vite/esbuild.
+- **Tanpa build step** — `npm run server` tetap `node server/index.js`. Tidak ada webpack/vite/esbuild.
 - Browser & Electron (Chromium modern) support native ES modules ≥ 2018.
 - Dependency Injection antar-modul lewat import eksplisit, bukan global mutable.
 - Tiap file jadi 100–300 baris, reviewable.

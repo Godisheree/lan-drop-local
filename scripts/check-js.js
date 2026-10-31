@@ -13,7 +13,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const ROOTS = ['public/js', 'server', 'scripts', 'main.js', 'preload.js'];
+const ROOTS = ['public/js', 'server', 'scripts', 'main.js', 'preload.js', 'tui.js'];
 const SKIP = new Set(['node_modules', '.git', 'dist', 'public/js/vendor']);
 
 function collect(target, acc) {

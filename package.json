@@ -4,7 +4,8 @@
   "description": "LAN file sharing via browser — no cloud, no setup",
   "main": "main.js",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node tui.js",
+    "server": "node server/index.js",
     "start:debug": "node server/index.js --debug",
     "electron-dev": "electron .",
     "build-win": "electron-builder --win",
@@ -23,7 +24,8 @@
     "verify:pwa": "node scripts/verify-pwa.js --url http://localhost:3000",
     "icons": "node scripts/generate-icons.js",
     "e2e": "node scripts/e2e.js",
-    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js && node scripts/check-security.js && node scripts/check-identity.js && node scripts/check-routing.js && node scripts/check-autoapprove.js && node scripts/check-ack.js && node scripts/check-settings.js && node scripts/check-dashboard.js",
+    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js && node scripts/check-security.js && node scripts/check-identity.js && node scripts/check-routing.js && node scripts/check-autoapprove.js && node scripts/check-ack.js && node scripts/check-settings.js && node scripts/check-dashboard.js && node scripts/check-tui.js",
+    "check:tui": "node scripts/check-tui.js",
     "check:settings": "node scripts/check-settings.js",
     "check:dashboard": "node scripts/check-dashboard.js"
   },
