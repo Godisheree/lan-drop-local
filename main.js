@@ -13,6 +13,20 @@ const TRAY_MODE = process.argv.includes('--tray') || process.env.LANDROP_TRAY ==
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 
+// ===================== Ukur jeda (opsional) =====================
+// LANDROP_TIMING=1 menulis penanda waktu ke %TEMP%\landrop-timing.log, supaya
+// "kok lama" bisa dibuktikan dengan angka, bukan tebakan.
+const T0 = Date.now();
+function mark(name) {
+  if (process.env.LANDROP_TIMING !== '1') return;
+  try {
+    require('fs').appendFileSync(
+      path.join(app.getPath('temp'), 'landrop-timing.log'),
+      `${Date.now() - T0} ms  ${name}\n`
+    );
+  } catch (_) {}
+}
+
 // ===================== Start Express Server =====================
 function startServer() {
   if (serverStarted) return;
@@ -24,6 +38,27 @@ function startServer() {
 
   // require langsung di main process — lifecycle otomatis ikut app
   require('./server/index.js');
+  mark('server di-require');
+}
+
+// Tunggu port benar-benar listen. Sebelumnya ada jeda tetap 800 ms di depan
+// loadURL — itu dibayar setiap kali jendela dibuka, padahal di mode tray server
+// sudah listen sejak app start. Cek port biasanya selesai dalam <50 ms.
+function waitForServer(port, timeoutMs = 5000) {
+  const net = require('net');
+  const mulai = Date.now();
+  return new Promise((resolve) => {
+    const cek = () => {
+      const sock = net.connect(port, '127.0.0.1');
+      sock.once('connect', () => { sock.destroy(); resolve(Date.now() - mulai); });
+      sock.once('error', () => {
+        sock.destroy();
+        if (Date.now() - mulai > timeoutMs) resolve(-1);
+        else setTimeout(cek, 50);
+      });
+    };
+    cek();
+  });
 }
 
 // ===================== Create Window =====================
@@ -33,12 +68,16 @@ function createWindow() {
     mainWindow.focus();
     return;
   }
+  mark('createWindow dipanggil');
 
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
     minWidth: 700,
     minHeight: 500,
+    // Jangan tampilkan dulu: yang muncul pertama kali jadi halaman yang sudah
+    // selesai digambar, bukan kerangka putih kosong yang bikin terasa lambat.
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -46,11 +85,31 @@ function createWindow() {
     },
     autoHideMenuBar: true,
   });
+  mark('BrowserWindow dibuat');
 
-  // Beri jeda agar Express server siap sebelum load URL
+  // 127.0.0.1, bukan localhost: server listen di 0.0.0.0 (IPv4 saja), sedangkan
+  // localhost di Windows dicoba ke ::1 dulu. Terukur 207 ms vs 9 ms.
+  waitForServer(PORT).then((ms) => {
+    mark(`server siap (cek port ${ms} ms)`);
+    if (!mainWindow) return;
+    mainWindow.loadURL(`http://127.0.0.1:${PORT}`);
+    mark('loadURL dipanggil');
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    mark('ready-to-show -> show()');
+    if (mainWindow) mainWindow.show();
+  });
+  mainWindow.webContents.on('did-finish-load', () => mark('halaman selesai dimuat'));
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc) => mark(`gagal muat ${code} ${desc}`));
+
+  // Jaring pengaman: kalau ready-to-show tidak pernah datang, tetap tampilkan.
   setTimeout(() => {
-    mainWindow.loadURL(`http://localhost:${PORT}`);
-  }, 800);
+    if (mainWindow && !mainWindow.isVisible()) {
+      mark('jaring pengaman: show() paksa');
+      mainWindow.show();
+    }
+  }, 3000);
 
   mainWindow.on('closed', () => {
     mainWindow = null;

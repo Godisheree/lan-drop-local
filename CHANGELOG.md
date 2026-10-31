@@ -7,6 +7,28 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum Rilis]
 
+### Fixed — jendela dari ikon tray terasa lambat dibuka
+
+Klik ikon tray dulu menyisakan layar putih beberapa detik sebelum dashboard
+muncul. Tiga sebabnya:
+
+- **Jeda tetap 800 ms** (`setTimeout`) sebelum `loadURL` — dibayar setiap kali
+  jendela dibuka, padahal di mode tray server sudah listen sejak app start.
+  Sekarang menunggu port-nya benar-benar siap (`net.connect` ke `127.0.0.1`):
+  terukur **7 ms**.
+- **`loadURL` memakai `localhost`**, sedangkan server listen di `0.0.0.0` (IPv4
+  saja) dan Windows mencoba `::1` lebih dulu. Terukur **207 ms** lewat
+  `localhost` vs **9 ms** lewat `127.0.0.1`. Sekarang `127.0.0.1`.
+- **Jendela tampil sebelum halamannya siap** — yang terlihat pertama adalah
+  kerangka putih kosong. Sekarang `show: false` + tampil saat `ready-to-show`,
+  dengan jaring pengaman 3 detik kalau event itu tidak datang.
+- `LANDROP_TIMING=1` mencatat penanda waktu tiap fase ke
+  `%TEMP%\landrop-timing.log`, supaya keluhan "kok lama" dijawab angka, bukan
+  tafsiran.
+
+Diukur dengan klik sungguhan ke ikon tray (build sesudah perbaikan): jendela
+dibuat **847 ms**, terlihat **940 ms**, halaman selesai dimuat **2170 ms**.
+
 ### Added — launcher menu + ikon tray (jalan lepas dari terminal)
 
 `npm start` dulu langsung menumpahkan server ke terminal. Sekarang ada dua cara
