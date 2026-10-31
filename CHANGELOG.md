@@ -57,6 +57,40 @@ HTTP 401, PIN bawaan → cookie `HttpOnly` + dashboard, `POST /dashboard/pin`
 `{"default":false,"hint":null}`, logout → balik ke halaman PIN. `npm test` EXIT=0
 (59/59 sintaks, 11/11 auto-approve, 9/9 settings, 9/9 routing, 24/24 TUI).
 
+### Fixed — dua lubang gerbang yang ketemu saat audit
+
+Audit gerbangnya sendiri (curl ke instance uji terpisah, bukan lewat browser) menemukan
+dua jalan memutar yang membuat PIN-nya sia-sia:
+
+- `GET /dashboard.html` → **HTTP 200, 9332 byte, berisi `logPane`.** Berkasnya ada di
+  `public/`, jadi `express.static` menyajikannya di alamat lain tanpa lewat gerbang.
+  Sekarang dialihkan (`302`) ke `/dashboard` sebelum middleware statis dipasang.
+- `GET /logs?since=0` → **HTTP 200 tanpa cookie.** Isi log menyebut nama perangkat,
+  alamat IP laptop, nama berkas, dan folder simpan — persis yang mau ditutup. Sekarang
+  `401 {"error":"Perlu PIN dashboard"}` tanpa sesi, tetap `200` dengan sesi.
+  `/history` sengaja **tidak** dikunci: panel riwayat di UI utama memakainya, dan itu
+  bagian dari janji "UI kirim file tetap bebas" (ADR-0007).
+
+Keduanya jadi pemeriksaan tetap di `scripts/check-dashboard.js`, jadi lubang ini tidak
+bisa balik tanpa ada tes yang gagal. Bukti lengkap: `docs/adr/0009-pin-dashboard.md`
+bagian "Audit setelah gerbang dipasang".
+
+### Changed — dependency: 2 kerentanan high hilang
+
+`npm audit` sebelumnya melaporkan **17 kerentanan (2 high)**. Dua yang high ada di jalur
+produksi: `multer` 2.4.0 (DoS lewat `fileFilter` async yang menggantung setelah request
+putus) dan `body-parser` 2.3.0 (bawaan Express). Setelah `multer` → 2.5.0, `express` →
+5.3.0, dan `overrides.body-parser` → `^2.4.0`: **15 kerentanan (0 high)**, sisanya rantai
+`electron-builder` yang cuma ada di `devDependencies` — tidak ikut terpasang di mesin
+orang yang memasang paket ini (`npm i -g lan-drop-local`). `npm audit fix` tidak bisa
+menyentuh rantai itu tanpa `--force` (breaking change), jadi sengaja dibiarkan.
+
+Bonus temuan: `npm run check:security` **selalu mencetak satu baris saja** (judul bagian
+pertama). Sebabnya, skrip itu me-require `server/transfer.js` → `server/logbus.js`, dan
+logbus membajak `console.log` serta mendiamkannya kecuali `LANDROP_DEBUG`. Jadi 89
+pemeriksaannya selama ini jalan tapi tidak pernah kelihatan — cuma exit code-nya. Satu
+baris `process.env.LANDROP_DEBUG = '1'` di awal skrip mengembalikannya.
+
 ## [1.1.1] — 2026-11-01
 
 ### Fixed — port terpakai bikin server mati / jalur transfer bisu

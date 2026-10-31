@@ -134,6 +134,10 @@ app.post('/dashboard/pin', pinLimiter, (req, res) => {
   res.json({ ok: true });
 });
 
+// /dashboard.html ada di folder statis — tanpa ini halaman pantau masih bisa
+// dibuka langsung lewat alamat itu, melewati gerbang PIN di /dashboard.
+app.get('/dashboard.html', (req, res) => res.redirect(302, '/dashboard'));
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ===================== Discovery Routes =====================
@@ -237,7 +241,14 @@ app.get('/status', (req, res) => {
 //
 // `since` = id terakhir yang sudah dimiliki klien, jadi polling cukup
 // mengirim baris baru — bukan 300 baris berulang tiap 2 detik.
+//
+// Dikunci PIN: isi log menyebut nama perangkat, alamat IP, nama berkas, dan
+// folder simpan. Mengunci halamannya saja tidak cukup — tanpa kunci di sini,
+// tetangga Wi-Fi cukup `curl /logs` untuk membaca yang sama.
 app.get('/logs', (req, res) => {
+  if (!pin.isAuthorized(req)) {
+    return res.status(401).json({ error: 'Perlu PIN dashboard' });
+  }
   res.json(logbus.tail(parseInt(req.query.since, 10) || 0));
 });
 

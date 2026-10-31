@@ -15,6 +15,10 @@
  *      error di console.
  *   5. Service worker tetap memakai URL root sebagai shell offline, bukan
  *      /dashboard.
+ *   6. Gerbang PIN halaman pantau (ADR-0009) tidak bisa dilewati: `/dashboard`
+ *      tanpa sesi mengirim halaman PIN, `/dashboard.html` (jalur statis)
+ *      dialihkan, dan `/logs` menolak tanpa sesi — kalau tidak, tetangga
+ *      Wi-Fi cukup curl untuk membaca isi log yang sama.
  *
  * Usage: node scripts/check-dashboard.js
  */
@@ -230,8 +234,27 @@ async function main() {
     );
     check('halaman tidak diindex mesin pencari', page.text.includes('name="robots" content="noindex"'));
 
+    // Jalur statis tidak boleh jadi pintu belakang: `/dashboard.html` ada di
+    // folder public, jadi tanpa aturan khusus halaman pantau bisa dibuka
+    // langsung dan gerbang PIN-nya dilewati.
+    const staticBypass = await fetch(`${base}/dashboard.html`, { redirect: 'manual' });
+    check(
+      '/dashboard.html tidak bisa dipakai melewati PIN (dialihkan ke /dashboard)',
+      staticBypass.status === 302 && (staticBypass.headers.get('location') || '').endsWith('/dashboard'),
+      `HTTP ${staticBypass.status} → ${staticBypass.headers.get('location')}`
+    );
+
+    // Data yang ditampilkan halaman pantau ikut dikunci. Mengunci halamannya
+    // saja tidak menolong: tetangga Wi-Fi cukup `curl /logs` untuk membaca
+    // nama berkas, IP, dan folder simpan yang sama.
+    const logsWith = await get(`${base}/logs?since=0`, login.cookie);
+    check('logs dengan sesi dibalas penuh', logsWith.status === 200 && Array.isArray((logsWith.json || {}).lines), `HTTP ${logsWith.status}`);
+
     const logout = await postJson(`${base}/dashboard/logout`, {}, login.cookie);
     check('logout mencabut sesi', logout.status === 200 && !(await get(`${base}/dashboard`, login.cookie)).text.includes('id="logPane"'));
+
+    const logsNoSession = await get(`${base}/logs?since=0`);
+    check('logs tanpa sesi ditolak 401', logsNoSession.status === 401, `HTTP ${logsNoSession.status}`);
 
     // 3. /status — semua yang dipakai kartu "Status server"
     const st = (await get(`${base}/status`)).json || {};
@@ -250,7 +273,13 @@ async function main() {
     );
 
     // 4. /logs — heart of the live log
-    const first = (await get(`${base}/logs?since=0`)).json || {};
+    //
+    // Perlu sesi PIN (ADR-0009): log menyebut nama berkas, IP, dan folder
+    // simpan, jadi ikut terkunci walau halamannya sudah dijaga.
+    const sess = await postJson(`${base}/dashboard/login`, { pin: '123456' });
+    check('sesi PIN untuk membaca log', sess.status === 200 && /^landrop_dash=.+/.test(sess.cookie), `HTTP ${sess.status}`);
+
+    const first = (await get(`${base}/logs?since=0`, sess.cookie)).json || {};
     check('logs: bentuk {lines, lastId, depth}', Array.isArray(first.lines) && Number.isInteger(first.lastId) && first.depth === 300);
     check('logs: berisi log startup server', first.lines.length > 0, `${first.lines.length} baris`);
     check(
@@ -258,7 +287,7 @@ async function main() {
       first.lines.every((l) => Number.isInteger(l.id) && Number.isInteger(l.ts) && ['info', 'warn', 'error'].includes(l.level) && typeof l.text === 'string')
     );
 
-    const second = (await get(`${base}/logs?since=${first.lastId}`)).json || {};
+    const second = (await get(`${base}/logs?since=${first.lastId}`, sess.cookie)).json || {};
     check('logs: since=<lastId> tidak mengulang baris lama', second.lines.length === 0, `${second.lines.length} baris`);
     check('logs: lastId tidak pernah turun', second.lastId >= first.lastId, `${second.lastId} >= ${first.lastId}`);
 
@@ -349,7 +378,7 @@ async function main() {
     peer.destroy();
 
     // Log server harus mencatat kejadian di atas — itu gunanya dashboard.
-    const logAfter = (await get(`${base}/logs?since=${first.lastId}`)).json || {};
+    const logAfter = (await get(`${base}/logs?since=${first.lastId}`, sess.cookie)).json || {};
     const newTexts = logAfter.lines.map((l) => l.text);
     check(
       'logs: kejadian tadi tercatat (transfer masuk + dibatalkan)',

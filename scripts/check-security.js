@@ -17,6 +17,12 @@
 const fs = require('fs');
 const path = require('path');
 
+// check ini me-require modul server (transfer.js, security.js) — dan transfer.js
+// me-require logbus.js, yang membajak console.log dan mendiamkannya kecuali
+// LANDROP_DEBUG. Akibatnya seluruh hasil cek di bawah tidak pernah kelihatan
+// (cuma exit code-nya yang jalan). Nyalakan sebelum require pertama.
+process.env.LANDROP_DEBUG = '1';
+
 const ROOT = path.resolve(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 

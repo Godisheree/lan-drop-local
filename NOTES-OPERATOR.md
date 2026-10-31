@@ -84,11 +84,14 @@ target IP ke LAN/Tailscale. Autentikasi di alur kirim file **sengaja tidak**
 ditambahkan (kontrak "nol setup") — lihat
 `docs/adr/0007-keamanan-berlapis-tanpa-autentikasi.md`. Satu pengecualian:
 **halaman pantau `/dashboard` dikunci PIN** (bawaan `123456`, diingat 30 hari
-per browser, 10 percobaan/menit) karena isinya riwayat transfer + log server —
-lihat `docs/adr/0009-pin-dashboard.md`. UI kirim file di `/` tetap bebas, jadi
-alur kirim dari HP tidak berubah. Kalau PIN lupa: hapus nilai `dashboardPin` di
-`settings.json` (= kembali ke `123456`).
-Regression check: `npm run check:security`.
+per browser, 10 percobaan/menit) — dan yang dikunci bukan cuma halamannya:
+`/logs` juga menolak tanpa sesi (isi log menyebut nama berkas, IP, folder
+simpan) dan `/dashboard.html` dialihkan ke `/dashboard` supaya jalur statis
+tidak jadi pintu belakang. Lihat `docs/adr/0009-pin-dashboard.md`. UI kirim
+file di `/` tetap bebas, termasuk panel riwayat — alur kirim dari HP tidak
+berubah. Kalau PIN lupa: hapus nilai `dashboardPin` di `settings.json`
+(= kembali ke `123456`).
+Regression check: `npm run check:security`, `npm run check:dashboard`.
 
 **Yang sengaja ditunda ke Fase 5:** SSE untuk progres transfer. Alasannya
 (biaya vs manfaat, dan risiko event hilang pada list endpoint) sudah

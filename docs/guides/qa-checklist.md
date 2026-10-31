@@ -75,6 +75,8 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 ## Manual — halaman PIN dashboard (1.2.0)
 
 - [ ] Buka `/dashboard` di jendela privat → yang muncul **halaman PIN**, bukan dashboard
+- [ ] Buka `/dashboard.html` → dialihkan ke `/dashboard` (bukan halaman pantau terbuka)
+- [ ] Buka `/logs` di jendela privat → 401 "Perlu PIN dashboard" (bukan isi log)
 - [ ] PIN `123456` → masuk ke dashboard; browser lain diingat, tidak diminta lagi
 - [ ] PIN salah → pesan jelas, kolom kosong, kursor balik ke kolom (coba 10× cepat → pesan "terlalu banyak percobaan")
 - [ ] Hint "PIN bawaan: 123456" muncul **hanya** selama PIN belum diganti

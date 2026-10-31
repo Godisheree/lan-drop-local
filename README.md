@@ -40,7 +40,9 @@ lan-drop
 3. **Halaman pantau (`/dashboard`) minta PIN.** PIN bawaannya `123456` — halaman
    login menampilkan hint-nya selama kamu belum menggantinya. Ganti di dashboard
    (kartu PIN) supaya orang lain di WiFi yang sama tidak bisa membuka riwayat
-   transfer dan log. Sekali masuk, browser itu diingat 30 hari.
+   transfer dan log. Sekali masuk, browser itu diingat 30 hari. Yang ikut terkunci
+   bukan cuma halamannya: isi log (`/logs`) juga minta sesi itu, karena tiap barisnya
+   menyebut nama berkas, alamat IP, dan folder simpan.
 4. Kirim / terima file dari UI utama (`http://192.168.x.x:3000/`) — halaman ini
    **tidak** dikunci, jadi HP tidak perlu mengetik apa pun buat mengirim.
 
