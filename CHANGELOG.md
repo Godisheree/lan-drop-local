@@ -5,7 +5,30 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
-## [Belum Rilis]
+## [1.1.0] — 2026-11-01
+
+### Added — LAN DROP bisa dipanggil dari folder mana saja (`lan-drop`)
+
+Dulu launcher cuma bisa lewat `npm start`, jadi harus `cd` ke folder repo dulu —
+merepotkan di PC, lebih merepotkan lagi di Termux. Sekarang paket punya entry
+point `bin`, jadi:
+
+```bash
+npm i -g lan-drop-local
+lan-drop          # dari folder mana pun
+```
+
+Belum ada di registry? Sumber yang sama bisa dipasang lewat URL tarball GitHub,
+tanpa git dan tanpa login:
+
+```bash
+npm i -g https://github.com/Godisheree/lan-drop-local/archive/refs/heads/main.tar.gz
+```
+
+Tarball npm cuma membawa berkas runtime (`tui.js`, `main.js`, `preload.js`,
+`server/`, `public/`) — `electron.zip` 144 MB dan berkas pengembangan tidak ikut.
+Terukur setelah install global: `lan-drop` dari folder lain menyalakan server dan
+`/dashboard` membalas HTTP 200.
 
 ### Fixed — jendela dari ikon tray terasa lambat dibuka
 

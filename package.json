@@ -1,6 +1,6 @@
 {
-  "name": "lan-drop",
-  "version": "1.0.1",
+  "name": "lan-drop-local",
+  "version": "1.1.0",
   "description": "LAN file sharing via browser — no cloud, no setup",
   "main": "main.js",
   "bin": {
@@ -39,10 +39,29 @@
     "check:settings": "node scripts/check-settings.js",
     "check:dashboard": "node scripts/check-dashboard.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "lan",
+    "file-transfer",
+    "share-files",
+    "local-network",
+    "airdrop",
+    "termux",
+    "cli"
+  ],
+  "author": "Godisheree",
   "license": "ISC",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Godisheree/lan-drop-local.git"
+  },
+  "homepage": "https://github.com/Godisheree/lan-drop-local#readme",
+  "bugs": {
+    "url": "https://github.com/Godisheree/lan-drop-local/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@electron-internal/extract-zip": "^1.0.4",
     "express": "^5.2.1",
