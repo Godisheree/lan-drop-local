@@ -127,6 +127,19 @@ export function showTextOverlay(text) {
   setState({ currentText: text });
 
   byId('textOverlaySender').textContent = text.senderName || '?';
+
+  // Nama pengirim diklaim sendiri oleh pengirim — siapa pun di Wi-Fi yang sama
+  // bisa menulis "Router-Admin" atau "LAN DROP". Jadi nama itu ditampilkan
+  // sebagai klaim, bukan identitas; alamat IP-nya ikut ditampilkan supaya
+  // user punya sesuatu yang lebih nyata buat dinilai.
+  const warn = byId('textOverlayWarn');
+  if (warn) {
+    const from = text.senderIp ? ` dari ${text.senderIp}` : '';
+    warn.textContent = `Nama pengirim cuma klaim${from} — bukan identitas terverifikasi. `
+      + 'Jangan pernah kirim PIN atau password lewat pesan seperti ini.';
+    warn.hidden = false;
+  }
+
   const body = byId('textOverlayBody');
   body.textContent = text.text;
 

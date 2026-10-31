@@ -516,7 +516,9 @@ function startRawReceive(requestId, req) {
           finished = true;
           socket.removeListener('data', textHandler);
           const text = Buffer.concat(chunks).toString('utf-8');
-          receivedTexts.push({ id: requestId, senderName: req.senderName, text, timestamp: Date.now() });
+          // senderIp ikut disimpan: nama pengirim cuma klaim dari pengirim,
+          // sedangkan alamat IP-nya fakta dari socket.
+          receivedTexts.push({ id: requestId, senderName: req.senderName, senderIp: req.senderIp || null, text, timestamp: Date.now() });
           if (receivedTexts.length > 50) receivedTexts.shift(); // batas kapasitas
 
           const p = transferProgress.get(requestId);
@@ -624,15 +626,20 @@ function startRawReceive(requestId, req) {
           resumed: startBytes > 0
         });
 
-        // ===== Guard ruang disk dengan ukuran NYATA (transfer otomatis) =====
+        // ===== Guard ruang disk dengan ukuran NYATA (SEMUA transfer) =====
         // Cek terakhir sebelum menulis. Ukuran di frame file-start ini yang
         // benar-benar dipakai write stream, dan hanya sisa (actualSize -
         // startBytes) yang perlu ruang baru. Gagal ukur = jangan tebak.
-        if (req.auto) {
+        //
+        // Tidak digerbang `req.auto`: pengirim yang jahat bisa mengaku
+        // fileSize kecil lalu mengirim angka besar di file-start, dan korban
+        // yang mengklik "Terima" sendiri tetap bisa kehabisan disk. Cek disk
+        // itu soal ruang mesin penerima, bukan soal siapa yang menyetujui.
+        {
           const free = getSaveDirFreeSpace();
           const remaining = actualSize - startBytes;
           if (free === null || remaining > free) {
-            console.warn(`[Transfer] ⏸️ ${requestId} — ruang disk tidak cukup untuk sisa ${remaining} byte (terima otomatis), transfer dibatalkan`);
+            console.warn(`[Transfer] ⏸️ ${requestId} — ruang disk tidak cukup untuk sisa ${remaining} byte, transfer dibatalkan`);
             transferProgress.delete(requestId);
             socket.end();
             pendingRequests.delete(requestId);
@@ -923,6 +930,9 @@ function startTransferServer() {
           fileSize: msg.fileSize,
           senderName: msg.senderName,
           senderId: msg.senderId,
+          // Alamat IP pengirim dari socket — satu-satunya identitas yang tidak
+          // bisa dipalsukan pengirim lewat payload.
+          senderIp: socket.remoteAddress || null,
           batchId: msg.batchId, // optional: grouping multi-file
           kind: msg.kind,       // 'file' | 'text' — text langsung diterima, tanpa modal
           transferKey,

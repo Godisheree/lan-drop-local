@@ -91,11 +91,14 @@ app.get('/dashboard', (req, res) => {
 // GET /dashboard/pin-info — dipakai halaman login buat nampilin hint.
 //
 // PIN bawaan (`123456`) memang ditampilkan: kalau user belum pernah ganti,
-// menyembunyikannya cuma bikin dia mentok di layar terkunci. Begitu PIN
-// diganti, hint-nya hilang sendiri.
+// menyembunyikannya cuma bikin dia mentok di layar terkunci. TAPI hint-nya
+// hanya untuk pemanggil loopback (browser di laptop yang menjalankan server
+// ini). Kalau dibagi ke seluruh LAN, gerbang PIN-nya nol nilai: tetangga
+// tinggal `curl /dashboard/pin-info`, dapat PIN-nya, lalu login.
 app.get('/dashboard/pin-info', (req, res) => {
   const isDefault = pin.isDefaultPin();
-  res.json({ default: isDefault, hint: isDefault ? pin.getPin() : null });
+  const ownDevice = pin.isLoopback(req);
+  res.json({ default: isDefault, hint: isDefault && ownDevice ? pin.getPin() : null });
 });
 
 // POST /dashboard/login — { pin } → cookie sesi.
@@ -106,7 +109,8 @@ app.post('/dashboard/login', pinLimiter, (req, res) => {
   if (!pin.verify(req.body && req.body.pin)) {
     return res.status(401).json({ ok: false, error: 'PIN salah' });
   }
-  res.set('Set-Cookie', pin.cookieHeader(pin.createSession(), pin.TTL_SECONDS));
+  // Tanpa Max-Age: session cookie — tutup browser, PIN diminta lagi.
+  res.set('Set-Cookie', pin.cookieHeader(pin.createSession()));
   res.json({ ok: true });
 });
 
@@ -446,12 +450,22 @@ app.get('/transfer/progress/:requestId', (req, res) => {
 //
 // Path file TIDAK pernah datang dari URL: id dipetakan server ke daftar
 // file yang sudah dia terima. Jadi tidak ada path traversal.
+//
+// TERKUNCI PIN: `idForPath()` = sha1(path file), dan path file ikut bocor di
+// `/history`. Tanpa kunci, tetangga bisa membaca isi foto yang baru diterima
+// ukuran penuh (`ensureThumbnail` mengembalikan file asli apa adanya kalau
+// ffmpeg tidak terpasang). Ini kelas data yang justru ingin dilindungi
+// gerbang PIN di ADR-0009.
 app.get('/thumbnail/:id', async (req, res) => {
   const id = String(req.params.id || '');
 
   // Id harus hex 16 karakter — tolak yang lain tanpa menyentuh filesystem.
   if (!/^[0-9a-f]{16}$/.test(id)) {
     return res.status(400).json({ error: 'Invalid thumbnail id' });
+  }
+
+  if (!pin.isAuthorized(req)) {
+    return res.status(401).json({ error: 'Perlu PIN dashboard' });
   }
 
   try {
@@ -461,7 +475,8 @@ app.get('/thumbnail/:id', async (req, res) => {
     }
 
     res.set('Content-Type', result.contentType);
-    res.set('Cache-Control', 'public, max-age=86400');
+    // private: isinya data pribadi, jangan sampai nyangkut di cache bersama.
+    res.set('Cache-Control', 'private, max-age=86400');
     res.send(result.buffer);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -505,17 +520,29 @@ app.post('/transfer/upload', transferLimiter, upload.array('file', 50), (req, re
 
 // ===================== Settings =====================
 
-// GET /settings/auto-approve — status terima otomatis
+// Terima-otomatis = pintu masuk tanpa dialog. Dikunci PIN (dan tetap dijaga
+// sameOriginGuard): kalau tidak, siapa pun di Wi-Fi yang sama cukup sekali
+// `curl -X POST /settings/auto-approve -d '{"enabled":true}'` lalu bisa
+// menembakkan file ke perangkat ini tanpa satu pun persetujuan user.
+// Satu-satunya UI yang memakainya adalah dashboard — halaman yang sudah
+// terkunci PIN — jadi mengunci endpoint ini tidak mengurangi kenyamanan.
+
+// GET /settings/auto-approve — status terima otomatis.
+//
+// Status `enabled` tetap dibaca halaman kirim file (badge pengingat di header:
+// user harus sadar perangkatnya sedang jadi "drop box"). Tapi daftar `peers`
+// cuma untuk dashboard: isinya nama perangkat yang boleh masuk tanpa dialog,
+// dan itu peta buat penyerang yang mau menyamar jadi salah satunya.
 app.get('/settings/auto-approve', (req, res) => {
-  res.json(settings.getAutoApprove());
+  const current = settings.getAutoApprove();
+  if (pin.isAuthorized(req)) return res.json(current);
+  res.json({ enabled: !!current.enabled, peers: [] });
 });
 
 // POST /settings/auto-approve — nyalain/matiin terima otomatis
-//
-// Dilindungi sameOriginGuard (middleware global): POST lintas-origin dari
-// halaman web lain ditolak, jadi halaman asing tidak bisa menyalakan mode
-// ini dari browser orang lain.
 app.post('/settings/auto-approve', transferLimiter, (req, res) => {
+  if (!pin.isAuthorized(req)) return res.status(401).json({ error: 'Perlu PIN dashboard' });
+
   const { enabled, peers } = req.body || {};
 
   if (enabled !== undefined && typeof enabled !== 'boolean') {
@@ -530,13 +557,24 @@ app.post('/settings/auto-approve', transferLimiter, (req, res) => {
 
 // ===================== History =====================
 
-// GET /history — riwayat transfer (terbaru di depan)
+// GET /history — riwayat transfer (terbaru di depan).
+//
+// Pemanggil TANPA sesi PIN dapat versi ringkas: `savedTo` (path file di disk
+// penerima) dan `thumbnailId` (kunci buat `GET /thumbnail/<id>`, lihat di
+// sana) dibuang. Panel riwayat di UI kirim file tetap hidup — nama file,
+// peer, arah, status — tapi tidak lagi jadi peta harta karun buat tetangga.
 app.get('/history', (req, res) => {
-  res.json(history.list());
+  const items = history.list();
+  if (pin.isAuthorized(req)) return res.json(items);
+
+  res.json(items.map(({ savedTo, thumbnailId, ...rest }) => rest));
 });
 
-// POST /history/clear — hapus semua riwayat
+// POST /history/clear — hapus semua riwayat. Butuh PIN: kalau terbuka,
+// penyerang bisa menghapus jejak file yang baru dia selundupkan.
 app.post('/history/clear', destructiveLimiter, (req, res) => {
+  if (!pin.isAuthorized(req)) return res.status(401).json({ error: 'Perlu PIN dashboard' });
+
   history.clear();
   res.json({ ok: true });
 });

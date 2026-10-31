@@ -77,9 +77,17 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 - [ ] Buka `/dashboard` di jendela privat → yang muncul **halaman PIN**, bukan dashboard
 - [ ] Buka `/dashboard.html` → dialihkan ke `/dashboard` (bukan halaman pantau terbuka)
 - [ ] Buka `/logs` di jendela privat → 401 "Perlu PIN dashboard" (bukan isi log)
-- [ ] PIN `123456` → masuk ke dashboard; browser lain diingat, tidak diminta lagi
+- [ ] Buka `/thumbnail/<id>` (ambil id dari `/history` saat sudah login) di jendela privat → 401
+- [ ] Buka `/history` di jendela privat → tetap 200, tapi **tanpa** `savedTo` dan `thumbnailId`
+- [ ] Panel **Riwayat** + **Galeri** di `/` (tanpa PIN): riwayat tetap tampil, galeri tidak muncul, tombol hapus tidak ada
+- [ ] Panel Sambung di `/` → **tidak ada lagi toggle "Terima file tanpa konfirmasi"**, cuma catatan kecil ke Dashboard
+- [ ] Kirim teks dari HP → overlay menampilkan peringatan "nama pengirim cuma klaim" + alamat IP pengirim
+- [ ] Aktifkan terima otomatis **di dashboard** → badge "terima otomatis" muncul di header `/` (buka dua tab)
+- [ ] PIN `123456` → masuk ke dashboard; browser lain diingat selama tab belum ditutup
+- [ ] Tutup semua jendela browser → buka `/dashboard` lagi → PIN diminta lagi (session cookie)
 - [ ] PIN salah → pesan jelas, kolom kosong, kursor balik ke kolom (coba 10× cepat → pesan "terlalu banyak percobaan")
-- [ ] Hint "PIN bawaan: 123456" muncul **hanya** selama PIN belum diganti
+- [ ] Hint "PIN bawaan: 123456" muncul **hanya** di browser laptop yang menjalankan servernya, **dan** hanya selama PIN belum diganti
+- [ ] Dari HP/host lain: `/dashboard/pin-info` balas `hint: null` (buka `http://<ip-laptop>:3000/dashboard/pin-info`)
 - [ ] Kartu **PIN dashboard** menyebut status; "Ganti PIN" nonaktif saat kurang dari 4 angka
 - [ ] Ganti PIN → pesan sukses, lalu otomatis balik ke halaman PIN; PIN lama tidak bisa lagi
 - [ ] Tombol **Keluar** → balik ke halaman PIN

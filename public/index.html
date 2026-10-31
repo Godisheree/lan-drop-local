@@ -115,14 +115,10 @@
 
         <div class="history-head">
           <h2 id="historyHeading">Riwayat</h2>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button id="btnToggleHistory" class="history-toggle" type="button"
-                    aria-expanded="true" aria-controls="historyList">
-              <span class="chevron" aria-hidden="true">▾</span> Lipat
-            </button>
-            <button id="btnClearHistory" class="icon-btn" type="button"
-                    aria-label="Hapus semua riwayat" title="Hapus riwayat">🗑</button>
-          </div>
+          <button id="btnToggleHistory" class="history-toggle" type="button"
+                  aria-expanded="true" aria-controls="historyList">
+            <span class="chevron" aria-hidden="true">▾</span> Lipat
+          </button>
         </div>
         <div id="historyList" class="history-list"></div>
       </section>
@@ -182,6 +178,7 @@
         <h3 id="textOverlayTitle">💬 Teks dari <span id="textOverlaySender">—</span></h3>
         <button id="btnCloseTextOverlay" class="modal-x" type="button" aria-label="Tutup">✕</button>
       </div>
+      <p id="textOverlayWarn" class="text-warn" hidden></p>
       <div id="textOverlayBody" class="text-body"></div>
       <div class="modal-actions">
         <button id="btnCopyText" class="btn btn-accept" type="button">📋 Salin</button>
@@ -202,26 +199,13 @@
         perangkat di WiFi yang sama.
       </p>
 
-      <!-- Terima otomatis sengaja di ATAS QR: di bawah (setelah status
-           jaringan) toggle-nya jatuh di luar area terlihat panel, dan user
-           mengira fiturnya tidak ada. -->
-      <h4 class="connect-subtitle">Terima otomatis</h4>
-      <div class="auto-approve" id="autoApproveSection">
-        <label class="switch-row" for="autoApproveToggle">
-          <input type="checkbox" id="autoApproveToggle" class="switch-input">
-          <span class="switch" aria-hidden="true"></span>
-          <span class="switch-text">
-            <strong>Terima file tanpa konfirmasi</strong>
-            <small>Perangkat ini langsung menerima file dari perangkat lain, tanpa jendela terima/tolak.</small>
-          </span>
-        </label>
-        <div id="autoApprovePeers" class="auto-peers" hidden>
-          <p class="auto-peers-hint">
-            Pilih perangkat yang boleh mengirim otomatis. Tidak ada yang dipilih = semua perangkat.
-          </p>
-          <ul id="autoApprovePeerList" class="auto-peer-list"></ul>
-        </div>
-      </div>
+      <!-- Terima otomatis TIDAK punya toggle di sini lagi: mode ini menerima
+           file tanpa dialog sama sekali, jadi menyalakannya butuh PIN dan
+           pindah ke Dashboard. Halaman ini terbuka untuk siapa saja di Wi-Fi
+           — kalau toggle-nya di sini, tetangga cukup satu klik. -->
+      <p class="connect-note">
+        Terima file tanpa konfirmasi diatur di <a href="/dashboard">Dashboard</a> (perlu PIN).
+      </p>
 
       <div id="qrFrame" class="qr-frame"></div>
       <ul id="urlList" class="url-list"></ul>

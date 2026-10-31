@@ -6,7 +6,6 @@
 
 import { el, clear, byId } from '../core/dom.js';
 import { formatBytes, formatTime } from '../core/format.js';
-import { showToast } from './notify.js';
 import { attachThumbnail } from './thumbnail.js';
 import { renderGallery } from './gallery.js';
 
@@ -81,20 +80,12 @@ export async function fetchAndRenderHistory() {
 }
 
 /**
- * Setup tombol hapus riwayat + toggle lipatan.
+ * Setup toggle lipatan riwayat.
+ *
+ * Tombol "hapus riwayat" TIDAK ada di sini: /history/clear butuh PIN, jadi
+ * tombolnya pindah ke dashboard (halaman pantau yang sudah terkunci).
  */
 export function setupHistory() {
-  byId('btnClearHistory').addEventListener('click', async () => {
-    try {
-      const { postJson } = await import('../core/api.js');
-      await postJson('/history/clear', {});
-      showToast('🗑 Riwayat dihapus', 'success');
-      fetchAndRenderHistory();
-    } catch (err) {
-      showToast('❌ Gagal hapus riwayat: ' + err.message, 'error');
-    }
-  });
-
   // Riwayat bisa dilipat supaya panel aktivitas lebih lega.
   const toggle = byId('btnToggleHistory');
   const list = byId('historyList');

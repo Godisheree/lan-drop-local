@@ -144,14 +144,9 @@ export function fetchAutoApprove() {
   return api('/settings/auto-approve');
 }
 
-/**
- * Nyalain/matiin terima otomatis.
- * @param {{enabled?: boolean, peers?: string[]}} patch
- * @returns {Promise<{enabled: boolean, peers: string[]}>}
- */
-export function postAutoApprove(patch) {
-  return postJson('/settings/auto-approve', patch);
-}
+// Tidak ada `postAutoApprove()` di sini: menyalakan terima otomatis butuh PIN,
+// dan satu-satunya tempat yang boleh melakukannya adalah dashboard — yang
+// memanggil endpoint itu langsung dengan cookie sesinya.
 
 /**
  * GET status request keluar.

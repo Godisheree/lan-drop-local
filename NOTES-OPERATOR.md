@@ -83,15 +83,21 @@ ffmpeg) + menambah security header, rate limit, batas upload, dan pembatasan
 target IP ke LAN/Tailscale. Autentikasi di alur kirim file **sengaja tidak**
 ditambahkan (kontrak "nol setup") — lihat
 `docs/adr/0007-keamanan-berlapis-tanpa-autentikasi.md`. Satu pengecualian:
-**halaman pantau `/dashboard` dikunci PIN** (bawaan `123456`, diingat 30 hari
-per browser, 10 percobaan/menit) — dan yang dikunci bukan cuma halamannya:
-`/logs` juga menolak tanpa sesi (isi log menyebut nama berkas, IP, folder
-simpan) dan `/dashboard.html` dialihkan ke `/dashboard` supaya jalur statis
-tidak jadi pintu belakang. Lihat `docs/adr/0009-pin-dashboard.md`. UI kirim
-file di `/` tetap bebas, termasuk panel riwayat — alur kirim dari HP tidak
-berubah. Kalau PIN lupa: hapus nilai `dashboardPin` di `settings.json`
-(= kembali ke `123456`).
-Regression check: `npm run check:security`, `npm run check:dashboard`.
+**halaman pantau `/dashboard` dikunci PIN** (bawaan `123456`, cookie session —
+hilang saat browser ditutup, batas 24 jam di server, 10 percobaan/menit) — dan
+yang dikunci bukan cuma halamannya: `/logs`, `GET /thumbnail/<id>`,
+`POST /history/clear`, dan `POST /settings/auto-approve` juga menolak tanpa sesi;
+`/dashboard.html` dialihkan ke `/dashboard` supaya jalur statis tidak jadi pintu
+belakang; `/history` untuk pemanggil tanpa sesi kehilangan `savedTo` +
+`thumbnailId` (path di disk + kunci isi foto). Hint PIN bawaan hanya muncul kalau
+dibuka dari laptop yang menjalankan servernya. Lihat
+`docs/adr/0009-pin-dashboard.md`. UI kirim file di `/` tetap bebas, termasuk
+panel riwayat — alur kirim dari HP tidak berubah. Yang PINDAH ke dashboard:
+toggle **terima otomatis** (mode tanpa dialog tidak boleh bisa dinyalakan dari
+jarak jauh) dan tombol **hapus riwayat**. Kalau PIN lupa: hapus nilai
+`dashboardPin` di `settings.json` (= kembali ke `123456`).
+Regression check: `npm run check:security`, `npm run check:dashboard`,
+`npm run check:autoapprove`.
 
 **Yang sengaja ditunda ke Fase 5:** SSE untuk progres transfer. Alasannya
 (biaya vs manfaat, dan risiko event hilang pada list endpoint) sudah

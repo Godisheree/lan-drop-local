@@ -15,7 +15,12 @@ const settings = require('./settings');
 // hidup lebih lama dari niat user mencabutnya.
 
 const COOKIE_NAME = 'landrop_dash';
-const TTL_SECONDS = 30 * 24 * 60 * 60; // 30 hari
+
+// Sesi di server cuma bertahan 24 jam (jaring pengaman kalau browser tidak
+// pernah ditutup), dan cookie-nya SESSION cookie: hilang begitu browser
+// ditutup. 30 hari terlalu panjang buat token yang lewat HTTP polos — sekali
+// kesadap di Wi-Fi terbuka, sesinya kepakai sebulan.
+const TTL_SECONDS = 24 * 60 * 60; // 24 jam
 
 const sessions = new Map(); // token -> waktu kedaluwarsa (ms)
 
@@ -84,9 +89,32 @@ function isAuthorized(req) {
   return isValidSession(readCookie(req, COOKIE_NAME));
 }
 
-/** Header Set-Cookie. Tanpa `Secure`: LAN DROP jalan di http polos. */
+/**
+ * Header Set-Cookie.
+ *
+ * Tanpa `Secure`: LAN DROP jalan di http polos, dan cookie bertanda `Secure`
+ * tidak akan pernah dikirim balik oleh browser di http — login-nya malah
+ * rusak. Tanpa `Max-Age` (kecuali diminta): cookie jadi SESSION cookie —
+ * browser ditutup, PIN diminta lagi. `maxAgeSeconds = 0` dipakai logout buat
+ * menyuruh browser menghapus cookie-nya.
+ */
 function cookieHeader(token, maxAgeSeconds) {
-  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
+  const base = `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax`;
+  return maxAgeSeconds == null ? base : `${base}; Max-Age=${maxAgeSeconds}`;
+}
+
+/**
+ * Apakah permintaan datang dari perangkat yang menjalankan server ini?
+ *
+ * Dipakai buat hint PIN: `127.0.0.1`/`::1` hanya bisa dari laptop pemilik.
+ * Termasuk bentuk IPv4-mapped (`::ffff:127.0.0.1`) yang muncul saat Node
+ * mendengarkan dual-stack, dan `::ffff:7f...` versi heksadesimal.
+ */
+function isLoopback(req) {
+  const addr = (req && req.socket && req.socket.remoteAddress) || '';
+  if (addr === '::1') return true;
+  if (addr.startsWith('::ffff:')) return addr.slice(7).startsWith('127.');
+  return addr.startsWith('127.');
 }
 
 module.exports = {
@@ -101,5 +129,6 @@ module.exports = {
   revokeAll,
   readCookie,
   isAuthorized,
+  isLoopback,
   cookieHeader,
 };

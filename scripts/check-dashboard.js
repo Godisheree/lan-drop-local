@@ -256,6 +256,63 @@ async function main() {
     const logsNoSession = await get(`${base}/logs?since=0`);
     check('logs tanpa sesi ditolak 401', logsNoSession.status === 401, `HTTP ${logsNoSession.status}`);
 
+    // 2b. Data pribadi lain yang ikut gerbang (audit keamanan 2026-11-01).
+    //
+    // Halaman pantau sudah aman, tapi data yang dibacanya sempat terbuka di
+    // alamat lain: /history membocorkan path simpan + thumbnailId, dan
+    // /thumbnail/<id> mengembalikan ISI FOTO ukuran penuh tanpa PIN. Sekalian
+    // diuji: terima-otomatis tidak bisa dinyalakan dari jauh, dan riwayat
+    // tidak bisa dihapus tanpa PIN.
+    check('cookie sesi adalah session cookie (tanpa Max-Age)', !/Max-Age/i.test(login.setCookie), login.setCookie);
+
+    const autoNoSession = await postJson(`${base}/settings/auto-approve`, { enabled: true, peers: [] });
+    check('auto-approve tanpa sesi ditolak 401', autoNoSession.status === 401, `HTTP ${autoNoSession.status}`);
+
+    const thNoSession = await get(`${base}/thumbnail/0123456789abcdef`);
+    check('thumbnail tanpa sesi ditolak 401', thNoSession.status === 401, `HTTP ${thNoSession.status}`);
+
+    const histAnonRes = await get(`${base}/history`);
+    const histAnon = histAnonRes.json;
+    check(
+      'history tanpa sesi tetap 200 (panel riwayat UI utama hidup)',
+      histAnonRes.status === 200 && Array.isArray(histAnon),
+      `HTTP ${histAnonRes.status}`
+    );
+    check(
+      'history tanpa sesi tanpa path simpan & thumbnailId',
+      Array.isArray(histAnon) && histAnon.every((e) => !('savedTo' in e) && !('thumbnailId' in e)),
+      `${Array.isArray(histAnon) ? histAnon.length : '?'} entri`
+    );
+
+    const clearAnon = await postJson(`${base}/history/clear`, {});
+    check('history/clear tanpa sesi ditolak 401', clearAnon.status === 401, `HTTP ${clearAnon.status}`);
+
+    const sess2 = await postJson(`${base}/dashboard/login`, { pin: '123456' });
+    check('sesi kedua terbit untuk uji lanjutan', sess2.status === 200 && /^landrop_dash=.+/.test(sess2.cookie), `HTTP ${sess2.status}`);
+
+    const autoWith = await postJson(`${base}/settings/auto-approve`, { enabled: true, peers: [] }, sess2.cookie);
+    check('auto-approve dengan sesi diterima', autoWith.status === 200 && (autoWith.json || {}).enabled === true, `HTTP ${autoWith.status}`);
+
+    const autoOff = await postJson(`${base}/settings/auto-approve`, { enabled: false }, sess2.cookie);
+    check('auto-approve bisa dimatikan lagi', autoOff.status === 200 && (autoOff.json || {}).enabled === false, `HTTP ${autoOff.status}`);
+
+    const autoAnonView = (await get(`${base}/settings/auto-approve`)).json || {};
+    check(
+      'auto-approve tanpa sesi: cuma status enabled, daftar peer tidak bocor',
+      typeof autoAnonView.enabled === 'boolean' && Array.isArray(autoAnonView.peers) && autoAnonView.peers.length === 0,
+      JSON.stringify(autoAnonView)
+    );
+
+    const histAuth = (await get(`${base}/history`, sess2.cookie)).json;
+    check(
+      'history dengan sesi tetap penuh (path simpan ikut)',
+      Array.isArray(histAuth) && histAuth.every((e) => 'savedTo' in e),
+      `${Array.isArray(histAuth) ? histAuth.length : '?'} entri`
+    );
+
+    const thAuth = await get(`${base}/thumbnail/0123456789abcdef`, sess2.cookie);
+    check('thumbnail dengan sesi: id tak ada = 404 (bukan 401)', thAuth.status === 404, `HTTP ${thAuth.status}`);
+
     // 3. /status — semua yang dipakai kartu "Status server"
     const st = (await get(`${base}/status`)).json || {};
     check('status: nama perangkat', st.deviceName === 'Dashboard-Test', String(st.deviceName));

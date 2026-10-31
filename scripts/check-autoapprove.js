@@ -92,15 +92,35 @@ function sendRequest(port, meta, { waitMs = 800 } = {}) {
   });
 }
 
-async function getJson(url) {
-  const res = await fetch(url);
+// Endpoint /settings/auto-approve sekarang butuh sesi PIN dashboard (audit: dulu
+// siapa pun di LAN bisa menyalakannya). Jadi skrip ini login dulu seperti user.
+let sessionCookie = '';
+
+async function login(base, pin = '123456') {
+  const res = await fetch(`${base}/dashboard/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+  const raw = res.headers.get('set-cookie') || '';
+  sessionCookie = raw.split(';')[0];
+  return { status: res.status, cookie: sessionCookie };
+}
+
+async function getJson(url, { anon = false } = {}) {
+  const res = await fetch(url, {
+    headers: !anon && sessionCookie ? { Cookie: sessionCookie } : {},
+  });
   return res.json();
 }
 
-async function postJson(url, body) {
+async function postJson(url, body, { anon = false } = {}) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(!anon && sessionCookie ? { Cookie: sessionCookie } : {}),
+    },
     body: JSON.stringify(body),
   });
   return { status: res.status, body: await res.json() };
@@ -154,6 +174,22 @@ async function main() {
       }
     }
     if (!ready) throw new Error('server tidak siap');
+
+    // --- 0. Gerbang PIN: tanpa sesi endpoint ini harus menolak ----------
+    const anonPost = await postJson(`${base}/settings/auto-approve`, { enabled: true }, { anon: true });
+    check('tanpa sesi PIN: POST /settings/auto-approve DITOLAK', anonPost.status === 401,
+      `status ${anonPost.status}`);
+    const anonGet = await getJson(`${base}/settings/auto-approve`, { anon: true });
+    check('tanpa sesi PIN: daftar peer tidak ikut terkirim',
+      Array.isArray(anonGet.peers) && anonGet.peers.length === 0,
+      `peers=${JSON.stringify(anonGet.peers)}`);
+
+    const session = await login(base);
+    check('login PIN bawaan dapat sesi', session.status === 200 && session.cookie.startsWith('landrop_dash='),
+      `status ${session.status}`);
+    const afterAnon = await getJson(`${base}/settings/auto-approve`);
+    check('POST tanpa sesi tidak mengubah setelan', afterAnon.enabled === false,
+      `enabled=${afterAnon.enabled}`);
 
     const sender = { senderName: 'Pengirim-Test', senderId: 'pengirim-test', batchId: 'b1' };
 

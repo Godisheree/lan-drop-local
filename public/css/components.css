@@ -344,6 +344,14 @@
   color: var(--text-muted);
 }
 
+/* Catatan di panel Sambung: hal sensitif yang pindah ke Dashboard. */
+.connect-note {
+  margin: var(--space-3) 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
 /* ===== Status jaringan (diagnostik discovery) ===== */
 .net-status {
   display: flex;
@@ -1108,6 +1116,19 @@
   margin-top: 0;
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
+}
+
+/* Catatan identitas di overlay teks masuk: nama pengirim cuma klaim dari
+   pengirim, jadi ditulis sebagai peringatan kecil — bukan judul. */
+.text-overlay .text-warn {
+  flex-shrink: 0;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning-text);
+  font-size: var(--text-sm);
+  line-height: 1.45;
 }
 
 /* --- Terima otomatis (auto-approve) -------------------------------------- */

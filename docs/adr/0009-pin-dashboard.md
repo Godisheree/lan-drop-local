@@ -29,29 +29,40 @@ tapi **"siapa boleh mengintip"**. Dua pertanyaan itu pantas dijawab berbeda.
 1. **Ruang lingkup gerbang: halaman pantau + data yang dibacanya.** Server yang
    memilih halaman: browser tanpa sesi sah menerima `dashboard-login.html`, browser
    bersesi menerima `dashboard.html`. Yang ikut dikunci: `/logs` (menolak 401 tanpa
-   sesi) dan jalur statis `/dashboard.html` (dialihkan ke `/dashboard`). Alasannya
-   ditemukan saat audit setelah gerbang ini dipasang — mengunci halamannya saja tidak
-   ada artinya kalau isi yang sama bisa dibaca lewat `curl /logs`, dan `public/dashboard.html`
-   tetap tersaji sebagai berkas statis di alamat lain (bukti pengukuran di bagian
-   "Audit setelah gerbang dipasang"). Endpoint yang dipakai UI kirim file
-   (`/transfer/*`, `/history`, `/devices`, `/status`, `/discovery/status`) **tetap
+   sesi), jalur statis `/dashboard.html` (dialihkan ke `/dashboard`), `GET
+   /thumbnail/<id>` (401 tanpa sesi — berkas asli yang sudah diterima bisa diunduh
+   lewat sini), `POST /history/clear` (401 — hapus jejak), dan `POST
+   /settings/auto-approve` (401 — mode "terima tanpa dialog" tidak boleh dinyalakan
+   dari jarak jauh). Dua yang terakhir ditambahkan setelah audit penuh (lihat bagian
+   "Audit lanjutan"). `/history` tetap terbuka **tapi dipangkas** untuk pemanggil tanpa
+   sesi: `savedTo` (path berkas di disk penerima) dan `thumbnailId` (kunci ke
+   `/thumbnail/<id>`) dibuang — panel riwayat di UI kirim file tetap hidup karena
+   memang dipakai di sana, sementara peta harta karun privasinya tidak ikut dibagikan.
+   Endpoint lain yang dipakai UI kirim file (`/transfer/*`, `/devices`, `/status`,
+   `/discovery/status`, `GET /settings/auto-approve` versi status saja) **tetap
    terbuka**: halaman kirim file memakai endpoint yang sama dengan dashboard, jadi
-   mengunci semuanya = mematahkan alur utama. `/history` khususnya memang ditampilkan
-   oleh panel riwayat di UI utama — jadi bukan rahasia yang bisa ditutup tanpa
-   mengubah janji ADR-0007; yang ditutup adalah **log server**, yang tidak pernah
-   muncul di UI utama.
+   mengunci semuanya = mematahkan alur utama. Log server tetap yang paling sensitif:
+   tidak pernah muncul di UI utama.
 
-2. **PIN 4-8 angka, default `123456`, ditampilkan sampai diganti.** PIN bawaan
-   sengaja tidak disembunyikan: user yang baru pasang harus bisa masuk tanpa mencari
-   dokumentasi, dan PIN yang tidak diketahui siapa pun akan berakhir jadi masalah
-   dukungan ("saya terkunci dari server saya sendiri"). Selama PIN masih bawaan,
-   server mengingatkan di log dan halaman login menampilkan hint. Begitu diganti,
-   hint-nya hilang sendiri (`/dashboard/pin-info` balas `hint: null`).
+2. **PIN 4-8 angka, default `123456`, ditampilkan sampai diganti — tapi hanya di
+   perangkat pemilik.** PIN bawaan sengaja tidak disembunyikan: user yang baru pasang
+   harus bisa masuk tanpa mencari dokumentasi, dan PIN yang tidak diketahui siapa pun
+   akan berakhir jadi masalah dukungan ("saya terkunci dari server saya sendiri").
+   Batasannya: hint itu hanya dikirim ke pemanggil **loopback** (`/dashboard/pin-info`
+   dari perangkat lain balas `hint: null`). Dulu hint-nya dikirim ke siapa pun di LAN,
+   dan itu membuat gerbangnya nol nilai — tetangga cukup membaca responsnya untuk dapat
+   PIN yang benar tanpa brute force. Pengingat "PIN masih bawaan" di log server tetap
+   ada. Begitu PIN diganti, hint-nya hilang sendiri (`hint: null`).
 
-3. **Sesi = cookie `HttpOnly; SameSite=Lax`, umur 30 hari, disimpan di memori.**
-   Bukan di disk: restart server berarti semua browser diminta PIN lagi. Sesi di
-   disk membuat "keluar" tidak ada artinya, karena token bisa hidup lebih lama dari
-   niat user mencabutnya.
+3. **Sesi = cookie `HttpOnly; SameSite=Lax`, session cookie, disimpan di memori.**
+   Tanpa `Max-Age`: tutup browser = PIN diminta lagi. Batas 24 jam di sisi server
+   berlaku sebagai jaring pengaman kalau browsernya tidak pernah ditutup (dulu 30 hari —
+   terlalu panjang untuk token yang lewat HTTP polos: sekali kesadap di Wi-Fi terbuka,
+   sesinya berguna sebulan). Sesi **tidak** disimpan di disk: restart server berarti
+   semua browser diminta PIN lagi, karena sesi di disk membuat "keluar" tidak ada
+   artinya — token bisa hidup lebih lama dari niat user mencabutnya. Cookie juga
+   sengaja **tanpa** atribut `Secure`: LAN DROP jalan di HTTP polos, dan browser tidak
+   akan pernah mengirim balik cookie bertanda `Secure` di HTTP — login-nya malah rusak.
 
 4. **Percobaan PIN dibatasi 10/menit per IP.** PIN yang lebih pendek dari kredensial
    akun hanya berguna kalau laju coba-coba juga dibatasi.

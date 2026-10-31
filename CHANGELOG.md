@@ -75,6 +75,54 @@ Keduanya jadi pemeriksaan tetap di `scripts/check-dashboard.js`, jadi lubang ini
 bisa balik tanpa ada tes yang gagal. Bukti lengkap: `docs/adr/0009-pin-dashboard.md`
 bagian "Audit setelah gerbang dipasang".
 
+### Fixed — 15 temuan audit keamanan penuh (1 kritis, 3 high, 4 medium, 7 low/info)
+
+Audit menyeluruh oleh agent di instance terpisah (`curl` + PoC TCP, `LANDROP_DATA_DIR`
+di luar repo) menemukan 15 hal. Yang di bawah ini sudah **diukur ulang di sini** —
+sebelum dan sesudah diperbaiki:
+
+- **KRITIS — `POST /settings/auto-approve` jalan tanpa PIN.** Siapa pun di Wi-Fi yang
+  sama cukup `curl -X POST /settings/auto-approve -d '{"enabled":true}'` → **HTTP 200**,
+  lalu bisa menembakkan file ke perangkat itu **tanpa satu pun dialog**: berkas uji
+  45.550 byte mendarat sendiri di folder simpan. Sekarang butuh sesi PIN (401 tanpa
+  sesi), dan toggle-nya pindah dari UI kirim file ke dashboard. Halaman kirim file tetap
+  menampilkan badge "terima otomatis" — tapi cuma status `enabled`, daftar peer
+  allowlist tidak lagi ikut terkirim ke pemanggil tanpa sesi (nama peer di situ = daftar
+  siapa yang boleh masuk tanpa dialog, peta buat penyamaran).
+- **HIGH — isi foto bisa diunduh tanpa PIN.** `GET /history` balas **200** tanpa cookie
+  dan menyertakan `savedTo` + `thumbnailId`; `GET /thumbnail/<id>` lalu balas **200
+  `image/jpeg` 45.550 byte — byte identik dengan foto asli**, bukan thumbnail kecil
+  (`ensureThumbnail` mengembalikan berkas asli saat ffmpeg tidak dipakai). Sekarang
+  `/thumbnail/*` → `401` tanpa sesi, dan `/history` tanpa sesi kehilangan `savedTo` +
+  `thumbnailId` — panel riwayat di UI utama tetap hidup (nama file, peer, arah, status),
+  galeri thumbnail-nya yang hilang dan cuma ada di dashboard. Tombol "hapus riwayat"
+  ikut pindah ke dashboard karena endpoint-nya butuh PIN.
+- **HIGH — `GET /dashboard/pin-info` membocorkan PIN-nya sendiri.** Balas
+  `{"default":true,"hint":"123456"}` ke siapa pun di LAN → gerbang PIN nol nilai selama
+  PIN belum diganti; tak perlu brute force, tinggal baca. Sekarang hint hanya untuk
+  pemanggil **loopback** (browser di laptop yang menjalankan servernya); dari perangkat
+  lain `hint: null`.
+- **HIGH — cek ruang disk cuma berlaku di jalur terima-otomatis.** Transfer yang
+  diterima manual lewat tombol "Terima" tidak pernah dicek terhadap ruang disk nyata,
+  padahal ukuran sebenarnya baru ketahuan di frame `file-start` (pengirim bisa mengaku
+  kecil lalu mengirim besar). Sekarang cek itu berlaku untuk **semua** transfer masuk;
+  gagal mengukur = transfer dibatalkan, bukan ditebak.
+- **MEDIUM — `POST /history/clear` tanpa PIN.** Penyerang bisa menghapus jejak file
+  yang baru dia selundupkan supaya korban tidak sadar. Sekarang `401` tanpa sesi.
+- **MEDIUM — teks masuk diterima tanpa tanda apa pun.** `senderName` sepenuhnya
+  dikendalikan pengirim, jadi siapa pun bisa menyamar jadi "Router-Admin" dan meminta
+  PIN. Perilaku kirim-cepat sengaja dipertahankan, tapi overlay-nya sekarang menampilkan
+  peringatan + **alamat IP pengirim** (dari socket — satu-satunya identitas yang tidak
+  bisa dipalsukan pengirim) dan menyatakan bahwa nama pengirim itu cuma klaim.
+- **MEDIUM — cookie sesi berumur 30 hari lewat HTTP polos.** Sekarang cookie **session**
+  (hilang begitu browser ditutup) dengan batas 24 jam di sisi server, jadi token yang
+  kesadap tidak lagi berguna sebulan.
+
+Sisa 7 temuan berlevel LOW/INFO sengaja tidak diubah — dua di antaranya karena memang
+batas yang diambil ADR-0007: rate limit PIN dihitung per IP (bukan per PIN), dan
+`/devices`, `/status`, `/history` (versi ringkas) tetap terbuka karena dipakai UI kirim
+file. `sw.js` naik ke `landrop-shell-v11` supaya UI lama tidak nyangkut di cache.
+
 ### Changed — dependency: 2 kerentanan high hilang
 
 `npm audit` sebelumnya melaporkan **17 kerentanan (2 high)**. Dua yang high ada di jalur
