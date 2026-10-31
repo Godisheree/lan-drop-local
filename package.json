@@ -3,6 +3,16 @@
   "version": "1.0.1",
   "description": "LAN file sharing via browser — no cloud, no setup",
   "main": "main.js",
+  "bin": {
+    "lan-drop": "tui.js"
+  },
+  "files": [
+    "tui.js",
+    "main.js",
+    "preload.js",
+    "server/",
+    "public/"
+  ],
   "scripts": {
     "start": "node tui.js",
     "server": "node server/index.js",
