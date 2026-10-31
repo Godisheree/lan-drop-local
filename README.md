@@ -40,7 +40,7 @@ lan-drop
 3. **Halaman pantau (`/dashboard`) minta PIN.** PIN bawaannya `123456` — halaman
    login menampilkan hint-nya selama kamu belum menggantinya. Ganti di dashboard
    (kartu PIN) supaya orang lain di WiFi yang sama tidak bisa membuka riwayat
-   transfer dan log. Sekali masuk, browser itu diingat 30 hari. Yang ikut terkunci
+   transfer dan log. Sekali masuk, browser itu diingat 24 jam. Yang ikut terkunci
    bukan cuma halamannya: isi log (`/logs`) juga minta sesi itu, karena tiap barisnya
    menyebut nama berkas, alamat IP, dan folder simpan.
 4. Kirim / terima file dari UI utama (`http://192.168.x.x:3000/`) — halaman ini
@@ -69,6 +69,21 @@ dan menampilkan alamat barunya — jadi tidak perlu dicari manual.
   Electron (240 MB) karena mode global fokus jadi server CLI.
 - **History & pengaturan** disimpan di luar folder install, jadi aman saat paket
   di-update: `%APPDATA%\lan-drop` (Windows) atau `~/.lan-drop` (Termux/Linux).
+
+## Riwayat perubahan
+
+Versi terbaru: **1.2.0**
+
+- Bahasa UI dirapikan: tanpa emoji, satu istilah untuk satu hal, istilah teknis
+  diganti kata sehari-hari. Aturannya di `docs/guides/bahasa-ui.md`.
+- 15 temuan audit keamanan ditutup (1 kritis, 3 high, 4 medium, 7 low/info) —
+  thumbnail dan riwayat tidak lagi bocor ke pemanggil tanpa sesi PIN.
+- Sesi PIN jadi 24 jam (sebelumnya 30 hari) dan cookie-nya tidak disimpan
+  permanen di browser.
+- Diuji di jalur Wi-Fi nyata, bukan cuma loopback.
+
+Catatan lengkap tiap versi:
+[CHANGELOG.md](https://github.com/Godisheree/lan-drop-local/blob/main/CHANGELOG.md).
 
 ## Lisensi
 

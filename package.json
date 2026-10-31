@@ -11,7 +11,8 @@
     "main.js",
     "preload.js",
     "server/",
-    "public/"
+    "public/",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "start": "node tui.js",
