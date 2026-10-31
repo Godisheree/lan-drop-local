@@ -134,9 +134,11 @@ export function showTextOverlay(text) {
   // user punya sesuatu yang lebih nyata buat dinilai.
   const warn = byId('textOverlayWarn');
   if (warn) {
-    const from = text.senderIp ? ` dari ${text.senderIp}` : '';
-    warn.textContent = `Nama pengirim cuma klaim${from} — bukan identitas terverifikasi. `
-      + 'Jangan pernah kirim PIN atau password lewat pesan seperti ini.';
+    const fact = text.senderIp
+      ? `Pesan ini benar-benar datang dari alamat ${text.senderIp}.`
+      : 'Alamat pengirimnya tidak terbaca, jadi tidak ada yang bisa dipastikan.';
+    warn.textContent = `Nama pengirim di atas cuma klaim, bukan identitas terverifikasi. ${fact} `
+      + 'Jangan kirim PIN, password, atau kode apa pun lewat pesan seperti ini.';
     warn.hidden = false;
   }
 
