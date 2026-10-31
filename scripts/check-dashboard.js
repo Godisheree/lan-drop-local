@@ -366,13 +366,15 @@ async function main() {
       envOut.split('\n').filter(Boolean).length + ' baris'
     );
 
-    // Satu-satunya yang tetap keluar tanpa flag: error. Diuji dengan sengaja
-    // menabrakkan port transfer ke server yang sedang jalan.
-    const errOut = await spawnProbe([], { TRANSFER_PORT: String(TRANSFER_PORT) });
+    // Satu-satunya yang tetap keluar tanpa flag: kalau ada masalah. Diuji dengan
+    // sengaja menabrakkan port HTTP ke server yang sedang jalan — sekarang itu
+    // bukan lagi proses mati, server pindah ke port kosong di atasnya dan
+    // perpindahan itu tetap tercetak tanpa perlu flag debug.
+    const clashOut = await spawnProbe([], { PORT: String(PORT) });
     check(
-      'terminal: error tetap tercetak tanpa flag',
-      /EADDRINUSE|error/i.test(errOut),
-      (errOut.split('\n').find((l) => /EADDRINUSE|error/i.test(l)) || '(tidak ada)').trim()
+      'terminal: port terpakai → pindah port otomatis & tetap tercetak tanpa flag',
+      /sudah dipakai aplikasi lain/.test(clashOut) && /LAN DROP aktif/.test(clashOut),
+      (clashOut.split('\n').find((l) => /sudah dipakai aplikasi lain/.test(l)) || '(tidak ada)').trim()
     );
   } finally {
     cleanup();

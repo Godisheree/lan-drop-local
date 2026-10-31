@@ -39,13 +39,15 @@ lan-drop
    dari HP yang tersambung ke WiFi yang sama.
 3. Kirim / terima file dari dashboard.
 
-Stop: `Ctrl+C` di terminal. Ganti port: `PORT=4000 lan-drop`.
+Stop: `Ctrl+C` di terminal. Ganti port: `PORT=4000 lan-drop`. Kalau port itu
+sudah dipakai aplikasi lain, LAN DROP pindah sendiri ke port kosong berikutnya
+dan menampilkan alamat barunya — jadi tidak perlu dicari manual.
 
 ## Pengaturan lewat environment
 
 | Env | Guna | Default |
 |---|---|---|
-| `PORT` | Port server | `3000` |
+| `PORT` | Port server (kalau sudah dipakai, LAN DROP naik ke port kosong di atasnya) | `3000` |
 | `LANDROP_SAVE_DIR` | Folder tujuan file yang diterima (flat, tanpa kategori) | `%USERPROFILE%\Downloads\LAN-DROP` (Windows) / `~/storage/pictures` (Termux) |
 | `LANDROP_DATA_DIR` | Folder history, pengaturan, buffer upload | `%APPDATA%\lan-drop` / `~/.lan-drop` |
 | `LANDROP_UPLOAD_DIR` | Folder buffer upload (khusus, kalau mau dipisah) | ikut data dir |

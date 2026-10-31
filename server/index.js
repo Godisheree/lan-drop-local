@@ -37,7 +37,7 @@ const upload = multer({
 });
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const ports = require('./ports');
 
 // Middleware
 //
@@ -93,7 +93,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 function getLanUrls() {
   const urls = listLANIPv4().map(({ name, address }) => ({
     ip: address,
-    url: `http://${address}:${PORT}`,
+    url: `http://${address}:${ports.http}`,
     label: name,
     via: 'lan',
   }));
@@ -102,7 +102,7 @@ function getLanUrls() {
   if (tsIP) {
     urls.push({
       ip: tsIP,
-      url: `http://${tsIP}:${PORT}`,
+      url: `http://${tsIP}:${ports.http}`,
       label: 'Tailscale',
       via: 'tailscale',
     });
@@ -164,8 +164,8 @@ app.get('/status', (req, res) => {
     platform: process.platform,
     uptimeSeconds,
     startedAt: Date.now() - uptimeSeconds * 1000,
-    port: Number(PORT),
-    transferPort: transfer.TRANSFER_PORT,
+    port: ports.http,
+    transferPort: ports.transfer,
     discoveryPort: discovery.getDiagnostics().listener.port,
     saveDir: getSaveDirRoot(),
     dataDir: getDataDir(),
@@ -518,9 +518,47 @@ function shouldOpenBrowser() {
   );
 }
 
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = require('http').createServer(app);
+
+// Berapa kali boleh naik port sebelum menyerah. 10 = 3000..3010, cukup untuk
+// kasus "ada app lain pakai port itu", tanpa jadi tak berujung.
+const MAX_PORT_TRIES = 10;
+
+/**
+ * Bind HTTP di port yang benar-benar kosong.
+ *
+ * `EADDRINUSE` tanpa handler = proses mati dengan stack trace dan user cuma
+ * tahu "gak jalan". Di sini: 3000 dipakai app lain → naik ke 3001, 3002, ...
+ * sampai dapat, dan angka hasilnya ditulis ke server/ports.js supaya log,
+ * /status, announce ke peer, jendela Electron, dan menu tray ikut pindah.
+ */
+function listenHttp(port, triesLeft) {
+  const onError = (err) => {
+    if (err.code !== 'EADDRINUSE') {
+      console.error(`[Server] Gagal listen di port ${port}: ${err.message}`);
+      process.exit(1);
+    }
+    if (triesLeft <= 0) {
+      console.error(`[Server] Port ${port} sampai +${MAX_PORT_TRIES} semuanya terpakai — jalankan dengan PORT=<angka lain>.`);
+      process.exit(1);
+    }
+    // notice, bukan console.warn: terminal default menekan log biasa, sedangkan
+    // pindah port itu hal yang user harus tahu (alamat dashboard-nya berubah).
+    logbus.notice(`⚠️ Port ${port} sudah dipakai aplikasi lain — LAN DROP pindah ke ${port + 1}`);
+    ports.http = port + 1;
+    listenHttp(port + 1, triesLeft - 1);
+  };
+
+  server.once('error', onError);
+  server.listen(port, '0.0.0.0', () => {
+    server.removeListener('error', onError);
+    onListening();
+  });
+}
+
+function onListening() {
   const ips = listLANIPv4();
-  console.log(`LAN DROP server — Express on http://localhost:${PORT}`);
+  console.log(`LAN DROP server — Express on http://localhost:${ports.http}`);
   console.log(`[Server] Nama perangkat: ${DEVICE_NAME}` + (
     process.env.DEVICE_NAME ? '' : '  (ubah dengan DEVICE_NAME="nama kamu" untuk menamain sendiri)'
   ));
@@ -528,7 +566,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('⚠️  No LAN IP found — check your WiFi connection');
   } else {
     ips.forEach(({ name, address }) => {
-      console.log(`📡 ${name} → http://${address}:${PORT}`);
+      console.log(`📡 ${name} → http://${address}:${ports.http}`);
     });
   }
 
@@ -537,12 +575,12 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 
   const tsIP = tailscale.getSelfTailscaleIP();
   if (tsIP) {
-    console.log(`🔒 Tailscale → http://${tsIP}:${PORT}`);
+    console.log(`🔒 Tailscale → http://${tsIP}:${ports.http}`);
   } else {
     console.log('🔒 Tailscale belum terdeteksi — nyalakan Tailscale dulu (HP: aplikasi Play Store juga bisa). Kalau aktif belakangan, alamatnya muncul otomatis di log ini.');
   }
 
-  console.log(`[Server] Port ${PORT} (HTTP) & ${transfer.TRANSFER_PORT} (transfer) listen di 0.0.0.0 — device lain di jaringan yang sama bisa menghubungi`);
+  console.log(`[Server] Port ${ports.http} (HTTP) & ${ports.transfer} (transfer) listen di 0.0.0.0 — device lain di jaringan yang sama bisa menghubungi`);
   console.log('[Server] Device kedua harus menjalankan LAN DROP-nya sendiri supaya dua arah (kirim & terima)');
 
   // Satu-satunya baris yang tetap tercetak saat log sedang diam: tanda "sudah
@@ -550,14 +588,16 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   // semua listener sudah jalan saat baris ini keluar.
   const otherAddr = (ips[0] && ips[0].address) || tsIP;
   logbus.notice(
-    `✅ LAN DROP aktif — dashboard: http://localhost:${PORT}/dashboard` +
-      (otherAddr ? `  •  dari perangkat lain: http://${otherAddr}:${PORT}/dashboard` : '')
+    `✅ LAN DROP aktif — dashboard: http://localhost:${ports.http}/dashboard` +
+      (otherAddr ? `  •  dari perangkat lain: http://${otherAddr}:${ports.http}/dashboard` : '')
   );
 
   // Paling akhir, setelah semua listener jalan: halaman yang dibuka langsung
   // bisa dipakai (bukan "connection refused" sesaat).
-  if (shouldOpenBrowser()) openBrowser(`http://localhost:${PORT}/dashboard`);
-});
+  if (shouldOpenBrowser()) openBrowser(`http://localhost:${ports.http}/dashboard`);
+}
+
+listenHttp(ports.http, MAX_PORT_TRIES);
 
 // ===================== Graceful Shutdown =====================
 function shutdown() {

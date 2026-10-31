@@ -16,8 +16,11 @@ const DEVICE_TIMEOUT = 10000;
 const CLEANUP_INTERVAL = 3000;
 
 // ===================== Identitas Device =====================
-const LAN_PORT = process.env.PORT || 3000;
-const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
+// Port yang di-announce ke peer dibaca dari server/ports.js saat announce
+// dikirim: kalau port LAN DROP bergeser (mis. 3000 sudah dipakai aplikasi
+// lain), peer harus diarahkan ke port yang benar-benar listen, bukan ke 3000
+// yang tidak menjawab apa-apa.
+const ports = require('./ports');
 const DEVICE_NAME = getDeviceName();
 const deviceId = `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`;
 const deviceName = DEVICE_NAME;
@@ -55,7 +58,7 @@ const lastErrorLogAt = new Map(); // dedupe log error: "iface|kode" -> timestamp
 function startBroadcaster() {
   const ip = getLANIP();
   const message = JSON.stringify({
-    type: 'announce', deviceId, deviceName, ip, port: LAN_PORT, transferPort: TRANSFER_PORT
+    type: 'announce', deviceId, deviceName, ip, port: ports.http, transferPort: ports.transfer
   });
   const buffer = Buffer.from(message);
 
@@ -158,7 +161,7 @@ function logBroadcastError(state, err) {
 // peer tailnet cuma bisa connect balik lewat situ.
 function buildTailscaleMessage(selfIP) {
   return Buffer.from(JSON.stringify({
-    type: 'announce', deviceId, deviceName, ip: selfIP, port: LAN_PORT, transferPort: TRANSFER_PORT, via: 'tailscale'
+    type: 'announce', deviceId, deviceName, ip: selfIP, port: ports.http, transferPort: ports.transfer, via: 'tailscale'
   }));
 }
 

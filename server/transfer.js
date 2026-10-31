@@ -8,9 +8,16 @@ const { isTermux, isWindows, getDataDir, getWindowsSaveDir, getSaveDirFreeSpace,
 const thumbnail = require('./thumbnail');
 const history = require('./history');
 const settings = require('./settings');
+const logbus = require('./logbus');
 
 // ===================== Konstanta =====================
-const TRANSFER_PORT = parseInt(process.env.TRANSFER_PORT) || 3001;
+// Port transfer diambil dari server/ports.js, bukan angka tetap: kalau portnya
+// sudah dipakai (atau HTTP LAN DROP sendiri yang pindah ke situ), server naik
+// ke port kosong berikutnya dan nilai itu ikut ter-announce ke peer.
+const ports = require('./ports');
+
+// Berapa kali boleh naik port sebelum menyerah (3001..3011).
+const MAX_PORT_TRIES = 10;
 
 // Resume: partial file disimpan di folder tujuan dengan suffix .landrop-part,
 // lalu di-rename jadi nama asli pas transfer selesai (rename dalam satu
@@ -868,6 +875,33 @@ function decideAutoAccept(msg, resumeOffset = 0) {
 }
 
 // ===================== TCP Server (Penerima) =====================
+/**
+ * Bind TCP transfer di port kosong pertama (3001..3011).
+ *
+ * Sebelumnya `EADDRINUSE` di sini cuma dicetak sebagai satu baris error dan
+ * jalur transfer mati diam-diam: dashboard tetap terbuka, kiriman gagal dengan
+ * "port unreachable", dan sebab aslinya cuma ada di log server.
+ */
+function listenTransfer(port, triesLeft) {
+  const onError = (err) => {
+    if (err.code !== 'EADDRINUSE' || triesLeft <= 0) {
+      console.error(`[Transfer] TCP server gagal di port ${port}: ${err.message}`);
+      return;
+    }
+    // notice: terminal default menekan log biasa — kalau jalur transfer pindah
+    // port, user harus tetap lihat alasannya.
+    logbus.notice(`⚠️ Port transfer ${port} sudah dipakai — LAN DROP pindah ke ${port + 1}`);
+    ports.transfer = port + 1;
+    listenTransfer(port + 1, triesLeft - 1);
+  };
+
+  tcpServer.once('error', onError);
+  tcpServer.listen(port, '0.0.0.0', () => {
+    tcpServer.removeListener('error', onError);
+    console.log(`[Transfer] TCP server listening on port ${port}`);
+  });
+}
+
 function startTransferServer() {
   cleanupStale(); // buang upload & partial yang udah kedaluwarsa
   ensureSaveDirExists(); // pastikan folder simpan (mis. Downloads\LAN-DROP) ada dari awal
@@ -953,13 +987,7 @@ function startTransferServer() {
     });
   });
 
-  tcpServer.listen(TRANSFER_PORT, '0.0.0.0', () => {
-    console.log(`[Transfer] TCP server listening on port ${TRANSFER_PORT}`);
-  });
-
-  tcpServer.on('error', (err) => {
-    console.error('[Transfer] TCP server error:', err.message);
-  });
+  listenTransfer(ports.transfer, MAX_PORT_TRIES);
 }
 
 // ===================== TCP Client (Pengirim) =====================
@@ -1523,5 +1551,4 @@ module.exports = {
   cancelOutgoingTransfer,
   cancelIncomingTransfer,
   assertInsideUploads, // diekspor buat regression test (scripts/check-security.js)
-  TRANSFER_PORT
 };

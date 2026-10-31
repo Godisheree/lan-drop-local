@@ -22,7 +22,11 @@ const { spawn } = require('child_process');
 const { listLANIPv4 } = require('./server/platform');
 
 const ROOT = __dirname;
-const PORT = parseInt(process.env.PORT, 10) || 3000;
+// Port awal dari server/ports.js (sumber yang sama dengan server). Nilai ini
+// hanya untuk cek "port kosong?" sebelum spawn — proses ini terpisah dari
+// server, jadi kalau server memilih port lain, alamat pastinya ada di log
+// server (mode terminal) atau menu ikon tray (mode background).
+const ports = require('./server/ports');
 
 // ===================== Menu =====================
 
@@ -221,11 +225,11 @@ function runTray() {
   child.unref();
 
   const ips = listLANIPv4();
-  const other = ips[0] ? `http://${ips[0].address}:${PORT}/dashboard` : null;
+  const other = ips[0] ? `http://${ips[0].address}:${ports.http}/dashboard` : null;
 
   console.log('');
   console.log(`  \u2705 LAN DROP jalan di background (PID ${child.pid}) \u2014 terminal ini boleh ditutup`);
-  console.log(`  \u{1F4CA} Dashboard: http://localhost:${PORT}/dashboard` + (other ? `  \u00b7  dari perangkat lain: ${other}` : ''));
+  console.log(`  \u{1F4CA} Dashboard: http://localhost:${ports.http}/dashboard` + (other ? `  \u00b7  dari perangkat lain: ${other}` : ''));
   console.log('  \u274C Matiin: klik ikon LAN DROP di pojok kanan bawah \u2192 Keluar');
   console.log('');
 }
@@ -243,10 +247,11 @@ async function run(action) {
   }
 
   if (action === 'tray') {
-    if (!(await portFree(PORT))) {
-      console.log(`\n  \u26A0\uFE0F  Port ${PORT} sudah dipakai \u2014 LAN DROP lain sedang jalan.`);
-      console.log('     Matiin dulu dari ikon tray, atau jalankan dengan PORT lain.\n');
-      return 'again';
+    // Dulu port terpakai = aksi dibatalkan. Sekarang server cari port kosong
+    // sendiri (server/ports.js), jadi ini cuma catatan — bukan penghalang.
+    if (!(await portFree(ports.http))) {
+      console.log(`\n  \u2139\uFE0F  Port ${ports.http} sedang dipakai \u2014 LAN DROP bakal pilih port kosong sendiri.`);
+      console.log('     Alamat pastinya ada di menu ikon tray \u2192 \"Buka dashboard di browser\".\n');
     }
     runTray();
   }

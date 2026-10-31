@@ -11,7 +11,10 @@ let serverStarted = false;
 // ditutup sementara LAN DROP tetap melayani perangkat lain.
 const TRAY_MODE = process.argv.includes('--tray') || process.env.LANDROP_TRAY === '1';
 
-const PORT = parseInt(process.env.PORT, 10) || 3000;
+// Port HTTP dibaca dari server/ports.js: server (di-require di bawah) menaikkan
+// angkanya kalau 3000 sudah dipakai aplikasi lain, dan jendela ini harus memuat
+// alamat yang benar-benar listen.
+const ports = require('./server/ports');
 
 // ===================== Ukur jeda (opsional) =====================
 // LANDROP_TIMING=1 menulis penanda waktu ke %TEMP%\landrop-timing.log, supaya
@@ -44,12 +47,12 @@ function startServer() {
 // Tunggu port benar-benar listen. Sebelumnya ada jeda tetap 800 ms di depan
 // loadURL — itu dibayar setiap kali jendela dibuka, padahal di mode tray server
 // sudah listen sejak app start. Cek port biasanya selesai dalam <50 ms.
-function waitForServer(port, timeoutMs = 5000) {
+function waitForServer(getPort, timeoutMs = 5000) {
   const net = require('net');
   const mulai = Date.now();
   return new Promise((resolve) => {
     const cek = () => {
-      const sock = net.connect(port, '127.0.0.1');
+      const sock = net.connect(getPort(), '127.0.0.1');
       sock.once('connect', () => { sock.destroy(); resolve(Date.now() - mulai); });
       sock.once('error', () => {
         sock.destroy();
@@ -89,10 +92,10 @@ function createWindow() {
 
   // 127.0.0.1, bukan localhost: server listen di 0.0.0.0 (IPv4 saja), sedangkan
   // localhost di Windows dicoba ke ::1 dulu. Terukur 207 ms vs 9 ms.
-  waitForServer(PORT).then((ms) => {
+  waitForServer(() => ports.http).then((ms) => {
     mark(`server siap (cek port ${ms} ms)`);
     if (!mainWindow) return;
-    mainWindow.loadURL(`http://127.0.0.1:${PORT}`);
+    mainWindow.loadURL(`http://127.0.0.1:${ports.http}`);
     mark('loadURL dipanggil');
   });
 
@@ -121,9 +124,9 @@ function ownDashboardUrl() {
   try {
     const { listLANIPv4 } = require('./server/platform');
     const ips = listLANIPv4();
-    if (ips.length) return `http://${ips[0].address}:${PORT}/dashboard`;
+    if (ips.length) return `http://${ips[0].address}:${ports.http}/dashboard`;
   } catch (_) {}
-  return `http://localhost:${PORT}/dashboard`;
+  return `http://localhost:${ports.http}/dashboard`;
 }
 
 function createTray() {
@@ -138,8 +141,8 @@ function createTray() {
     Menu.buildFromTemplate([
       { label: 'Buka LAN DROP', click: () => createWindow() },
       {
-        label: `Buka dashboard di browser (http://localhost:${PORT}/dashboard)`,
-        click: () => shell.openExternal(`http://localhost:${PORT}/dashboard`),
+        label: `Buka dashboard di browser (http://localhost:${ports.http}/dashboard)`,
+        click: () => shell.openExternal(`http://localhost:${ports.http}/dashboard`),
       },
       { label: 'Salin alamat dashboard', click: () => clipboard.writeText(ownDashboardUrl()) },
       { type: 'separator' },

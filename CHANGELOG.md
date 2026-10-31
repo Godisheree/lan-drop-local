@@ -5,6 +5,31 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.1.1] — 2026-11-01
+
+### Fixed — port terpakai bikin server mati / jalur transfer bisu
+
+Angka 3000 (HTTP) dan 3001 (transfer) dulu ditulis tetap di lima berkas. Kalau
+salah satunya sudah dipakai aplikasi lain, dua hal terjadi: server HTTP mati
+dengan stack trace `EADDRINUSE`, dan jalur transfer hanya mencetak satu baris
+error lalu bisu — dashboard tetap terbuka, kirim file gagal dengan pesan
+"port unreachable", sebab aslinya cuma ada di log.
+
+Sekarang port jadi satu sumber di `server/ports.js`. Begitu bind gagal karena
+`EADDRINUSE`, LAN DROP naik ke port kosong berikutnya (sampai 10 percobaan) dan
+angka hasilnya dipakai di semua tempat: log, `/status`, announce discovery ke
+peer, jendela Electron, dan menu ikon tray. Perpindahannya diberitahukan lewat
+notice, jadi alamat dashboard yang benar tetap terlihat tanpa `--debug`.
+
+Terukur: dengan 3000 & 3001 sudah dipakai proses lain, instance kedua otomatis
+jalan dan `GET http://127.0.0.1:3002/status` melaporkan `port: 3002`,
+`transferPort: 3003`, `/dashboard` membalas HTTP 200.
+
+### Changed — port terpakai bukan lagi alasan batal di launcher TUI
+
+Dulu mode tray menolak jalan kalau port dipakai ("matiin dulu LAN DROP lain").
+Sekarang cuma catatan, karena server pindah port sendiri.
+
 ## [1.1.0] — 2026-11-01
 
 ### Added — LAN DROP bisa dipanggil dari folder mana saja (`lan-drop`)
