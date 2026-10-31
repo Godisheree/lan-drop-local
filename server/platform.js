@@ -4,7 +4,7 @@
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 
 function isTermux() {
   // Termux selalu set PREFIX ke /data/data/com.termux/files/usr
@@ -26,10 +26,20 @@ function getDataDir() {
 }
 
 // ===================== Save Dir (file diterima) =====================
-// Windows: file masuk ke D:\LAN-DROP dengan subfolder per kategori:
-//   Pictures (foto) · Videos · Documents · Music · sisanya di root.
-// Bisa dioverride lewat env LANDROP_SAVE_DIR (langsung ke folder itu, flat).
-const WINDOWS_SAVE_DIR = 'D:\\LAN-DROP';
+// Windows: file masuk ke %USERPROFILE%\Downloads\LAN-DROP dengan subfolder per
+// kategori: Pictures (foto) · Videos · Documents · Music · sisanya di root.
+//
+// Sengaja BUKAN drive tetap seperti dulu (`D:\LAN-DROP`): banyak laptop tidak
+// punya drive D, dan folder yang gagal dibuat bikin file mendarat di
+// `%APPDATA%\lan-drop\downloads` — folder tersembunyi yang user awam tidak akan
+// menemukan. `Downloads` selalu ada di Windows dan tempat yang orang cari duluan.
+//
+// Mau lokasi sendiri? LANDROP_SAVE_DIR=<folder> (langsung ke folder itu, flat).
+const WINDOWS_SAVE_DIR = path.join(
+  process.env.USERPROFILE || os.homedir(),
+  'Downloads',
+  'LAN-DROP'
+);
 const WINDOWS_SAVE_CATEGORIES = { photo: 'Pictures', video: 'Videos', doc: 'Documents', audio: 'Music' };
 
 function getWindowsSaveDir(category) {
@@ -298,4 +308,35 @@ function getDeviceName() {
   return cachedDeviceName;
 }
 
-module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, getSaveDirRoot, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, getOwnAddresses, isUsablePeerAddress, getDeviceName, resolveDeviceName, sanitizeDeviceName, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4 };
+// ===================== Buka Browser =====================
+/**
+ * Buka URL di browser default OS. Dipakai server saat start supaya dashboard
+ * gak perlu dicari manual.
+ *
+ * Gagal buka browser BUKAN error: server tetap jalan (banyak mesin headless /
+ * Termux tanpa `termux-tools`). Karena itu child-nya `detached` + `unref`, dan
+ * `error` ditelan.
+ *
+ * @param {string} url
+ * @returns {boolean} true kalau perintahnya berhasil diluncurkan (bukan berarti browsernya jadi terbuka)
+ */
+function openBrowser(url) {
+  const cmd = isWindows()
+    ? ['cmd', ['/c', 'start', '', url]] // `start` itu builtin cmd, jadi harus lewat cmd /c
+    : isTermux()
+      ? ['termux-open-url', [url]]
+      : process.platform === 'darwin'
+        ? ['open', [url]]
+        : ['xdg-open', [url]];
+
+  try {
+    const child = spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore' });
+    child.on('error', () => {});
+    child.unref();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, getSaveDirRoot, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, getOwnAddresses, isUsablePeerAddress, getDeviceName, resolveDeviceName, sanitizeDeviceName, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4, openBrowser };

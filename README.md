@@ -46,10 +46,11 @@ Stop: `Ctrl+C` di terminal. Ganti port: `PORT=4000 lan-drop`.
 | Env | Guna | Default |
 |---|---|---|
 | `PORT` | Port server | `3000` |
-| `LANDROP_SAVE_DIR` | Folder tujuan file yang diterima (flat, tanpa kategori) | `D:\LAN-DROP` (Windows) / `~/storage/pictures` (Termux) |
+| `LANDROP_SAVE_DIR` | Folder tujuan file yang diterima (flat, tanpa kategori) | `%USERPROFILE%\Downloads\LAN-DROP` (Windows) / `~/storage/pictures` (Termux) |
 | `LANDROP_DATA_DIR` | Folder history, pengaturan, buffer upload | `%APPDATA%\lan-drop` / `~/.lan-drop` |
 | `LANDROP_UPLOAD_DIR` | Folder buffer upload (khusus, kalau mau dipisah) | ikut data dir |
 | `LANDROP_MAX_UPLOAD_MB` | Batas ukuran satu file | `2048` |
+| `LANDROP_NO_BROWSER` | `1` = jangan buka dashboard di browser otomatis | (kosong) |
 | `LANDROP_PEERS` | Peer manual (`Nama@ip:port@transferPort`, dipisah `,`) | auto-discovery |
 
 ## Catatan

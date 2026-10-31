@@ -870,7 +870,7 @@ function decideAutoAccept(msg, resumeOffset = 0) {
 // ===================== TCP Server (Penerima) =====================
 function startTransferServer() {
   cleanupStale(); // buang upload & partial yang udah kedaluwarsa
-  ensureSaveDirExists(); // pastikan D:\LAN-DROP ada dari awal
+  ensureSaveDirExists(); // pastikan folder simpan (mis. Downloads\LAN-DROP) ada dari awal
   tcpServer = net.createServer((socket) => {
     console.log(`[Transfer] 📥 Incoming TCP connection from ${socket.remoteAddress}:${socket.remotePort}`);
     const parser = new FrameParser((msg) => {

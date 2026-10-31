@@ -30,6 +30,29 @@ Tarball npm cuma membawa berkas runtime (`tui.js`, `main.js`, `preload.js`,
 Terukur setelah install global: `lan-drop` dari folder lain menyalakan server dan
 `/dashboard` membalas HTTP 200.
 
+### Added — dashboard dibuka otomatis di browser
+
+Begitu server siap listen, dashboard-nya dibuka di browser default OS
+(`cmd /c start` di Windows, `termux-open-url` di Termux, `open`/`xdg-open` di
+macOS/Linux). Tiga pengecualian: di Electron (app sudah punya jendela sendiri),
+kalau bukan TTY (service, cron, skrip), dan kalau `LANDROP_NO_BROWSER=1`.
+Gagal buka browser bukan error — server tetap jalan.
+
+### Changed — folder simpan Windows tidak lagi hardcode drive D:
+
+Dulu semua file diterima mendarat di `D:\LAN-DROP\<kategori>`. Laptop yang tidak
+punya drive D berarti `mkdir` gagal (`ENOENT`), dan kode jatuh ke
+`%APPDATA%\lan-drop\downloads` — folder tersembunyi yang user awam tidak akan
+menemukan, walau file-nya tidak hilang.
+
+Sekarang default `%USERPROFILE%\Downloads\LAN-DROP` (selalu ada, tempat orang
+cari duluan) dengan subfolder kategori yang sama: Pictures · Videos · Documents ·
+Music. Mau lokasi sendiri, mis. tetap di drive D:
+
+```bash
+setx LANDROP_SAVE_DIR "D:\LAN-DROP"   # buka terminal baru setelah ini
+```
+
 ### Fixed — jendela dari ikon tray terasa lambat dibuka
 
 Klik ikon tray dulu menyisakan layar putih beberapa detik sebelum dashboard

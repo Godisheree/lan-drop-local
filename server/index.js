@@ -13,7 +13,7 @@ const history = require('./history');
 const settings = require('./settings');
 const thumbnail = require('./thumbnail');
 const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
-const { listLANIPv4, getDeviceName, getDataDir, getSaveDirRoot } = require('./platform');
+const { listLANIPv4, getDeviceName, getDataDir, getSaveDirRoot, openBrowser } = require('./platform');
 
 // Generate device name dari hostname atau environment variable
 const DEVICE_NAME = getDeviceName();
@@ -502,6 +502,22 @@ app.use((err, req, res, next) => {
 
 // ===================== Server Startup =====================
 
+/**
+ * Dashboard-nya dibuka otomatis di browser? Cuma untuk yang menjalankan manual
+ * di terminal — di situ browser memang yang dicari. Tiga pengecualian:
+ *  - Electron: app-nya punya jendela sendiri, browser tambahan cuma bikin bingung.
+ *  - Bukan TTY (service, cron, skrip, dipipe): browser mendadak muncul = gangguan.
+ *  - `LANDROP_NO_BROWSER=1` untuk yang tidak mau sama sekali.
+ * @returns {boolean}
+ */
+function shouldOpenBrowser() {
+  return (
+    !process.versions.electron &&
+    process.env.LANDROP_NO_BROWSER !== '1' &&
+    !!process.stdout.isTTY
+  );
+}
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   const ips = listLANIPv4();
   console.log(`LAN DROP server — Express on http://localhost:${PORT}`);
@@ -537,6 +553,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     `✅ LAN DROP aktif — dashboard: http://localhost:${PORT}/dashboard` +
       (otherAddr ? `  •  dari perangkat lain: http://${otherAddr}:${PORT}/dashboard` : '')
   );
+
+  // Paling akhir, setelah semua listener jalan: halaman yang dibuka langsung
+  // bisa dipakai (bukan "connection refused" sesaat).
+  if (shouldOpenBrowser()) openBrowser(`http://localhost:${PORT}/dashboard`);
 });
 
 // ===================== Graceful Shutdown =====================

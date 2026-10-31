@@ -55,4 +55,4 @@ login, tidak ada data yang keluar dari jaringan lokal.
 | Peer | Perangkat lain yang terlihat di jaringan |
 | Batch | Satu kiriman berisi beberapa file (dibgrupkan lewat `batchId`) |
 | Part file | File sementara `<nama>.landrop-part` selama transfer berjalan |
-| Save dir | Folder tujuan file diterima (`D:\LAN-DROP\<kategori>` di Windows) |
+| Save dir | Folder tujuan file diterima (`%USERPROFILE%\Downloads\LAN-DROP\<kategori>` di Windows) |
