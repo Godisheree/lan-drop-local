@@ -5,6 +5,19 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.1] — 2026-11-01
+
+### Changed — README ditulis dalam bahasa Inggris
+
+README adalah satu-satunya yang tampil di halaman npm (registry tidak punya tab
+changelog), jadi teksnya pindah ke Inggris supaya kebaca oleh pemakai luar.
+Isinya sama: pasang dari repo/global/GitHub, cara pakai + PIN, tabel environment,
+catatan ikon tray, dan ringkasan perubahan versi terbaru yang menautkan ke file
+ini. Dokumentasi lain (`docs/`, CHANGELOG) tetap bahasa Indonesia.
+
+`CHANGELOG.md` ikut dimasukkan ke daftar `files` di `package.json`, jadi catatan
+versi ini ikut terpasang bersama paketnya. Tidak ada perubahan kode.
+
 ## [1.2.0] — 2026-11-01
 
 ### Changed — bahasa UI: tanpa emoji, satu istilah untuk satu hal

@@ -1,90 +1,93 @@
 # LAN DROP
 
-Bagikan file antar perangkat di jaringan lokal lewat browser — tanpa cloud, tanpa
-setup, tanpa akun. HP buka dashboard, kirim file, dan file-nya mendarat langsung
-di folder simpan PC (atau sebaliknya).
+Share files between devices on your local network through the browser — no cloud,
+no setup, no account. Open the dashboard on your phone, send a file, and it lands
+straight in the save folder on your PC (or the other way around).
 
-## Pasang
+## Install
 
-Butuh Node.js 18+.
+Requires Node.js 18+.
 
-**Jalan dari repo** — dapat menu tombol panah + ikon tray:
+**Run it from the repo** — gives you the arrow-key menu and the tray icon:
 
 ```bash
 npm install
 npm start
 ```
 
-**Sebagai perintah `lan-drop`** — bisa dipanggil dari folder mana saja, tanpa
-harus `cd` ke folder repo dulu:
+**As the `lan-drop` command** — callable from any folder, no `cd` into the repo:
 
 ```bash
 npm i -g lan-drop-local
 lan-drop
 ```
 
-Belum terbit di npm registry? Pasang langsung dari GitHub — tanpa git, tanpa
-login, sama-sama bisa di PC dan Termux:
+Install straight from GitHub instead — no git, no login, works on both PC and
+Termux:
 
 ```bash
 npm i -g https://github.com/Godisheree/lan-drop-local/archive/refs/heads/main.tar.gz
 lan-drop
 ```
 
-## Pakai
+## Usage
 
-1. Jalankan `lan-drop` (atau `npm start`).
-2. Terminal menampilkan alamat dashboard, mis. `http://localhost:3000/dashboard`.
-   Buka itu di browser PC, atau alamat LAN-nya (`http://192.168.x.x:3000/dashboard`)
-   dari HP yang tersambung ke WiFi yang sama.
-3. **Halaman pantau (`/dashboard`) minta PIN.** PIN bawaannya `123456` — halaman
-   login menampilkan hint-nya selama kamu belum menggantinya. Ganti di dashboard
-   (kartu PIN) supaya orang lain di WiFi yang sama tidak bisa membuka riwayat
-   transfer dan log. Sekali masuk, browser itu diingat 24 jam. Yang ikut terkunci
-   bukan cuma halamannya: isi log (`/logs`) juga minta sesi itu, karena tiap barisnya
-   menyebut nama berkas, alamat IP, dan folder simpan.
-4. Kirim / terima file dari UI utama (`http://192.168.x.x:3000/`) — halaman ini
-   **tidak** dikunci, jadi HP tidak perlu mengetik apa pun buat mengirim.
+1. Run `lan-drop` (or `npm start`).
+2. The terminal prints the dashboard address, e.g. `http://localhost:3000/dashboard`.
+   Open it in the PC browser, or use the LAN address (`http://192.168.x.x:3000/dashboard`)
+   from a phone on the same Wi-Fi.
+3. **The monitor page (`/dashboard`) asks for a PIN.** The default PIN is `123456`,
+   and the login page shows that hint until you change it. Change it from the
+   dashboard (PIN card) so nobody else on the same Wi-Fi can open your transfer
+   history and logs. Once you sign in, that browser is remembered for 24 hours.
+   It is not only the page that stays locked: the log content (`/logs`) needs that
+   session too, because every line names the file, the IP address and the save
+   folder.
+4. Send and receive files from the main UI (`http://192.168.x.x:3000/`) — that
+   page is **not** locked, so your phone never has to type anything to send.
 
-Stop: `Ctrl+C` di terminal. Ganti port: `PORT=4000 lan-drop`. Kalau port itu
-sudah dipakai aplikasi lain, LAN DROP pindah sendiri ke port kosong berikutnya
-dan menampilkan alamat barunya — jadi tidak perlu dicari manual.
+Stop it with `Ctrl+C` in the terminal. Change the port with `PORT=4000 lan-drop`.
+If that port is already taken by another app, LAN DROP moves up to the next free
+port on its own and prints the new address — no manual hunting.
 
-## Pengaturan lewat environment
+## Environment settings
 
-| Env | Guna | Default |
+| Env | Purpose | Default |
 |---|---|---|
-| `PORT` | Port server (kalau sudah dipakai, LAN DROP naik ke port kosong di atasnya) | `3000` |
-| `LANDROP_SAVE_DIR` | Folder tujuan file yang diterima (flat, tanpa kategori) | `%USERPROFILE%\Downloads\LAN-DROP` (Windows) / `~/storage/pictures` (Termux) |
-| `LANDROP_DATA_DIR` | Folder history, pengaturan, buffer upload | `%APPDATA%\lan-drop` / `~/.lan-drop` |
-| `LANDROP_UPLOAD_DIR` | Folder buffer upload (khusus, kalau mau dipisah) | ikut data dir |
-| `LANDROP_MAX_UPLOAD_MB` | Batas ukuran satu file | `2048` |
-| `LANDROP_NO_BROWSER` | `1` = jangan buka dashboard di browser otomatis | (kosong) |
-| `LANDROP_PEERS` | Peer manual (`Nama@ip:port@transferPort`, dipisah `,`) | auto-discovery |
+| `PORT` | Server port (if taken, LAN DROP moves up to a free one) | `3000` |
+| `LANDROP_SAVE_DIR` | Where received files land (flat, no categories) | `%USERPROFILE%\Downloads\LAN-DROP` (Windows) / `~/storage/pictures` (Termux) |
+| `LANDROP_DATA_DIR` | Folder for history, settings and upload buffers | `%APPDATA%\lan-drop` / `~/.lan-drop` |
+| `LANDROP_UPLOAD_DIR` | Upload buffer folder (separate only if you want it) | follows the data dir |
+| `LANDROP_MAX_UPLOAD_MB` | Size limit per file | `2048` |
+| `LANDROP_NO_BROWSER` | `1` = do not open the dashboard in a browser automatically | (empty) |
+| `LANDROP_PEERS` | Manual peers (`Name@ip:port@transferPort`, comma-separated) | auto-discovery |
 
-## Catatan
+## Notes
 
-- **Ikon tray** cuma ada kalau Electron terpasang — yaitu kalau dijalankan dari
-  repo (`npm install` lalu `npm start`). Install global sengaja tidak membawa
-  Electron (240 MB) karena mode global fokus jadi server CLI.
-- **History & pengaturan** disimpan di luar folder install, jadi aman saat paket
-  di-update: `%APPDATA%\lan-drop` (Windows) atau `~/.lan-drop` (Termux/Linux).
+- **The tray icon only exists if Electron is installed** — that means running it
+  from the repo (`npm install` then `npm start`). The global install deliberately
+  leaves Electron out (240 MB), because global mode is meant to be a plain CLI
+  server.
+- **History and settings live outside the install folder**, so they survive
+  package updates: `%APPDATA%\lan-drop` (Windows) or `~/.lan-drop` (Termux/Linux).
 
-## Riwayat perubahan
+## Changelog
 
-Versi terbaru: **1.2.0**
+Latest version: **1.2.1** — README rewritten in English (no code changes).
 
-- Bahasa UI dirapikan: tanpa emoji, satu istilah untuk satu hal, istilah teknis
-  diganti kata sehari-hari. Aturannya di `docs/guides/bahasa-ui.md`.
-- 15 temuan audit keamanan ditutup (1 kritis, 3 high, 4 medium, 7 low/info) —
-  thumbnail dan riwayat tidak lagi bocor ke pemanggil tanpa sesi PIN.
-- Sesi PIN jadi 24 jam (sebelumnya 30 hari) dan cookie-nya tidak disimpan
-  permanen di browser.
-- Diuji di jalur Wi-Fi nyata, bukan cuma loopback.
+### 1.2.0
 
-Catatan lengkap tiap versi:
+- UI wording cleaned up: no emoji, one term for one thing, technical jargon
+  replaced with everyday words. The rules live in `docs/guides/bahasa-ui.md`.
+- 15 security audit findings closed (1 critical, 3 high, 4 medium, 7 low/info) —
+  thumbnails and history no longer leak to callers without a PIN session.
+- PIN sessions now last 24 hours (before: 30 days) and the cookie is no longer
+  stored permanently in the browser.
+- Tested on a real Wi-Fi path, not just loopback.
+
+Full release notes for every version:
 [CHANGELOG.md](https://github.com/Godisheree/lan-drop-local/blob/main/CHANGELOG.md).
 
-## Lisensi
+## License
 
 ISC.
