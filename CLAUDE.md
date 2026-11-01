@@ -172,6 +172,9 @@ Struktur lengkap: [docs/guides/frontend-architecture.md](docs/guides/frontend-ar
   Berhenti saat tab disembunyikan.
 - **Naikkan `CACHE_VERSION` di `public/sw.js` setiap kali shell berubah.**
   Kalau tidak, user bisa melihat UI versi lama setelah update.
+- Elemen wajib yang hilang saat init = gejala cache, bukan bug fitur: biarkan
+  `healStaleShell()` (fitur/pwa.js) membuang cache lalu memuat ulang sekali
+  sebelum menampilkan pesan galat ke user.
 
 **Service worker** hanya diregistrasi di secure context (HTTPS/localhost) —
 di LAN HTTP browser mengabaikannya. Lihat ADR-0004.

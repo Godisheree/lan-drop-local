@@ -5,6 +5,27 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [Belum dirilis]
+
+### Fixed — UI memulihkan sendiri saat shell service worker tertinggal
+
+Kalau HTML dan JS yang jalan di browser berasal dari versi berbeda (cache
+service worker tertinggal sesudah update), elemen wajib hilang dari DOM dan UI
+mati dengan pesan teknis `Gagal memuat aplikasi: Elemen #... tidak ditemukan di
+DOM`. Sekarang kondisi itu dikenali sebagai gejala cache: cache dibuang, service
+worker dilepas, halaman dimuat ulang sekali, lalu jalan normal.
+
+Dibatasi satu kali per sesi — kalau setelah dimuat ulang elemennya masih tidak
+ada, berarti memang bug asli dan barulah pesannya ditampilkan, jadi halaman
+tidak pernah masuk loop reload.
+
+- `public/js/features/pwa.js` — `healStaleShell()` + `markShellHealthy()`
+- `public/js/main.js` — init yang gagal karena elemen hilang memicu pemulihan itu
+- `public/js/dashboard.js` — cek elemen sebelum module membacanya di scope atas
+- `public/sw.js` — `CACHE_VERSION` naik ke `landrop-shell-v13`
+
+Belum dipublikasikan ke npm.
+
 ## [1.2.1] — 2026-11-01
 
 ### Changed — README ditulis dalam bahasa Inggris

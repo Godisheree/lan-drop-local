@@ -16,6 +16,13 @@
 import { api, postJson } from './core/api.js';
 import { el, clear, byId } from './core/dom.js';
 import { formatBytes, formatDuration, formatDateTime, formatTime, formatSpeed } from './core/format.js';
+import { healStaleShell, markShellHealthy } from './features/pwa.js';
+
+// Shell service worker yang tertinggal (HTML dan JS beda versi) bikin elemen di
+// bawah hilang. Module ini membacanya di scope atas, jadi gagalnya senyap tanpa
+// pesan ke user. Hilang → pulihkan cache; utuh → buka kunci pemulihan sesi ini.
+if (document.getElementById('dashDevice')) markShellHealthy();
+else healStaleShell();
 
 // ---------------------------------------------------------------------------
 // Konstanta

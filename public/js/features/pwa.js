@@ -109,6 +109,58 @@ export function applyUpdate() {
 }
 
 /**
+ * Buang cache + lepas service worker, lalu muat ulang sekali.
+ *
+ * Dipakai saat aplikasi mati karena elemen wajib tidak ada di DOM: itu gejala
+ * shell service worker tertinggal (HTML dan JS dari versi berbeda), bukan bug
+ * fitur. Dibatasi sekali per sesi — kalau setelah muat ulang masih gagal,
+ * elemennya memang benar tidak ada, dan halaman tidak boleh masuk loop reload.
+ *
+ * @returns {Promise<boolean>} true kalau halaman sedang dimuat ulang
+ */
+export async function healStaleShell() {
+  const KEY = 'landrop-shell-heal';
+
+  try {
+    if (sessionStorage.getItem(KEY)) return false;
+    sessionStorage.setItem(KEY, '1');
+  } catch (_) {
+    // Tanpa sessionStorage tidak ada cara membatasi loop — jangan muat ulang.
+    return false;
+  }
+
+  try {
+    if (self.caches) {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name)));
+    }
+  } catch (err) {
+    console.warn('[pwa] gagal menghapus cache shell:', err.message);
+  }
+
+  try {
+    const registrations = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  } catch (err) {
+    console.warn('[pwa] gagal melepas service worker:', err.message);
+  }
+
+  location.reload();
+  return true;
+}
+
+/**
+ * Shell sudah konsisten (init berhasil) — buka lagi izin healStaleShell().
+ */
+export function markShellHealthy() {
+  try {
+    sessionStorage.removeItem('landrop-shell-heal');
+  } catch (_) {
+    // Tidak penting.
+  }
+}
+
+/**
  * Tangkap event install prompt supaya bisa dipakai tombol "Pasang aplikasi".
  */
 export function setupInstallPrompt() {

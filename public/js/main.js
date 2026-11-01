@@ -23,7 +23,7 @@ import { setupPaste } from './features/paste.js';
 import { setupAutoApprove, renderAutoApprove } from './features/autoapprove.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
-import { initPwa, applyUpdate } from './features/pwa.js';
+import { initPwa, applyUpdate, healStaleShell, markShellHealthy } from './features/pwa.js';
 import { initLiveRegion, showToast, clearBadge } from './features/notify.js';
 import { initMobileHardening } from './features/mobile.js';
 import { initShortcuts, registerShortcut, closeTopModal, hasOpenModal } from './features/a11y.js';
@@ -407,6 +407,9 @@ async function init() {
 
   // Perbarui badge tab secara berkala.
   setInterval(updateActivityBadge, 1000);
+
+  // Sampai sini semua elemen wajib sudah ketemu — shell dianggap sehat.
+  markShellHealthy();
 }
 
 // Hentikan polling saat tab disembunyikan — hemat baterai di HP.
@@ -420,7 +423,12 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('beforeunload', stopPolling);
 
-init().catch((err) => {
+init().catch(async (err) => {
   console.error('[app] gagal init:', err);
+  // Elemen wajib hilang = gejala HTML dan JS beda versi (cache service worker
+  // tertinggal). Buang cache lalu muat ulang sekali sebelum menyerah — biar
+  // user tidak melihat pesan teknis untuk masalah cache.
+  const stale = /tidak ditemukan di DOM/.test(err.message || '');
+  if (stale && await healStaleShell()) return;
   showToast('Gagal memuat aplikasi: ' + err.message, 'error');
 });
