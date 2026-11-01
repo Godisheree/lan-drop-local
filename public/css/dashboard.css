@@ -84,8 +84,11 @@ body.dash {
   color: var(--text-on-accent);
 }
 
+/* Hover menggelap, bukan pindah ke --accent yang lebih terang: teks
+   --text-on-accent di atas --accent cuma 2,85:1 (gagal AA). Lihat ADR-0010. */
 .dash-btn-primary:hover {
-  background: var(--accent);
+  background: var(--accent-strong);
+  filter: brightness(0.92);
 }
 
 .dash-btn-danger {

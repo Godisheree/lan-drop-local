@@ -2,6 +2,7 @@
    Design Token — sumber tunggal semua warna, spacing, radius, dan shadow.
    Dark mode menimpa nilai token, bukan selector.
    Lihat docs/adr/0003-dark-mode-via-tokens.md
+   Palet aksen oren + mark logo: docs/adr/0010-brand-color-dan-logo.md
    ========================================================================== */
 
 :root {
@@ -24,24 +25,27 @@
   --text-muted: #6E7480;
   --text-on-accent: #FFFFFF;
 
-  /* --- Aksen -------------------------------------------------------- */
+  /* --- Aksen (oren) ------------------------------------------------ */
   /* --accent        dekoratif (progress bar, focus ring, titik) */
-  /* --accent-strong 4,63:1 di --bg-surface, dan 4,63:1 teks putih di atasnya */
-  --accent: #5B8DEF;
-  --accent-strong: #3B6FE0;
-  --accent-soft: rgba(91, 141, 239, 0.12);
-  --accent-softer: rgba(91, 141, 239, 0.07);
+  /* --accent-strong 5,18:1 di --bg-surface, dan 5,18:1 teks putih di atasnya */
+  --accent: #FF6B1A;
+  --accent-strong: #C2410C;
+  --accent-soft: rgba(255, 107, 26, 0.12);
+  --accent-softer: rgba(255, 107, 26, 0.07);
 
   /* --- Status ------------------------------------------------------- */
+  /* --warning digeser ke kuning-amber: oranye lama (#FF9500) cuma beda
+     1,30:1 dari --accent oren, jadi arti "peringatan" ikut ketuker. */
+  /* --warning-text 5,38:1 di --bg-surface */
   --success: #34C759;
   --success-text: #1B873F;
   --success-soft: rgba(52, 199, 89, 0.12);
   --danger: #FF3B30;
   --danger-text: #C62828;
   --danger-soft: rgba(255, 59, 48, 0.10);
-  --warning: #FF9500;
-  --warning-text: #9A6400;
-  --warning-soft: rgba(255, 149, 0, 0.14);
+  --warning: #F2B705;
+  --warning-text: #8A6400;
+  --warning-soft: rgba(242, 183, 5, 0.16);
 
   /* --- Garis & bayangan --------------------------------------------- */
   --border-subtle: rgba(22, 24, 29, 0.08);
@@ -109,10 +113,10 @@
     --text-muted: #8B94A5;
     --text-on-accent: #0B0D11;
 
-    --accent: #7AA5F5;
-    --accent-strong: #8FB6FF;
-    --accent-soft: rgba(122, 165, 245, 0.16);
-    --accent-softer: rgba(122, 165, 245, 0.09);
+    --accent: #FF7A1F;
+    --accent-strong: #FF9A5C;
+    --accent-soft: rgba(255, 122, 31, 0.16);
+    --accent-softer: rgba(255, 122, 31, 0.09);
 
     --success: #3DD866;
     --success-text: #5DD68A;
@@ -120,9 +124,9 @@
     --danger: #FF6B60;
     --danger-text: #FF8A80;
     --danger-soft: rgba(255, 107, 96, 0.14);
-    --warning: #FFB020;
-    --warning-text: #FFB84D;
-    --warning-soft: rgba(255, 176, 32, 0.16);
+    --warning: #FFCC00;
+    --warning-text: #FFC93C;
+    --warning-soft: rgba(255, 204, 0, 0.16);
 
     --border-subtle: rgba(255, 255, 255, 0.10);
     --border-strong: rgba(255, 255, 255, 0.20);
@@ -149,10 +153,10 @@
   --text-muted: #8B94A5;
   --text-on-accent: #0B0D11;
 
-  --accent: #7AA5F5;
-  --accent-strong: #8FB6FF;
-  --accent-soft: rgba(122, 165, 245, 0.16);
-  --accent-softer: rgba(122, 165, 245, 0.09);
+  --accent: #FF7A1F;
+  --accent-strong: #FF9A5C;
+  --accent-soft: rgba(255, 122, 31, 0.16);
+  --accent-softer: rgba(255, 122, 31, 0.09);
 
   --success: #3DD866;
   --success-text: #5DD68A;
@@ -160,9 +164,9 @@
   --danger: #FF6B60;
   --danger-text: #FF8A80;
   --danger-soft: rgba(255, 107, 96, 0.14);
-  --warning: #FFB020;
-  --warning-text: #FFB84D;
-  --warning-soft: rgba(255, 176, 32, 0.16);
+  --warning: #FFCC00;
+  --warning-text: #FFC93C;
+  --warning-soft: rgba(255, 204, 0, 0.16);
 
   --border-subtle: rgba(255, 255, 255, 0.10);
   --border-strong: rgba(255, 255, 255, 0.20);

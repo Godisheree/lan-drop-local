@@ -5,6 +5,33 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.3.0] — 2026-11-01
+
+### Changed — warna aksen oren + mark logo baru
+
+Aksen pindah dari biru (`#5B8DEF`) ke oren. Netral hitam→abu tetap, hijau/merah
+tetap dipakai untuk status transfer — dua warna itu tidak boleh jadi aksen karena
+sudah berarti "berhasil" dan "gagal" (prinsip UI/UX #2). Karena itu `--warning`
+ikut digeser ke kuning-amber (`#F2B705`): oranye lama cuma beda 1,30:1 dari
+aksen baru, jadi "peringatan" terbaca sebagai "aksi".
+
+Kontras aksen naik: `--accent-strong` terang 4,63:1 → 5,18:1, mode gelap
+`--accent` 6,55:1. Hover tombol primary sekarang menggelap
+(`filter: brightness(0.92)`) alih-alih pindah ke `--accent` yang lebih terang —
+teks di atas `--accent` cuma 2,85:1 dan gagal WCAG AA.
+
+Logo: mark dibuat ulang jadi squircle gradien oren dengan panah turun bergaris
+dasar ("drop"). Bentuk yang sama dipakai ikon PWA dan favicon dinamis.
+
+- `public/css/tokens.css` — aksen oranye + `--warning` kuning-amber (terang & gelap)
+- `public/css/dashboard.css` — hover tombol primary menggelap
+- `public/js/main.js`, `public/js/features/notify.js` — hex lama dibuang, ikut token
+- `scripts/generate-icons.js` — squircle + gradien + garis dasar, `npm run icons`
+- `public/icons/*.png` — dirender ulang
+- `public/manifest.webmanifest` — `theme_color` `#C2410C`
+- `public/sw.js` — `CACHE_VERSION` naik ke `landrop-shell-v14`
+- `docs/adr/0010-brand-color-dan-logo.md`, `docs/guides/qa-checklist.md` — kontras baru
+
 ## [1.2.2] — 2026-11-01
 
 ### Fixed — UI memulihkan sendiri saat shell service worker tertinggal

@@ -142,10 +142,21 @@ function renderFaviconBadge(count) {
 
   ctx.clearRect(0, 0, 64, 64);
 
-  // Ikon dasar: lingkaran biru dengan glyph drop
-  ctx.fillStyle = '#5B8DEF';
+  // Ikon dasar: squircle gradien oren + glyph drop (lihat docs/adr/0010).
+  // arcTo dipakai, bukan roundRect — aman di WebView Android lama.
+  const grad = ctx.createLinearGradient(0, 0, 64, 64);
+  grad.addColorStop(0, '#FF7A1F');
+  grad.addColorStop(1, '#C2410C');
+  ctx.fillStyle = grad;
+
+  const R = 14;
   ctx.beginPath();
-  ctx.arc(32, 32, 30, 0, Math.PI * 2);
+  ctx.moveTo(2 + R, 2);
+  ctx.arcTo(62, 2, 62, 62, R);
+  ctx.arcTo(62, 62, 2, 62, R);
+  ctx.arcTo(2, 62, 2, 2, R);
+  ctx.arcTo(2, 2, 62, 2, R);
+  ctx.closePath();
   ctx.fill();
 
   ctx.fillStyle = '#ffffff';

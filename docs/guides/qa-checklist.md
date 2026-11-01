@@ -131,8 +131,12 @@ Pasangan ini sudah dihitung dan harus tetap berlaku:
 | `--text-primary` di `--bg-surface` | 16,1:1 | 4,5:1 |
 | `--text-secondary` di `--bg-surface` | 5,96:1 | 4,5:1 |
 | `--text-muted` di `--bg-surface` | 4,62:1 | 4,5:1 |
-| `--accent-strong` di `--bg-surface` | 4,63:1 | 4,5:1 |
-| teks putih di `--accent-strong` | 4,63:1 | 4,5:1 |
+| `--accent-strong` di `--bg-surface` | 5,18:1 | 4,5:1 |
+| teks putih di `--accent-strong` | 5,18:1 | 4,5:1 |
+| `--warning-text` di `--bg-surface` | 5,38:1 | 4,5:1 |
+| gelap: `--accent` di `--bg-surface` (`#FF7A1F` di `#181C23`) | 6,55:1 | 4,5:1 |
+| gelap: `--accent-strong` di `--bg-surface` (`#FF9A5C`) | 8,16:1 | 4,5:1 |
+| gelap: `--warning-text` di `--bg-surface` (`#FFC93C`) | 11,12:1 | 4,5:1 |
 | `--success-text` di `--bg-surface` | 4,58:1 | 4,5:1 |
 | `--danger-text` di `--bg-surface` | 5,62:1 | 4,5:1 |
 

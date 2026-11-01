@@ -9,7 +9,7 @@
   "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "any",
   "background_color": "#F7F7F9",
-  "theme_color": "#F7F7F9",
+  "theme_color": "#C2410C",
   "color_scheme": "light dark",
   "lang": "id",
   "dir": "ltr",

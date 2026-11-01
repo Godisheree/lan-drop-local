@@ -277,7 +277,7 @@ function initRippleBackground() {
   const readAccent = () => {
     const value = getComputedStyle(document.documentElement)
       .getPropertyValue('--accent').trim();
-    return value || '#5B8DEF';
+    return value || '#C2410C';
   };
   let accent = readAccent();
 

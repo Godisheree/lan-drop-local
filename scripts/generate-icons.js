@@ -6,8 +6,9 @@
  * CRC32 diimplementasikan sendiri. Rendering pakai supersampling 4x lalu
  * downsample, jadi tepinya halus.
  *
- * Ikon dibuat dari bentuk yang sama dengan favicon & badge di notify.js:
- * lingkaran biru + panah turun putih.
+ * Mark: squircle gradien oren + panah turun dengan garis dasar ("drop").
+ * Bentuk yang sama dipakai favicon dinamis di public/js/features/notify.js.
+ * Lihat docs/adr/0010-brand-color-dan-logo.md.
  *
  * Usage: node scripts/generate-icons.js
  * Output: public/icons/*.png
@@ -99,16 +100,29 @@ function encodePng(width, height, rgba) {
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
-const BLUE = [0x5b, 0x8d, 0xef];
+// Aksen dari public/css/tokens.css (--accent → --accent-strong, mode terang).
+const ACCENT_START = [0xff, 0x6b, 0x1a];
+const ACCENT_END = [0xc2, 0x41, 0x0c];
 const WHITE = [0xff, 0xff, 0xff];
 
 /**
- * Whether a point (in normalized 0..1 space) is inside the glyph.
+ * Warna latar pada satu titik: gradien diagonal, atau satu warna kalau dipaksa.
  *
- * @param {number} nx - x / size
- * @param {number} ny - y / size
- * @returns {{inside: boolean, color: number[]}|null}
+ * @param {number} nx - x / size (0..1)
+ * @param {number} ny - y / size (0..1)
+ * @param {number[]|null} background
+ * @returns {number[]}
  */
+function backgroundColor(nx, ny, background) {
+  if (background) return background;
+  const t = Math.max(0, Math.min(1, (nx + ny) / 2));
+  return [
+    ACCENT_START[0] + (ACCENT_END[0] - ACCENT_START[0]) * t,
+    ACCENT_START[1] + (ACCENT_END[1] - ACCENT_START[1]) * t,
+    ACCENT_START[2] + (ACCENT_END[2] - ACCENT_START[2]) * t,
+  ];
+}
+
 /**
  * Jarak titik ke segmen garis.
  *
@@ -132,15 +146,24 @@ function distanceToSegment(px, py, x1, y1, x2, y2) {
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
+/**
+ * Apakah titik ada di dalam glyph (panah turun + garis dasar).
+ *
+ * @param {number} nx - x / size
+ * @param {number} ny - y / size
+ * @returns {{inside: boolean, color: number[]}|null}
+ */
 function sampleGlyph(nx, ny) {
-  // Panah turun: batang vertikal + kepala chevron (dua garis miring).
+  // Panah turun: batang vertikal + kepala chevron + garis dasar ("drop").
   const cx = 0.5;
   const STEM_HALF = 0.068;
-  const STEM_TOP = 0.19;
-  const STEM_BOTTOM = 0.56;
-  const HEAD_TOP = 0.44;
-  const TIP_Y = 0.79;
+  const STEM_TOP = 0.16;
+  const STEM_BOTTOM = 0.50;
+  const HEAD_TOP = 0.38;
+  const TIP_Y = 0.68;
   const HEAD_HALF = 0.175;
+  const BASE_Y = 0.82;
+  const BASE_HALF = 0.24;
   const STROKE = 0.05;
 
   // Batang vertikal
@@ -159,6 +182,11 @@ function sampleGlyph(nx, ny) {
     return { inside: true, color: WHITE };
   }
 
+  // Garis dasar — bagian "drop" (sesuatu yang jatuh ke sebuah permukaan).
+  if (Math.abs(ny - BASE_Y) <= STROKE && Math.abs(nx - cx) <= BASE_HALF) {
+    return { inside: true, color: WHITE };
+  }
+
   return null;
 }
 
@@ -168,15 +196,15 @@ function sampleGlyph(nx, ny) {
  * @param {number} size - output size in pixels
  * @param {Object} [opts]
  * @param {boolean} [opts.maskable] - full-bleed background, smaller glyph
- * @param {boolean} [opts.transparent] - no background circle
- * @param {number[]} [opts.background] - background color
+ * @param {boolean} [opts.transparent] - no background shape
+ * @param {number[]} [opts.background] - warna latar paksa (default: gradien aksen)
  * @returns {Buffer} RGBA
  */
 function renderIcon(size, opts = {}) {
   const {
     maskable = false,
     transparent = false,
-    background = BLUE,
+    background = null,
   } = opts;
 
   const SS = 4; // supersampling factor
@@ -184,6 +212,11 @@ function renderIcon(size, opts = {}) {
 
   // Glyph gets smaller for maskable (safe zone is the inner 80%).
   const glyphScale = maskable ? 0.62 : 1;
+
+  // Squircle: setengah sisi + radius sudut, dalam fraksi sisi.
+  const HALF = 0.44;
+  const CORNER = 0.16;
+  const STRAIGHT = HALF - CORNER;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -201,18 +234,21 @@ function renderIcon(size, opts = {}) {
 
           if (maskable) {
             // Full-bleed background
-            color = background;
+            color = backgroundColor(nx, ny, background);
             alpha = 255;
           } else if (transparent) {
             color = null;
             alpha = 0;
           } else {
-            // Circle background
-            const dx = nx - 0.5;
-            const dy = ny - 0.5;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist <= 0.48) {
-              color = background;
+            // Squircle background
+            const dx = Math.abs(nx - 0.5);
+            const dy = Math.abs(ny - 0.5);
+            const inside = dx <= HALF && dy <= HALF
+              && !(dx > STRAIGHT && dy > STRAIGHT
+                && Math.hypot(dx - STRAIGHT, dy - STRAIGHT) > CORNER);
+
+            if (inside) {
+              color = backgroundColor(nx, ny, background);
               alpha = 255;
             }
           }
