@@ -73,7 +73,16 @@ port on its own and prints the new address — no manual hunting.
 
 ## Changelog
 
-Latest version: **1.2.1** — README rewritten in English (no code changes).
+Latest version: **1.2.2** — the UI now recovers by itself when a stale service
+worker shell leaves it half-broken (reported on Android: a red
+"element #... not found in DOM" toast that stopped the page before it started;
+cause was cached JavaScript from an older version, not a broken feature). The
+cache is dropped, the service worker is released, and the page reloads once —
+at most once per session, so it can never loop. No API changes.
+
+### 1.2.1
+
+README rewritten in English (no code changes).
 
 ### 1.2.0
 

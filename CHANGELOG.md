@@ -5,7 +5,7 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
-## [Belum dirilis]
+## [1.2.2] — 2026-11-01
 
 ### Fixed — UI memulihkan sendiri saat shell service worker tertinggal
 
@@ -23,8 +23,6 @@ tidak pernah masuk loop reload.
 - `public/js/main.js` — init yang gagal karena elemen hilang memicu pemulihan itu
 - `public/js/dashboard.js` — cek elemen sebelum module membacanya di scope atas
 - `public/sw.js` — `CACHE_VERSION` naik ke `landrop-shell-v13`
-
-Belum dipublikasikan ke npm.
 
 ## [1.2.1] — 2026-11-01
 
