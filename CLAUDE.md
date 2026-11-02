@@ -179,10 +179,14 @@ Struktur lengkap: [docs/guides/frontend-architecture.md](docs/guides/frontend-ar
 **Service worker** hanya diregistrasi di secure context (HTTPS/localhost) —
 di LAN HTTP browser mengabaikannya. Lihat ADR-0004.
 
-**Upload flow:** drag file ke device card (atau tombol file picker) → upload via
-multer `/transfer/upload` (XHR, ada progres) → request `/transfer/request` → poll
-`/transfer/status/:id` sampai accepted → trigger `/transfer/send-file` → poll
-`/transfer/progress/:id`. Receiver polls `/transfer/pending`, shows modal on new
+**Upload flow:** drag file ke device card (atau tombol file picker) → `/transfer/request`
+dulu (cuma nama + ukuran) → poll `/transfer/status/:id` sampai accepted → **baru**
+upload ke multer `/transfer/upload` (XHR, ada progres) → trigger `/transfer/send-file`
+→ poll `/transfer/progress/:id`. Urutan ini disengaja: file 2 GB yang ditolak tidak
+boleh kepindah satu byte pun, dan penerima harus dapat dialog seketika. Jeda antara
+"Terima" dan `file-start` karena itu bisa menit-an — `startRawReceive` TIDAK boleh
+memasang timeout socket (dijaga `scripts/check-send-flow.js`; perilakunya diuji di
+`check-autoapprove.js`). Receiver polls `/transfer/pending`, shows modal on new
 request, accept/reject via `/transfer/respond`.
 
 **Panel Sambung:** `GET /me` mengembalikan `{ deviceName, urls[] }`. Frontend
@@ -223,7 +227,7 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 
 - **Frame parser must be removed** from socket before raw streaming — `socket.removeListener('data', handler)` in both `startRawReceive` and `startFileSend`. A stuck parser corrupts the file stream.
 - **`{ end: false }` in `readStream.pipe(socket)`** — sender must not close the socket after piping; receiver closes it to confirm completion.
-- **Upload-then-send:** browser can't provide `filePath`, so frontend uploads to own server first via multer, then uses the returned server-side path for TCP streaming.
+- **Ask-then-upload:** browser can't provide `filePath`, so the frontend sends `/transfer/request` first and only after the peer accepts does it upload via multer and pass the returned server-side path to TCP streaming. Never upload before the request: a rejected 2 GB file would already have crossed the wire.
 - **Cached ffmpeg detection:** `checkFfmpeg()` runs once, caches result in `_ffmpegPath` module variable (undefined=unchecked, false=not found, string=path).
 - **Hardlink/symlink fallback:** multer saves files without extension, so transcoding creates temp link with correct extension before passing to ffmpeg.
 - **requestId is per-side:** sender and receiver generate their own requestIds for the same transfer — never sync them across devices. Match incoming requests on the receiver via `batchId` + `fileName`.
