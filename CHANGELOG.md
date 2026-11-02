@@ -5,6 +5,20 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.5] — 2026-11-03
+
+### Fixed — `LANDROP_SAVE_DIR` dihormati di Linux/Termux
+
+Variabel yang dijanjikan README itu cuma dibaca lewat `getWindowsSaveDir()`,
+jadi di luar Windows isinya diabaikan: folder tujuan tetap `<data dir>/downloads`
+walaupun user sudah menyetel folder sendiri. Sekarang override dibaca paling
+atas `resolveSaveDir()`, berlaku untuk semua platform.
+
+Ketahuan dari CI GitHub Actions yang baru dipasang: `npm test` di ubuntu-latest
+merah di pemeriksaan "file mendarat di folder simpan" (Node 18, 20, dan 22),
+sementara di Windows lolos karena kebetulan lewat jalur Windows. Rilis 1.2.4
+di npm terlanjur membawa bug ini.
+
 ## [1.2.4] — 2026-11-03
 
 ### Fixed — buffer upload pindah ke data dir + file ditolak langsung dihapus

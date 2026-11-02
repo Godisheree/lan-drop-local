@@ -75,9 +75,15 @@ port on its own and prints the new address — no manual hunting.
 
 ## Changelog
 
-Latest version: **1.2.4** — this release carries the security work below (64 KB TCP
+Latest version: **1.2.5** — this release carries the security work below (64 KB TCP
 frame cap, `Host` guard against DNS rebinding), so `npm i -g lan-drop-local` finally
 gets it.
+
+### 1.2.5
+
+- Fixed: `LANDROP_SAVE_DIR` was ignored outside Windows, so received files landed in
+  `<data dir>/downloads` instead of the folder you configured. Found by the new CI
+  (ubuntu-latest failed "file mendarat di folder simpan" on Node 18/20/22).
 
 ### 1.2.4
 
