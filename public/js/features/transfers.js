@@ -210,9 +210,13 @@ export function addTransferItem(requestId, data) {
     status: data.status,
   });
 
-  if (data.filePath) {
+  if (data.filePath || data.file) {
     meta.set(requestId, {
       filePath: data.filePath,
+      // Objek File ikut disimpan: alur kirim sekarang meng-upload SETELAH
+      // penerima setuju, jadi saat "Kirim ulang" file-nya belum tentu ada di
+      // buffer server dan harus di-upload lagi dari objek ini.
+      file: data.file,
       fileName: data.fileName,
       fileSize: data.fileSize,
       batchId: data.batchId,
@@ -666,12 +670,15 @@ export async function retryTransfer(requestId, onResent) {
       statusText: 'Menunggu diterima...',
       batchId: info.batchId,
       filePath: info.filePath,
+      file: info.file,
       ip: info.ip,
       port: info.port,
     });
 
     showToast('↻ Mengirim ulang...', 'info');
-    if (onResent) onResent(newId);
+    // `info` ikut dikirim: pemanggil butuh `file` (kalau masih ada) untuk
+    // meng-upload ulang, karena file baru di-upload setelah penerima setuju.
+    if (onResent) onResent(newId, info);
   } catch (err) {
     showToast('Gagal mengirim ulang: ' + err.message, 'error');
   }

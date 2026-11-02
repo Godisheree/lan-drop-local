@@ -5,6 +5,38 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [Belum dirilis]
+
+### Changed — minta izin dulu, upload belakangan
+
+`sendBatch()` dulu meng-upload seluruh file ke server sendiri **sebelum**
+`/transfer/request` dikirim. Akibatnya dialog "Terima?" di perangkat tujuan baru
+muncul setelah upload selesai (video 2 GB bisa menit-an), dan kalau ditolak semua
+byte sudah kepindah percuma.
+
+Sekarang urutannya: `/transfer/request` (nama + ukuran saja, beberapa ratus byte)
+→ penerima setuju → upload dengan progres → `/transfer/send-file` → streaming.
+Penolakan berhenti sebelum satu byte bergerak, dan dialog muncul seketika.
+
+Konsekuensi protokol yang ikut dijaga: jeda antara "Terima" dan frame `file-start`
+kini bisa menit-an untuk file besar, jadi `startRawReceive` tidak boleh memasang
+timeout socket (memang tidak ada) — dikunci `scripts/check-send-flow.js`, dan
+perilakunya diuji dengan jeda 1,5 detik di `check-autoapprove.js`.
+
+- `public/js/features/send.js` — `uploadThenStart()`: upload per file setelah ACC,
+  lalu streaming. Batal saat upload ikut menutup permintaan di server, jadi
+  penerima tidak menggantung menunggu byte yang tak akan datang.
+- `public/js/features/transfers.js`, `public/js/main.js` — "Kirim ulang" sekarang
+  menunggu ACC lalu upload + streaming. Dulu callback-nya cuma memperbarui badge,
+  jadi item hasil kirim-ulang berhenti di status "menunggu" selamanya.
+- `scripts/check-send-flow.js` (+ `npm run check:send-flow`, masuk `npm test`) —
+  menjaga urutan izin-dulu dan melarang timeout di `startRawReceive`.
+
+Terima otomatis tidak berubah perilakunya: keputusannya tetap dari metadata
+(nama, ukuran, ruang disk) dan tetap diuji `check-autoapprove.js` — 15 → 18
+pemeriksaan, termasuk jalur berjeda. `npm test` 323 → 335 pemeriksaan;
+`npm run e2e` 48/48 di Chrome nyata (termasuk batal & kirim batch).
+
 ## [1.2.5] — 2026-11-03
 
 ### Fixed — `LANDROP_SAVE_DIR` dihormati di Linux/Termux

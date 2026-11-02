@@ -76,104 +76,77 @@ function uploadFiles(files, onProgress, signal) {
 export async function sendBatch(target, files) {
   if (!files || files.length === 0) return;
 
-  const state = getState();
-  const batchId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  const controller = new AbortController();
-  uploadControllers.set(batchId, controller);
+  // Urutan: MINTA IZIN DULU, upload belakangan.
+  //
+  // Dulu file di-upload utuh ke server ini sebelum permintaan dikirim. Untuk
+  // video 2 GB itu artinya: user nunggu upload kelar, penerima baru dapat
+  // dialog "Terima?", dan kalau ditolak semua byte itu sudah kepindah. Sekarang
+  // yang dikirim duluan cuma metadata (nama + ukuran, beberapa ratus byte),
+  // jadi dialog muncul seketika dan penolakan berhenti sebelum satu byte pun
+  // bergerak.
+  const { postJson } = await import('../core/api.js');
+  const batchId = files.length > 1
+    ? Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+    : undefined;
+  const batchLabel = `Kirim ke ${target.targetName}`;
 
-  // Tampilkan item "mengupload" lebih dulu supaya user punya feedback.
-  const placeholderId = `upload-${batchId}`;
-  addTransferItem(placeholderId, {
-    direction: 'send',
-    fileName: files.length === 1 ? files[0].name : `${files.length} file`,
-    fileSize: files.reduce((sum, f) => sum + f.size, 0),
-    targetName: target.targetName,
-    status: 'waiting',
-    statusText: `Mengunggah ${files.length} file (0%)…`,
-    batchId: files.length > 1 ? batchId : undefined,
-    batchSize: files.length,
-    batchLabel: `Kirim ke ${target.targetName}`,
-  });
+  let sent = 0;
 
-  let uploaded;
-  try {
-    uploaded = await uploadFiles(
-      files,
-      (percent) => {
-        updateTransferItem(placeholderId, {
-          statusText: `Mengunggah ${files.length} file (${percent}%)…`,
-        });
-      },
-      controller.signal
-    );
-  } catch (err) {
-    uploadControllers.delete(batchId);
-    const aborted = err.name === 'AbortError';
-    updateTransferItem(placeholderId, {
-      status: aborted ? 'cancelled' : 'failed',
-      statusText: aborted ? 'Upload dibatalkan' : 'Gagal mengunggah: ' + err.message,
-    });
-    if (aborted) showToast('Upload dibatalkan', 'info');
-    else showToast('Gagal upload: ' + err.message, 'error');
-    return;
-  }
-
-  uploadControllers.delete(batchId);
-
-  // Ganti placeholder dengan item asli per file.
-  const oldItem = state.activeTransfers.get(placeholderId);
-  if (oldItem && oldItem.el) oldItem.el.remove();
-  state.activeTransfers.delete(placeholderId);
-
-  const sent = [];
-  for (const file of uploaded) {
+  for (const file of files) {
+    let res;
     try {
-      const { postJson } = await import('../core/api.js');
-      const res = await postJson('/transfer/request', {
+      res = await postJson('/transfer/request', {
         targetIp: target.ip,
         targetPort: target.port,
-        fileName: file.fileName,
-        fileSize: file.fileSize,
+        fileName: file.name,
+        fileSize: file.size,
         batchId,
-      });
-      sent.push({
-        requestId: res.requestId,
-        filePath: file.filePath,
-        fileName: file.fileName,
-        fileSize: file.fileSize,
+        targetName: target.targetName,
       });
     } catch (err) {
-      showToast(`Gagal mengirim ${file.fileName}: ${err.message}`, 'error');
+      showToast(`Gagal mengirim ${file.name}: ${err.message}`, 'error');
+      continue;
     }
-  }
 
-  if (sent.length === 0) return;
+    sent += 1;
 
-  showToast(
-    sent.length === 1
-      ? 'Permintaan dikirim, menunggu diterima...'
-      : `${sent.length} file dikirim, menunggu diterima...`,
-    'info'
-  );
+    const item = {
+      requestId: res.requestId,
+      file,                 // di-upload setelah penerima menekan "Terima"
+      fileName: file.name,
+      fileSize: file.size,
+      targetName: target.targetName,
+      ip: target.ip,
+      port: target.port,
+      batchId,
+      batchSize: files.length,
+    };
 
-  // Semua request sudah terkirim; poll status masing-masing secara paralel.
-  for (const item of sent) {
     addTransferItem(item.requestId, {
       direction: 'send',
       fileName: item.fileName,
       fileSize: item.fileSize,
-      targetName: target.targetName,
+      targetName: item.targetName,
       status: 'waiting',
       statusText: 'Menunggu diterima...',
-      batchId: sent.length > 1 ? batchId : undefined,
-      batchSize: sent.length,
-      batchLabel: `Kirim ke ${target.targetName}`,
-      filePath: item.filePath,
-      ip: target.ip,
-      port: target.port,
+      batchId,
+      batchSize: files.length,
+      batchLabel,
+      file: file,           // disimpan untuk "Kirim ulang" sebelum upload
+      ip: item.ip,
+      port: item.port,
     });
 
     waitForAccept(item);
+  }
+
+  if (sent > 0) {
+    showToast(
+      sent === 1
+        ? 'Permintaan dikirim, menunggu diterima...'
+        : `${sent} file dikirim, menunggu diterima...`,
+      'info'
+    );
   }
 }
 
@@ -181,9 +154,9 @@ export async function sendBatch(target, files) {
  * Tunggu peer menerima request, lalu mulai streaming file.
  * @param {Object} item
  */
-async function waitForAccept(item) {
+export async function waitForAccept(item) {
   const state = getState();
-  const { fetchRequestStatus, postJson } = await import('../core/api.js');
+  const { fetchRequestStatus } = await import('../core/api.js');
 
   const started = Date.now();
   let lastTick = started;
@@ -213,35 +186,9 @@ async function waitForAccept(item) {
       if (st.status === 'accepted') {
         clearInterval(timer);
         state.waitStartedAt.delete(item.requestId);
-
-        if (st.resumeOffset > 0) {
-          const pct = item.fileSize > 0
-            ? Math.round((st.resumeOffset / item.fileSize) * 100)
-            : 0;
-          updateTransferItem(item.requestId, {
-            status: 'transferring',
-            statusText: `↻ Melanjutkan dari ${pct}%...`,
-          });
-        } else {
-          updateTransferItem(item.requestId, {
-            status: 'transferring',
-            statusText: 'Mengirim file...',
-          });
-        }
-
-        try {
-          await postJson('/transfer/send-file', {
-            requestId: item.requestId,
-            filePath: item.filePath,
-          });
-          pollProgress(item.requestId, 'send');
-        } catch (err) {
-          updateTransferItem(item.requestId, {
-            status: 'failed',
-            statusText: 'Gagal kirim: ' + err.message,
-          });
-          showToast('Gagal kirim file', 'error');
-        }
+        // Baru sekarang file-nya di-upload: penerima sudah setuju, jadi tidak
+        // ada byte yang bergerak sia-sia.
+        await uploadThenStart(item, st.resumeOffset || 0);
         return;
       }
 
@@ -287,14 +234,124 @@ async function waitForAccept(item) {
 }
 
 /**
- * Batalkan upload yang sedang berjalan.
- * @param {string} batchId
+ * Upload file lalu mulai streaming — dipanggil HANYA setelah penerima setuju.
+ *
+ * Kalau `item.file` tidak ada (mis. kirim ulang setelah halaman di-reload),
+ * pakai `item.filePath` yang masih tersimpan di buffer server.
+ *
+ * @param {Object} item
+ * @param {number} resumeOffset byte yang sudah dimiliki penerima
  */
-export function cancelUpload(batchId) {
-  const controller = uploadControllers.get(batchId);
+async function uploadThenStart(item, resumeOffset) {
+  const { postJson, fetchRequestStatus } = await import('../core/api.js');
+
+  let filePath = item.filePath || null;
+
+  if (item.file) {
+    const controller = new AbortController();
+    uploadControllers.set(item.requestId, controller);
+
+    updateTransferItem(item.requestId, {
+      statusText: `Mengunggah ${item.fileName} (0%)...`,
+      percent: 0,
+    });
+
+    try {
+      const uploaded = await uploadFiles(
+        [item.file],
+        (percent) => {
+          // User menekan Batal selama upload: item sudah dibuang dari daftar
+          // aktif, jadi hentikan upload-nya. Tanpa ini, file 2 GB yang sudah
+          // dibatalkan tetap dipindah sampai habis.
+          if (!getState().activeTransfers.has(item.requestId)) {
+            controller.abort();
+            return;
+          }
+          updateTransferItem(item.requestId, {
+            statusText: `Mengunggah ${item.fileName} (${percent}%)...`,
+            percent,
+          });
+        },
+        controller.signal
+      );
+      filePath = uploaded && uploaded[0] ? uploaded[0].filePath : null;
+    } catch (err) {
+      uploadControllers.delete(item.requestId);
+      const aborted = err.name === 'AbortError';
+      updateTransferItem(item.requestId, {
+        status: aborted ? 'cancelled' : 'failed',
+        statusText: aborted ? 'Dibatalkan' : 'Gagal mengunggah: ' + err.message,
+      });
+      if (aborted) {
+        // Permintaan sudah di-ACC dan penerima sedang menunggu byte. Beri tahu
+        // dia supaya koneksinya ditutup, bukan menggantung sampai timeout.
+        try { await postJson(`/transfer/cancel/${encodeURIComponent(item.requestId)}`, { role: 'send' }); } catch (_) {}
+      } else {
+        showToast('Gagal upload: ' + err.message, 'error');
+      }
+      return;
+    }
+
+    uploadControllers.delete(item.requestId);
+  }
+
+  if (!filePath) {
+    updateTransferItem(item.requestId, {
+      status: 'failed',
+      statusText: 'File sumber tidak tersedia — kirim ulang filenya',
+    });
+    return;
+  }
+
+  // Selama upload (bisa menit-an untuk file besar) penerima bisa membatalkan
+  // atau koneksinya putus. Cek sekali lagi supaya `/transfer/send-file` tidak
+  // balas error untuk transfer yang sebenarnya sudah selesai urusannya.
+  try {
+    const st = await fetchRequestStatus(item.requestId);
+    if (st.status !== 'accepted') {
+      const cancelled = st.status === 'cancelled';
+      updateTransferItem(item.requestId, {
+        status: cancelled ? 'cancelled' : 'failed',
+        statusText: cancelled ? 'Dibatalkan' : 'Koneksi ke perangkat terputus',
+      });
+      return;
+    }
+  } catch (_) {
+    // Status hilang (server restart) — biar `/transfer/send-file` yang melapor.
+  }
+
+  updateTransferItem(item.requestId, {
+    status: 'transferring',
+    statusText: resumeOffset > 0 && item.fileSize > 0
+      ? `↻ Melanjutkan dari ${Math.round((resumeOffset / item.fileSize) * 100)}%...`
+      : 'Mengirim file...',
+    percent: 0,
+  });
+
+  try {
+    await postJson('/transfer/send-file', {
+      requestId: item.requestId,
+      filePath,
+    });
+    pollProgress(item.requestId, 'send');
+  } catch (err) {
+    updateTransferItem(item.requestId, {
+      status: 'failed',
+      statusText: 'Gagal kirim: ' + err.message,
+    });
+    showToast('Gagal kirim file', 'error');
+  }
+}
+
+/**
+ * Batalkan upload yang sedang berjalan.
+ * @param {string} requestId
+ */
+export function cancelUpload(requestId) {
+  const controller = uploadControllers.get(requestId);
   if (!controller) return false;
   controller.abort();
-  uploadControllers.delete(batchId);
+  uploadControllers.delete(requestId);
   return true;
 }
 

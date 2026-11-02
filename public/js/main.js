@@ -14,7 +14,7 @@ import { fetchDevices, fetchMe, currentVia } from './core/api.js';
 import { renderDevices, setupDragDrop, setupFileInputs, openFilePicker, toTransferTarget } from './features/devices.js';
 import { setLanUrls, openConnectPanel, closeConnectPanel } from './features/connect.js';
 import { cancelTransfer, retryTransfer } from './features/transfers.js';
-import { sendBatch, sendText } from './features/send.js';
+import { sendBatch, sendText, waitForAccept } from './features/send.js';
 import {
   setupTextComposer, openComposer, setupTextOverlay, pollReceivedTexts, submitComposer,
 } from './features/text.js';
@@ -191,8 +191,12 @@ function setupTransferActions() {
 
     if (btn.classList.contains('btn-retry')) {
       btn.disabled = true;
-      await retryTransfer(requestId, () => {
+      await retryTransfer(requestId, (newId, info) => {
         updateActivityBadge();
+        // Permintaan baru sudah terkirim; tunggu diterima lalu upload+streaming.
+        // Dulu callback ini cuma update badge, jadi item "Kirim ulang" berhenti
+        // di status menunggu selamanya.
+        if (info) waitForAccept({ requestId: newId, ...info });
       });
       btn.disabled = false;
       return;

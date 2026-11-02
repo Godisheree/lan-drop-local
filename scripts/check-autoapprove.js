@@ -260,6 +260,42 @@ async function main() {
       !fs.existsSync(path.join(saveDir, 'ghost.txt')) &&
       !fs.existsSync(path.join(saveDir, 'ghost.txt.landrop-part')));
 
+    // --- 6b. Jeda ACC → file-start -------------------------------------
+    // Alur kirim sekarang: minta izin dulu, baru file di-upload. Untuk video
+    // 2 GB jeda antara "Terima" dan byte pertama bisa menit-an, jadi penerima
+    // WAJIB menunggu tanpa memutus socket. Diuji dengan jeda 1,5 detik.
+    const slowPayload = Buffer.from('dikirim setelah jeda ACC\n', 'utf-8');
+    const slow = await sendRequest(
+      TRANSFER_PORT,
+      { ...sender, fileName: 'jeda-acc.txt', fileSize: slowPayload.length, kind: 'file' },
+      { waitMs: 150 }
+    );
+    check('kiriman berjeda: tetap diterima otomatis',
+      slow.response && slow.response.accepted === true,
+      slow.response ? 'accepted' : 'tidak ada frame');
+
+    if (slow.response && slow.response.accepted === true) {
+      const closed = new Promise((r) => slow.socket.on('close', r));
+      await sleep(1500);
+      check('socket penerima masih terbuka setelah 1,5 detik jeda (menunggu upload)',
+        !slow.socket.destroyed);
+      slow.socket.write(frame({ type: 'file-start', fileName: 'jeda-acc.txt', fileSize: slowPayload.length }));
+      slow.socket.write(slowPayload);
+      await Promise.race([closed, sleep(4000)]);
+      slow.socket.destroy();
+
+      // Tunggu file benar-benar mendarat (rename dari .landrop-part bisa
+      // telat beberapa ratus ms kalau antivirus sedang memindai).
+      const landedSlow = path.join(saveDir, 'jeda-acc.txt');
+      for (let i = 0; i < 30 && !fs.existsSync(landedSlow); i += 1) await sleep(100);
+
+      check('file dari kiriman berjeda mendarat utuh',
+        fs.existsSync(landedSlow) &&
+        fs.readFileSync(landedSlow, 'utf-8') === slowPayload.toString('utf-8'));
+    } else {
+      slow.socket.destroy();
+    }
+
     // --- 7. Tidak ada entri pending yang tertinggal ----------------------
     const pending = await getJson(`${base}/transfer/pending`);
     const stuck = pending.filter((p) => p.status === 'accepted' || p.status === 'pending');
