@@ -11,6 +11,8 @@
  *   3. Perilaku middleware: security header, origin guard, rate limit
  *   4. Tidak ada shell interpolation di server/ (exec/execSync/shell:true)
  *   5. ffmpeg/ffprobe dibatasi ke protokol file: (anti-SSRF lewat media)
+ *   6. Host guard: header Host wajib menunjuk jaringan ini (anti DNS rebinding)
+ *   7. Batas panjang frame TCP (prefix 4-byte tidak boleh mengklaim ~4 GB)
  *
  * Usage: node scripts/check-security.js
  */
@@ -367,6 +369,123 @@ expectTrue(
 expectTrue(
   thumbnailSource.includes("'-protocol_whitelist', 'file'"),
   'thumbnail.js juga dibatasi protokol file'
+);
+
+// ===================== 6. Host guard (anti DNS rebinding) =====================
+console.log('\n[6] Host guard (anti DNS rebinding)');
+
+const { hostGuard } = require(path.join(ROOT, 'server', 'security.js'));
+
+/**
+ * Jalankan hostGuard dengan header Host buatan. `undefined` = tanpa Host.
+ */
+function runHostGuard(host) {
+  const res = { ...fakeRes, headers: {}, statusCode: null, body: null };
+  const req = {
+    headers: host == null ? {} : { host },
+    get: (name) => (name.toLowerCase() === 'host' ? host : undefined),
+  };
+  let passed = false;
+  hostGuard(req, res, () => { passed = true; });
+  return { passed, statusCode: res.statusCode };
+}
+
+expectTrue(runHostGuard('192.168.1.7:3000').passed, 'Host IP LAN → diteruskan');
+expectTrue(runHostGuard('100.101.102.103:3000').passed, 'Host IP Tailscale (CGNAT) → diteruskan');
+expectTrue(runHostGuard('127.0.0.1:3000').passed, 'Host loopback → diteruskan');
+expectTrue(runHostGuard('localhost:3000').passed, 'Host localhost → diteruskan');
+expectTrue(runHostGuard('[::1]:3000').passed, 'Host IPv6 loopback → diteruskan');
+expectTrue(
+  runHostGuard(`${require('os').hostname().toLowerCase()}:3000`).passed,
+  'Host nama mesin sendiri → diteruskan'
+);
+
+expectTrue(runHostGuard('evil.example').statusCode === 403, 'Host domain asing → 403 (anti DNS rebinding)');
+expectTrue(runHostGuard('evil.example:3000').statusCode === 403, 'Host domain asing berport → 403');
+expectTrue(
+  runHostGuard('localhost.evil.example:3000').statusCode === 403,
+  'Host yang menyamar diawali "localhost" → 403'
+);
+expectTrue(runHostGuard('8.8.8.8:3000').statusCode === 403, 'Host IP publik → 403');
+expectTrue(runHostGuard('169.254.169.254:3000').statusCode === 403, 'Host metadata cloud (link-local) → 403');
+expectTrue(runHostGuard(undefined).statusCode === 403, 'Host tidak ada → 403');
+expectTrue(indexSource.includes('app.use(hostGuard)'), 'hostGuard terpasang di server/index.js');
+
+// ===================== 7. Batas panjang frame TCP =====================
+console.log('\n[7] Batas panjang frame TCP');
+
+const { FrameParser, MAX_FRAME_BYTES } = require(path.join(ROOT, 'server', 'transfer.js'));
+
+/** Rakit frame utuh (prefix 4-byte + payload JSON). */
+function frame(payload) {
+  const body = Buffer.from(payload, 'utf-8');
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(body.length);
+  return Buffer.concat([header, body]);
+}
+
+/** Prefix panjang saja — celah yang dites: parser belum lihat isinya. */
+function lengthPrefix(len) {
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(len);
+  return header;
+}
+
+expectTrue(MAX_FRAME_BYTES === 64 * 1024, 'batas frame 64 KB');
+
+// Frame normal tetap jalan
+{
+  const got = [];
+  const parser = new FrameParser((m) => got.push(m));
+  parser.feed(frame('{"type":"transfer-request","fileName":"a.txt"}'));
+  expectTrue(got.length === 1 && got[0].type === 'transfer-request', 'frame normal diterima');
+}
+
+// Frame terpecah beberapa paket TCP tetap dirakit
+{
+  const got = [];
+  const parser = new FrameParser((m) => got.push(m));
+  const raw = frame('{"type":"text","length":5}');
+  parser.feed(raw.slice(0, 2));
+  parser.feed(raw.slice(2, 7));
+  parser.feed(raw.slice(7));
+  expectTrue(got.length === 1 && got[0].type === 'text', 'frame terbagi beberapa paket tetap dirakit');
+}
+
+// Prefix yang mengklaim ~4 GB
+{
+  const got = [];
+  let err = null;
+  const parser = new FrameParser((m) => got.push(m), (e) => { err = e; });
+  parser.feed(lengthPrefix(0xffffffff));
+  expectTrue(err !== null, 'frame 4 GB ditolak (onError dipanggil)');
+  expectTrue(got.length === 0, 'frame 4 GB tidak pernah jadi pesan');
+  expectTrue(parser.broken === true, 'parser berhenti setelah menolak frame');
+  expectTrue(parser.buffer.length === 0, 'buffer dibuang setelah frame ditolak');
+
+  const before = got.length;
+  parser.feed(frame('{"type":"transfer-request"}'));
+  expectTrue(got.length === before, 'feed setelah parser berhenti diabaikan');
+}
+
+// Batas persis: 64 KB diterima, 64 KB + 1 ditolak
+{
+  let err = null;
+  const parser = new FrameParser(() => {}, (e) => { err = e; });
+  parser.feed(lengthPrefix(MAX_FRAME_BYTES));
+  expectTrue(err === null, 'frame tepat di batas (64 KB) tidak ditolak');
+  expectTrue(parser.broken === false, 'parser tetap hidup untuk frame tepat di batas');
+}
+{
+  let err = null;
+  const parser = new FrameParser(() => {}, (e) => { err = e; });
+  parser.feed(lengthPrefix(MAX_FRAME_BYTES + 1));
+  expectTrue(err !== null, 'frame 64 KB + 1 ditolak');
+}
+
+expectTrue(
+  (transferSource.match(/\}, \(err\) => \{/g) || []).length >= 2,
+  'pemakai FrameParser memasang penangan onError (bukan menelan diam-diam)'
 );
 
 // ===================== Ringkasan =====================

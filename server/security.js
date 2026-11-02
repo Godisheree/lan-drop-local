@@ -264,10 +264,98 @@ function isSelfTarget(targetIp) {
   return own.includes(value);
 }
 
+// ===================== Host Guard (anti DNS rebinding) =====================
+
+/**
+ * Nama-nama yang menunjuk mesin ini sendiri: `os.hostname()` plus bentuk
+ * pendek dan bentuk mDNS-nya (`LAPTOP-3F2A` → `laptop-3f2a`, `laptop-3f2a.local`),
+ * ditambah daftar manual dari `LANDROP_ALLOWED_HOSTS`.
+ */
+function ownHostnames() {
+  const names = new Set();
+  const add = (value) => {
+    const text = String(value == null ? '' : value).trim().toLowerCase();
+    if (!text) return;
+    const short = text.split('.')[0];
+    names.add(text);
+    names.add(short);
+    names.add(`${short}.local`);
+  };
+
+  add(require('os').hostname());
+  for (const entry of String(process.env.LANDROP_ALLOWED_HOSTS || '').split(',')) add(entry);
+  return names;
+}
+
+/**
+ * Tolak request yang header `Host`-nya bukan milik jaringan ini.
+ *
+ * Kenapa perlu: `sameOriginGuard` di atas membandingkan `Origin` dengan `Host`
+ * — dan DNS rebinding menyerang tepat di titik itu. Halaman jahat di
+ * `http://evil.example` bisa bikin domainnya resolve ke `127.0.0.1`, jadi
+ * browser menganggapnya satu origin dengan server lokal: `Origin == Host`,
+ * guard CSRF lolos, dan halaman itu bebas memanggil API LAN DROP. Sebagian
+ * endpoint memang tanpa PIN (kirim file, `/system/*`), jadi yang tersisa cuma
+ * header `Host` sebagai penanda siapa yang sebenarnya dihubungi.
+ *
+ * Bahaya nyatanya bukan cookie dashboard (cookie terikat nama host, tidak ikut
+ * terkirim ke nama domain penyerang), tapi endpoint terbuka: permintaan
+ * transfer, daftar upload, dan info sistem.
+ *
+ * Yang boleh: IP literal LAN/Tailscale/loopback (aturan sama dengan
+ * `isAllowedTargetIp`), `localhost`, dan nama mesin ini sendiri. Nama domain
+ * dari luar selalu ditolak. Operator yang memang memakai nama lain (mis.
+ * MagicDNS Tailscale) mendaftarkannya di `LANDROP_ALLOWED_HOSTS`.
+ *
+ * Escape hatch: `LANDROP_ALLOW_ANY_HOST=1` — dipakai kalau server ditaruh di
+ * belakang reverse proxy yang menulis header `Host` sendiri. Sengaja dipisah
+ * dari `LANDROP_ALLOW_PUBLIC_TARGETS`, supaya flag untuk target keluar tidak
+ * diam-diam membuka jalur masuk.
+ *
+ * @type {import('express').RequestHandler}
+ */
+function hostGuard(req, res, next) {
+  if (process.env.LANDROP_ALLOW_ANY_HOST === '1') return next();
+
+  const raw = String(
+    (typeof req.get === 'function' ? req.get('host') : null) ||
+    (req.headers && req.headers.host) ||
+    ''
+  ).trim();
+
+  // Buang port. IPv6 ditulis "[alamat]:port".
+  let host = raw;
+  if (host.startsWith('[')) {
+    const end = host.indexOf(']');
+    host = end === -1 ? '' : host.slice(1, end);
+  } else {
+    const colon = host.lastIndexOf(':');
+    if (colon !== -1) host = host.slice(0, colon);
+  }
+  // Trailing dot = bentuk absolut nama yang sama ("localhost." == "localhost").
+  host = host.toLowerCase().replace(/\.+$/, '');
+
+  if (!host) {
+    return res.status(403).json({ error: 'Forbidden: header Host tidak ada' });
+  }
+  if (host === 'localhost' || host === 'localhost.localdomain') return next();
+
+  const family = net.isIP(host);
+  if (family === 4 && isAllowedIPv4(host)) return next();
+  if (family === 6 && isAllowedIPv6(host)) return next();
+  if (ownHostnames().has(host)) return next();
+
+  return res.status(403).json({
+    error: 'Forbidden: Host tidak dikenal. Akses lewat alamat IP LAN/Tailscale, '
+      + 'atau daftarkan namanya di LANDROP_ALLOWED_HOSTS.',
+  });
+}
+
 module.exports = {
   securityHeaders,
   rateLimit,
   sameOriginGuard,
+  hostGuard,
   isAllowedTargetIp,
   isSelfTarget,
 };

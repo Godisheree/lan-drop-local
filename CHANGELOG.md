@@ -5,6 +5,34 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [Belum dirilis]
+
+### Added — batas panjang frame TCP + host guard (anti DNS rebinding)
+
+`FrameParser` dulu membaca prefix panjang 4-byte (uint32) apa adanya: empat byte
+dari siapa pun yang bisa menjangkau port transfer sudah cukup untuk menyuruh
+parser menahan dan menumbuhkan buffer sebesar ~4 GB, sebelum isinya pernah
+diverifikasi. Sekarang frame dibatasi `MAX_FRAME_BYTES` = 64 KB — jauh di atas
+kebutuhan frame JSON header (`transfer-request` dengan nama file maksimum 200
+karakter). Frame yang melebihi batas langsung ditolak: parser berhenti permanen,
+buffer dibuang, dan socket ditutup (di sisi penerima, dan di sisi pengirim saat
+menerima ack yang tidak masuk akal).
+
+Header `Host` juga mulai diperiksa (`hostGuard`, dipasang sebelum
+`sameOriginGuard`). `sameOriginGuard` menolak POST lintas-origin dengan
+membandingkan `Origin` dan `Host` — dan DNS rebinding menyerang tepat di titik
+itu: halaman di domain penyerang yang menunjuk ke `127.0.0.1` terbaca sebagai
+satu origin, jadi guard-nya lolos. Sekarang yang diterima hanya `localhost`, IP
+literal LAN/Tailscale/loopback, dan nama mesin ini sendiri. Nama tambahan (mis.
+MagicDNS Tailscale) didaftarkan lewat `LANDROP_ALLOWED_HOSTS`;
+`LANDROP_ALLOW_ANY_HOST=1` melewatkan cek ini untuk server di belakang reverse
+proxy.
+
+Keputusan lengkapnya di [ADR-0011](docs/adr/0011-batas-frame-tcp-dan-host-guard.md).
+Regresi baru: `npm run check:security` naik dari 89 → 114 pemeriksaan (25 cek
+baru, semuanya berbasis perilaku — frame normal/terpecah/tepat-di-batas, dan
+host IP LAN/loopback/nama mesin vs domain asing/IP publik/Host kosong).
+
 ## [1.3.0] — 2026-11-01
 
 ### Changed — warna aksen oren + mark logo baru

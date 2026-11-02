@@ -88,14 +88,41 @@ const TEXT_TTL = 10 * 60 * 1000; // teks diterima dibersihkan setelah 10 menit
 let tcpServer = null;
 
 // ===================== Frame Parser =====================
+
+/**
+ * Panjang maksimum satu frame.
+ *
+ * Prefix 4-byte (uint32) secara teknis bisa mengklaim sampai ~4 GB. Isi frame
+ * LAN DROP selalu JSON kecil: header `transfer-request` (nama file, ukuran,
+ * nama pengirim), balasan `transfer-response`, atau ack `transfer-saved`.
+ * 64 KB sudah jauh lebih dari cukup untuk semua itu — nama file dibatasi 200
+ * karakter. Tanpa batas ini, empat byte dari peer bisa memaksa server
+ * mengalokasikan buffer raksasa sebelum isinya pernah diverifikasi.
+ *
+ * ponytail: batas ini khusus frame JSON header. Kalau nanti ada frame yang
+ * memang membawa data (mis. daftar file satu batch), naikkan angkanya — jangan
+ * buang cek-nya.
+ */
+const MAX_FRAME_BYTES = 64 * 1024;
+
 class FrameParser {
-  constructor(onMessage) {
+  /**
+   * @param {(msg: any) => void} onMessage
+   * @param {(err: Error) => void} [onError] dipanggil sekali kalau frame
+   *   ditolak (mis. kepanjangan). Setelah itu parser mati total: sisa byte di
+   *   buffer dibuang dan feed() berikutnya diabaikan, supaya stream yang sudah
+   *   tidak bisa dipercaya tidak ikut dirakit.
+   */
+  constructor(onMessage, onError) {
     this.buffer = Buffer.alloc(0);
     this.onMessage = onMessage;
+    this.onError = onError || null;
     this.expectedLen = null;
+    this.broken = false;
   }
 
   feed(data) {
+    if (this.broken) return;
     this.buffer = Buffer.concat([this.buffer, data]);
 
     while (true) {
@@ -103,6 +130,13 @@ class FrameParser {
         if (this.buffer.length < 4) return;
         this.expectedLen = this.buffer.readUInt32BE(0);
         this.buffer = this.buffer.slice(4);
+
+        if (this.expectedLen > MAX_FRAME_BYTES) {
+          this.abort(new Error(
+            `Frame terlalu besar: ${this.expectedLen} byte (maks ${MAX_FRAME_BYTES})`
+          ));
+          return;
+        }
       }
 
       if (this.buffer.length < this.expectedLen) return;
@@ -116,6 +150,15 @@ class FrameParser {
         this.onMessage(obj);
       } catch (_) {}
     }
+  }
+
+  /** Matikan parser permanen dan buang sisa buffer. Idempoten. */
+  abort(err) {
+    if (this.broken) return;
+    this.broken = true;
+    this.buffer = Buffer.alloc(0);
+    this.expectedLen = null;
+    if (this.onError) this.onError(err || new Error('Frame Parser dihentikan'));
   }
 }
 
@@ -972,6 +1015,11 @@ function startTransferServer() {
           respondToRequest(requestId, false, decision.reason);
         }
       }
+    }, (err) => {
+      // Frame cacat dari peer (mis. panjang mengklaim 4 GB). Socket-nya sudah
+      // tidak bisa dipercaya — tutup, jangan coba lanjut baca.
+      console.warn(`[Transfer] ⚠️ Frame dari ${socket.remoteAddress} ditolak: ${err.message} — socket ditutup`);
+      socket.destroy();
     });
 
     const dataHandler = (data) => parser.feed(data);
@@ -1108,6 +1156,12 @@ async function startFileSend(requestId, filePath) {
     } else if (msg.type === 'transfer-save-failed') {
       req.saveFailed = msg.reason || 'penerima gagal menyimpan file';
     }
+  }, (err) => {
+    // Ack dari penerima selalu frame JSON kecil; yang lebih besar dari batas
+    // berarti peer-nya bermasalah (atau bukan penerima yang kita harapkan).
+    console.warn(`[Transfer] ⚠️ Frame ack dari ${req.targetIp}:${req.targetPort} ditolak: ${err.message} — koneksi diputus`);
+    req.saveFailed = req.saveFailed || 'peer mengirim frame tidak valid';
+    socket.destroy();
   });
   const ackHandler = (data) => ackParser.feed(data);
   socket.on('data', ackHandler);
@@ -1561,4 +1615,6 @@ module.exports = {
   cancelOutgoingTransfer,
   cancelIncomingTransfer,
   assertInsideUploads, // diekspor buat regression test (scripts/check-security.js)
+  FrameParser, // diekspor buat regression test batas frame
+  MAX_FRAME_BYTES,
 };

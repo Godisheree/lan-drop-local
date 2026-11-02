@@ -13,7 +13,7 @@ const history = require('./history');
 const settings = require('./settings');
 const pin = require('./pin');
 const thumbnail = require('./thumbnail');
-const { securityHeaders, rateLimit, sameOriginGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
+const { securityHeaders, rateLimit, sameOriginGuard, hostGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
 const { listLANIPv4, getDeviceName, getDataDir, getSaveDirRoot, openBrowser } = require('./platform');
 
 // Generate device name dari hostname atau environment variable
@@ -42,10 +42,12 @@ const ports = require('./ports');
 
 // Middleware
 //
-// Urutan penting: header keamanan & origin guard DULUAN, baru parser body.
-// Kalau parser body yang pertama, request dengan JSON rusak dibalas HTML
-// bawaan Express yang berisi stack trace + path absolut (bocor info).
+// Urutan penting: header keamanan, host guard, & origin guard DULUAN, baru
+// parser body. Kalau parser body yang pertama, request dengan JSON rusak
+// dibalas HTML bawaan Express yang berisi stack trace + path absolut (bocor
+// info).
 app.use(securityHeaders);
+app.use(hostGuard);
 app.use(sameOriginGuard);
 app.use(express.json());
 

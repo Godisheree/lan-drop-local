@@ -61,6 +61,8 @@ port on its own and prints the new address — no manual hunting.
 | `LANDROP_MAX_UPLOAD_MB` | Size limit per file | `2048` |
 | `LANDROP_NO_BROWSER` | `1` = do not open the dashboard in a browser automatically | (empty) |
 | `LANDROP_PEERS` | Manual peers (`Name@ip:port@transferPort`, comma-separated) | auto-discovery |
+| `LANDROP_ALLOWED_HOSTS` | Extra hostnames accepted in the `Host` header (e.g. Tailscale MagicDNS name) | hostname + LAN/Tailscale IPs only |
+| `LANDROP_ALLOW_ANY_HOST` | `1` = skip the `Host` check (behind a reverse proxy that rewrites `Host`) | (empty) |
 
 ## Notes
 

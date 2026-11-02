@@ -18,6 +18,8 @@ Format: [MADR](https://adr.github.io/madr/) — konteks → keputusan → konsek
 | [0007](0007-keamanan-berlapis-tanpa-autentikasi.md) | Keamanan berlapis tanpa autentikasi | Diterima | 2025-10-21 |
 | [0008](0008-alamat-peer-stable-per-jalur.md) | Alamat peer stabil per jalur (LAN/Tailscale) | Diterima | 2025-10-22 |
 | [0009](0009-pin-dashboard.md) | PIN untuk halaman pantau (UI kirim file tetap terbuka) | Diterima | 2026-11-01 |
+| [0010](0010-brand-color-dan-logo.md) | Warna aksen oren + mark logo baru | Diterima | 2026-11-01 |
+| [0011](0011-batas-frame-tcp-dan-host-guard.md) | Batas frame TCP + host guard (anti DNS rebinding) | Diterima | 2026-11-02 |
 
 ## Template
 
