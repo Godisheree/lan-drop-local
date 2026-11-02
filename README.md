@@ -75,20 +75,23 @@ port on its own and prints the new address — no manual hunting.
 
 ## Changelog
 
-Latest version in the repo: **1.3.0**. The newest release on npm is still **1.2.2** —
-the security work below (64 KB frame cap, `Host` guard) is not published yet, so run
-LAN DROP from the repo if you want those fixes.
+Latest version: **1.2.4** — this release carries the security work below (64 KB TCP
+frame cap, `Host` guard against DNS rebinding), so `npm i -g lan-drop-local` finally
+gets it.
 
-### 1.3.0
+### 1.2.4
 
+- Security: TCP frames are capped at 64 KB — a 4-byte length prefix from anyone who
+  could reach the transfer port was enough to make the receiver grow a ~4 GB buffer —
+  and the `Host` header is now checked to stop DNS rebinding (ADR-0011).
+- Upload buffers moved out of the package folder into the data dir
+  (`<data dir>/uploads`), so a global install no longer writes into `node_modules/`
+  and an update cannot wipe a transfer that is being resumed. A failed upload can
+  also no longer stop the server from booting.
+- Files whose transfer was **rejected** are deleted right away instead of sitting in
+  the upload buffer for 7 days.
 - Accent moved from blue to orange, and the logo mark was redrawn (squircle +
   drop arrow); `--warning` shifted to amber so it cannot be read as "action".
-- Upload buffers moved out of the package folder into the data dir
-  (`<data dir>/uploads`), so a global install no longer writes into
-  `node_modules/` and an update cannot wipe a transfer that is being resumed.
-  A failed upload can also no longer stop the server from booting.
-- Files whose transfer was **rejected** are now deleted right away instead of
-  sitting in the upload buffer for 7 days.
 - GitHub Actions runs `npm test` (322 checks) on Node 18/20/22.
 
 ### 1.2.2

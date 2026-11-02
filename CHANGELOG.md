@@ -5,7 +5,7 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
-## [Belum dirilis]
+## [1.2.4] — 2026-11-03
 
 ### Fixed — buffer upload pindah ke data dir + file ditolak langsung dihapus
 
@@ -32,8 +32,8 @@ dihapus. Sampah 162 MB itu sudah dibersihkan.
 - File nyasar dibuang dari repo: `test-send.txt` (payload uji) dan
   `tailscale-discovery.patch` (patch yang sudah lama masuk `server/tailscale.js`,
   keputusan ADR-0006). `fitur-cancel-transfer.md` pindah ke `docs/product/`.
-- `README.md` — versi terbaru di repo (1.3.0) dipisah dari versi npm (1.2.2),
-  plus catatan bahwa perbaikan keamanan di bawah belum terbit.
+- `README.md` — bagian Changelog dirapikan: 1.2.4 memuat perbaikan keamanan
+  (frame/`Host`), pindahnya buffer upload, dan aksen oranye dalam satu rilis.
 
 ### Added — batas panjang frame TCP + host guard (anti DNS rebinding)
 
@@ -60,8 +60,6 @@ Keputusan lengkapnya di [ADR-0011](docs/adr/0011-batas-frame-tcp-dan-host-guard.
 Regresi baru: `npm run check:security` naik dari 89 → 114 pemeriksaan (25 cek
 baru, semuanya berbasis perilaku — frame normal/terpecah/tepat-di-batas, dan
 host IP LAN/loopback/nama mesin vs domain asing/IP publik/Host kosong).
-
-## [1.3.0] — 2026-11-01
 
 ### Changed — warna aksen oren + mark logo baru
 
