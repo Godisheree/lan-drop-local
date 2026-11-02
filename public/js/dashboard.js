@@ -323,7 +323,10 @@ async function refreshDiscovery() {
   fillKv($.discKv, [
     ['Listener', `port ${dash(listener.port)} — ${listener.bound ? 'terikat' : 'TIDAK terikat'}`],
     ['Error listener', listener.error ? el('span', { class: 'dash-tag', dataset: { state: 'err' }, text: listener.error }) : '—'],
-    ['Perangkat dikenal', `${dash(peers.count)} — sinyal terakhir ${peers.lastAnnounceAt ? ago(peers.lastAnnounceAt) : 'belum ada'}`],
+    // `ago()` mengembalikan ELEMEN (biar bisa dihitung ulang tiap detik).
+    // Di dalam template string dia jadi "[object HTMLSpanElement]" — yang
+    // dibutuhkan di sini teksnya saja.
+    ['Perangkat dikenal', `${dash(peers.count)} — sinyal terakhir ${peers.lastAnnounceAt ? agoText(peers.lastAnnounceAt) : 'belum ada'}`],
     ['Tailscale', ts.selfIp ? `ip ${ts.selfIp}` : 'tidak aktif'],
     ['Tailscale CLI', ts.cliFound ? 'ada' : 'tidak ada (normal di HP)'],
     ['Perangkat tailnet', dash(ts.peerCount)],

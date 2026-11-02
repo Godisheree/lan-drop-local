@@ -55,7 +55,17 @@ function buildCard(device, handlers) {
     el('span', { text: 'tersambung' }),
   ]);
 
-  const dropHint = el('p', { class: 'drop-hint', text: 'Seret file ke sini, atau tekan Ctrl+V untuk menempel' });
+  // Petunjuk menyesuaikan perangkat: di HP tidak ada drag-drop mouse maupun
+  // Ctrl+V, jadi teks desktop cuma bikin bingung (ketahuan saat ambil
+  // screenshot mobile).
+  const touchOnly = typeof window.matchMedia === 'function'
+    && window.matchMedia('(hover: none)').matches;
+  const dropHint = el('p', {
+    class: 'drop-hint',
+    text: touchOnly
+      ? 'Ketuk tombol di bawah untuk memilih file, atau tempel dari papan klip'
+      : 'Seret file ke sini, atau tekan Ctrl+V untuk menempel',
+  });
 
   const actions = el('div', { class: 'btn-file-row' }, [
     el('button', {

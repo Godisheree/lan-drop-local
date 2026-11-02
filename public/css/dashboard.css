@@ -234,8 +234,17 @@ body.dash {
 
 .dash-table {
   width: 100%;
+  /* `fixed` + wrap: tanpa ini kolom terakhir (mis. "Err" di kartu Penemuan
+     perangkat) melewati tepi kartu dan terpotong — kelihatan di screenshot
+     README sebelum diperbaiki. */
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--text-sm);
+}
+.dash-table td,
+.dash-table th {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .dash-table th {

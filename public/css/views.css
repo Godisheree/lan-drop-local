@@ -211,9 +211,11 @@
     padding: 4px var(--space-2);
   }
 
-  /* Tombol "Sambung" jadi ikon saja supaya header tidak berdesakan. */
-  .connect-trigger span:not([aria-hidden]) { display: none; }
-  .connect-trigger { padding: var(--space-2); min-width: var(--tap-min); }
+  /* Tombol "Sambungkan" dulu labelnya disembunyikan tanpa ikon pengganti, jadi
+     di HP yang tampil cuma kotak kosong. Sekarang labelnya tetap ada, cuma
+     dikecilkan; nama perangkat yang menyusut lebih dulu kalau sempit. */
+  .connect-trigger { padding: var(--space-2); min-width: 0; }
+  .connect-trigger .connect-label { display: inline; font-size: var(--text-xs); white-space: nowrap; }
 
   .btn-file-row {
     display: grid;

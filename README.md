@@ -1,8 +1,41 @@
-# LAN DROP
+<p align="center">
+  <img src="docs/screenshots/banner.png" alt="LAN DROP — share files over Wi-Fi, no cloud, no account" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/lan-drop-local"><img src="https://img.shields.io/npm/v/lan-drop-local?color=c2410c" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/lan-drop-local"><img src="https://img.shields.io/npm/dw/lan-drop-local?color=c2410c" alt="npm downloads per week"></a>
+  <a href="https://github.com/Godisheree/lan-drop-local/actions/workflows/ci.yml"><img src="https://github.com/Godisheree/lan-drop-local/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <img src="https://img.shields.io/npm/l/lan-drop-local?color=c2410c" alt="license">
+  <img src="https://img.shields.io/node/v/lan-drop-local?color=c2410c" alt="node version">
+</p>
 
 Share files between devices on your local network through the browser — no cloud,
 no setup, no account. Open the dashboard on your phone, send a file, and it lands
 straight in the save folder on your PC (or the other way around).
+
+## Screenshots
+
+![Send and receive UI on a desktop browser](docs/screenshots/desktop.png)
+
+| Phone (390 px wide) | Monitoring dashboard (PIN-locked) |
+|---|---|
+| ![Send UI on a phone](docs/screenshots/mobile.png) | ![Dashboard with peers, disk, history and logs](docs/screenshots/dashboard.png) |
+
+## What it does
+
+- **The receiver decides first.** A 2 GB file is not uploaded until the other
+  device taps *Terima* — decline, and not a single byte has moved.
+- **Resume after a dropped Wi-Fi.** Files continue where they stopped instead of
+  starting over.
+- **Files, photos, video and text.** Text goes through the same flow, and `Ctrl+V`
+  pastes straight onto a device card.
+- **Nothing leaves your LAN.** No telemetry, no CDN, no account, no cloud.
+- **Runs anywhere Node runs** — Windows, Linux, macOS, Android/Termux. Saves to
+  `Downloads\LAN-DROP` (or `~/storage/pictures` on Termux).
+- **Installable as a PWA** on the phone; the whole UI is one page, no app store.
+- **Monitoring page behind a PIN** — peers, transfers, disk, history and live logs
+  (ADR-0009).
 
 ## Install
 
@@ -72,6 +105,18 @@ port on its own and prints the new address — no manual hunting.
   server.
 - **History and settings live outside the install folder**, so they survive
   package updates: `%APPDATA%\lan-drop` (Windows) or `~/.lan-drop` (Termux/Linux).
+
+## Security
+
+The send page has no login by design — that is what makes it zero-setup. What it
+does have: a PIN on the monitoring page, a `Host` header check against DNS
+rebinding, an origin check on POSTs, a 64 KB cap on every TCP frame, a path
+allowlist for anything the server may stream, and no dependency that phones home.
+Each of those has a regression test in `npm test`.
+
+Reasoning lives in [`docs/adr/`](docs/adr) — start with
+[ADR-0007](docs/adr/0007-keamanan-berlapis-tanpa-autentikasi.md) and
+[ADR-0011](docs/adr/0011-batas-frame-tcp-dan-host-guard.md).
 
 ## Changelog
 

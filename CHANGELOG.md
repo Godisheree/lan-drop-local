@@ -7,6 +7,33 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum dirilis]
 
+### Fixed — cacat UI yang kelihatan begitu dipotret
+
+Empat masalah ketemu saat menyiapkan screenshot README, semuanya cacat nyata,
+bukan soal fotonya:
+
+1. **Tombol "Sambungkan" kosong di HP.** Aturan `max-width: 640px` menyembunyikan
+   labelnya dengan asumsi ada ikon pengganti — tidak ada. Sekarang labelnya tetap
+   tampil (diperkecil) dan header tetap muat tanpa overflow di 390 px maupun
+   360 px.
+2. **Petunjuk menyeret file muncul di layar sentuh**: "Seret file ke sini, atau
+   tekan Ctrl+V" — tidak ada drag-and-drop mouse maupun Ctrl+V di HP. Sekarang
+   teksnya menyesuaikan `(hover: none)`.
+3. **Dashboard mencetak `[object HTMLSpanElement]`** di "Perangkat dikenal" —
+   `ago()` mengembalikan elemen, lalu diinterpolasi ke template string.
+4. **Kolom terakhir tabel dashboard terpotong** tepi kartu (mis. "Err" di kartu
+   Penemuan perangkat). `table-layout: fixed` + sel boleh membungkus.
+5. Tombol "Dashboard" di header selebar 44 px padahal isinya teks 60 px, jadi
+   menabrak chip nama perangkat. Selector `.icon-btn-text` kalah urutan dari
+   `.icon-btn`; sekarang dua kelas.
+
+### Docs — README dengan banner, badge, dan screenshot
+
+- `docs/screenshots/` — banner, UI desktop, UI HP, dan dashboard (diambil dari
+  dua instance sungguhan, bukan mock).
+- `README.md` — header bergambar + badge npm/CI/lisensi/Node, bagian Screenshots,
+  ringkasan fitur, dan bagian Security. Badge CI menunjuk workflow yang baru ada.
+
 ### Changed — minta izin dulu, upload belakangan
 
 `sendBatch()` dulu meng-upload seluruh file ke server sendiri **sebelum**

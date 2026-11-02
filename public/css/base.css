@@ -180,11 +180,15 @@ a {
   color: var(--text-primary);
 }
 
-/* Tautan teks di header: tinggi tetap sama dengan tombol ikon. */
-.icon-btn-text {
+/* Tautan teks di header: tinggi tetap sama dengan tombol ikon.
+   Selector sengaja dua kelas: `.icon-btn` di bawahnya menyetel `width: var(--tap-min)`
+   (44px), dan aturan satu-kelas di sini kalah urutan — teks "Dashboard" jadi
+   meluber keluar kotak 44px dan nabrak nama perangkat. */
+.icon-btn.icon-btn-text {
   width: auto;
   padding: 0 var(--space-3);
   font-size: var(--text-sm);
+  white-space: nowrap;
   text-decoration: none;
 }
 
