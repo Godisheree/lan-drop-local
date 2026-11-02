@@ -67,7 +67,7 @@ arsitektur yang sulit dibalik ditulis sebagai ADR baru.
 ## Architecture
 
 ### Server entry (`server/index.js`)
-Express app serving `public/` statically. Mounts REST routes for discovery and transfer. Multer upload saves to `./uploads-temp/` (or `$LANDROP_UPLOAD_DIR` for Electron ASAR compat). On startup, gets LAN IPs filtering out VM/Docker/vEthernet/WARP adapters, then starts UDP discovery + TCP transfer server.
+Express app serving `public/` statically. Mounts REST routes for discovery and transfer. Multer upload saves to `<data dir>/uploads` (`%APPDATA%\lan-drop\uploads` / `~/.lan-drop/uploads`, or `$LANDROP_UPLOAD_DIR` for Electron ASAR compat) — never inside the package folder, so `npm update` cannot wipe a transfer waiting to resume. On startup, gets LAN IPs filtering out VM/Docker/vEthernet/WARP adapters, then starts UDP discovery + TCP transfer server.
 
 ### Discovery (`server/discovery.js`)
 UDP broadcast on port 41234. Sends JSON `announce` packet every 2s `{deviceId, deviceName, ip, port, transferPort}`. Listener populates `knownDevices` Map; entries expire after 10s no broadcast, cleaned every 3s.
