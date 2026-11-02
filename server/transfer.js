@@ -203,6 +203,14 @@ function getTermuxStorageDir(category) {
 // → Downloads (mirip klasifikasi Termux). Fallback ke data dir kalau platform
 // gak nyediain folder yang bisa ditulis.
 function resolveSaveDir(safeName) {
+  // Override eksplisit berlaku di SEMUA platform. Di Windows nilainya sudah
+  // diambil getWindowsSaveDir(), tapi di Linux/Termux dulu diabaikan total:
+  // `dir` tetap null lalu jatuh ke <data dir>/downloads, padahal README
+  // menjanjikan LANDROP_SAVE_DIR. Ketahuan dari CI ubuntu (Node 18/20/22):
+  // pemeriksaan "file mendarat di folder simpan" gagal di sana, lolos di
+  // Windows karena kebetulan lewat jalur Windows.
+  if (process.env.LANDROP_SAVE_DIR) return process.env.LANDROP_SAVE_DIR;
+
   const fileType = classifyFileType(safeName);
   let dir = null;
   if (isWindows()) {
