@@ -83,11 +83,20 @@ function extractFunction(source, name) {
 console.log('\n[1] Path allowlist upload');
 
 const { assertInsideUploads } = require(path.join(ROOT, 'server', 'transfer.js'));
-const uploadsRoot = path.resolve(
-  process.env.LANDROP_UPLOAD_DIR || path.join(ROOT, 'uploads-temp')
-);
+// Sumber kebenaran yang sama dengan server (data dir), bukan path relatif ke repo.
+const { getUploadDir } = require(path.join(ROOT, 'server', 'platform.js'));
+const uploadsRoot = path.resolve(getUploadDir());
 
 expectTrue(typeof assertInsideUploads === 'function', 'assertInsideUploads tersedia');
+
+// Folder upload wajib di luar folder paket: di instalasi global (`npm i -g`)
+// folder paket = node_modules/lan-drop-local, dan `npm update` akan menghapus
+// transfer yang sedang di-resume. Dulu default-nya `__dirname/../uploads-temp`.
+expectTrue(
+  // path.relative antar drive (D: → C:) mengembalikan path absolut, bukan '..'.
+  (() => { const rel = path.relative(ROOT, uploadsRoot); return rel.startsWith('..') || path.isAbsolute(rel); })(),
+  'folder upload di luar folder paket (bukan node_modules/lan-drop-local/uploads-temp)'
+);
 
 expectTrue(
   assertInsideUploads(path.join(uploadsRoot, 'upload_abc123')) === path.join(uploadsRoot, 'upload_abc123'),

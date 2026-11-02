@@ -7,6 +7,34 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum dirilis]
 
+### Fixed — buffer upload pindah ke data dir + file ditolak langsung dihapus
+
+Folder buffer upload dulu `path.join(__dirname, '..', 'uploads-temp')`: di
+instalasi global (`npm i -g lan-drop-local`) itu berarti
+`node_modules/lan-drop-local/uploads-temp`, jadi (1) `npm update`/install ulang
+menghapus transfer yang sedang menunggu resume, dan (2) `fs.mkdirSync` yang
+tidak dijaga melempar error di prefix read-only — server mati sebelum sempat
+start. Sekarang satu sumber kebenaran `platform.getUploadDir()`:
+`$LANDROP_UPLOAD_DIR` (Electron, tetap) atau `<data dir>/uploads`; gagal bikin
+folder cuma jadi peringatan, server tetap jalan.
+
+Kebocoran yang menyertainya: `startFileSend` menghapus file upload saat
+`completed`/`cancelled`, tapi **tidak** saat `rejected` — padahal request yang
+ditolak tidak akan pernah dimulai, jadi "dipertahankan untuk resume" hanya
+menumpuk file seukuran aslinya selama 7 hari (bukti: 4 file 40 MB + 4 file
+256 KB = 162 MB sisa uji coba di `uploads-temp/`). `rejected` sekarang ikut
+dihapus. Sampah 162 MB itu sudah dibersihkan.
+
+- `.github/workflows/ci.yml` — 322 pemeriksaan `npm test` jalan di Node 18/20/22
+  tiap push ke `main` dan tiap PR. Sebelumnya semuanya cuma jalan kalau diingat.
+- `scripts/check-security.js` — 2 cek baru: folder upload wajib di luar folder
+  paket (114 → 116 pemeriksaan).
+- File nyasar dibuang dari repo: `test-send.txt` (payload uji) dan
+  `tailscale-discovery.patch` (patch yang sudah lama masuk `server/tailscale.js`,
+  keputusan ADR-0006). `fitur-cancel-transfer.md` pindah ke `docs/product/`.
+- `README.md` — versi terbaru di repo (1.3.0) dipisah dari versi npm (1.2.2),
+  plus catatan bahwa perbaikan keamanan di bawah belum terbit.
+
 ### Added — batas panjang frame TCP + host guard (anti DNS rebinding)
 
 `FrameParser` dulu membaca prefix panjang 4-byte (uint32) apa adanya: empat byte

@@ -1,0 +1,26 @@
+name: CI
+
+# 322 pemeriksaan lokal yang dulu cuma jalan kalau diingat. Sekarang tiap push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # --omit=dev tidak dipakai: sebagian pemeriksaan butuh devDependency.
+      - run: npm ci
+      - run: npm test

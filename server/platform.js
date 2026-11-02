@@ -25,6 +25,19 @@ function getDataDir() {
   return path.join(os.homedir(), '.lan-drop');
 }
 
+// ===================== Upload Dir (file yang mau dikirim) =====================
+// Buffer upload dari browser SEBELUM diteruskan ke peer.
+//
+// Sengaja di data dir, bukan `__dirname/..`: di instalasi global (`npm i -g`)
+// folder itu jatuh di dalam node_modules/lan-drop-local, sehingga
+//   - `npm update` menghapus transfer yang sedang di-resume, dan
+//   - `fs.mkdirSync` gagal (prefix read-only) = server mati saat start.
+// Electron tetap menimpanya lewat LANDROP_UPLOAD_DIR (butuh folder di luar ASAR).
+function getUploadDir() {
+  if (process.env.LANDROP_UPLOAD_DIR) return process.env.LANDROP_UPLOAD_DIR;
+  return path.join(getDataDir(), 'uploads');
+}
+
 // ===================== Save Dir (file diterima) =====================
 // Windows: file masuk ke %USERPROFILE%\Downloads\LAN-DROP dengan subfolder per
 // kategori: Pictures (foto) · Videos · Documents · Music · sisanya di root.
@@ -339,4 +352,4 @@ function openBrowser(url) {
   }
 }
 
-module.exports = { isTermux, isWindows, getDataDir, getWindowsSaveDir, getSaveDirRoot, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, getOwnAddresses, isUsablePeerAddress, getDeviceName, resolveDeviceName, sanitizeDeviceName, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4, openBrowser };
+module.exports = { isTermux, isWindows, getDataDir, getUploadDir, getWindowsSaveDir, getSaveDirRoot, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, listLANIPv4, listLANInterfaces, getLANIP, getOwnAddresses, isUsablePeerAddress, getDeviceName, resolveDeviceName, sanitizeDeviceName, isLinkLocalIPv4, isPointToPoint, isTailscaleIPv4, openBrowser };

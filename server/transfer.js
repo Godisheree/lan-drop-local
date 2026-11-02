@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
-const { isTermux, isWindows, getDataDir, getWindowsSaveDir, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, isTailscaleIPv4 } = require('./platform');
+const { isTermux, isWindows, getDataDir, getUploadDir, getWindowsSaveDir, getSaveDirFreeSpace, WINDOWS_SAVE_DIR, WINDOWS_SAVE_CATEGORIES, isTailscaleIPv4 } = require('./platform');
 const thumbnail = require('./thumbnail');
 const history = require('./history');
 const settings = require('./settings');
@@ -32,11 +32,10 @@ const UPLOAD_TTL = 7 * 24 * 60 * 60 * 1000;       // upload sampah dibersihin 7 
 // /transfer/send-file bisa dipakai buat membocorkan file apa pun di disk
 // (path dari body request dipakai mentah-mentah).
 //
-// Folder upload: $LANDROP_UPLOAD_DIR (dipakai Electron) atau ./uploads-temp.
-// Nilainya harus sama persis dengan yang dipakai server/index.js.
-const UPLOADS_ROOT = path.resolve(
-  process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp')
-);
+// Folder upload: $LANDROP_UPLOAD_DIR (dipakai Electron) atau <data dir>/uploads.
+// Nilainya harus sama persis dengan yang dipakai server/index.js — dua-duanya
+// lewat platform.getUploadDir() supaya tidak bisa melenceng.
+const UPLOADS_ROOT = path.resolve(getUploadDir());
 
 /**
  * Pastikan path file berada di dalam folder upload.
@@ -304,7 +303,7 @@ function ensureSaveDirExists() {
 // Bersihin upload & partial yang udah kedaluwarsa — biar storage Termux
 // gak penuh sampah transfer yang gak pernah diselesaikan.
 function cleanupStale() {
-  const uploadsDir = process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp');
+  const uploadsDir = UPLOADS_ROOT;
   const partsDir = path.join(getDataDir(), 'parts');
   const now = Date.now();
   try {
@@ -1285,10 +1284,13 @@ async function startFileSend(requestId, filePath) {
       });
     }
 
-    // Bersihkan file upload HANYA kalau bener-bener kelar atau user batal
-    // eksplisit. Partial sengaja DIPERTAHANKAN supaya bisa di-retry/resume
-    // kalau koneksi mati sendiri. File >7 hari dibersihin cleanupStale().
-    if (finalStatus === 'completed' || finalStatus === 'cancelled') {
+    // Bersihkan file upload HANYA kalau bener-bener kelar, user batal, atau
+    // ditolak. `rejected` ikut dihapus karena request yang ditolak tidak akan
+    // pernah dimulai — menahannya 7 hari cuma numpuk file seukuran aslinya di
+    // disk (dulu: 4 file 40 MB sisa uji coba). Partial sengaja DIPERTAHANKAN
+    // supaya bisa di-retry/resume kalau koneksi mati sendiri; itu yang
+    // dibersihin cleanupStale() setelah 7 hari.
+    if (finalStatus === 'completed' || finalStatus === 'cancelled' || finalStatus === 'rejected') {
       // Hapus upload asli maupun output transcode. Kalau sama (tanpa
       // konversi), unlink dua kali; error ENOENT diabaikan.
       for (const f of new Set([filePath, sendFilePath])) {

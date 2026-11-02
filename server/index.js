@@ -14,14 +14,21 @@ const settings = require('./settings');
 const pin = require('./pin');
 const thumbnail = require('./thumbnail');
 const { securityHeaders, rateLimit, sameOriginGuard, hostGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
-const { listLANIPv4, getDeviceName, getDataDir, getSaveDirRoot, openBrowser } = require('./platform');
+const { listLANIPv4, getDeviceName, getDataDir, getUploadDir, getSaveDirRoot, openBrowser } = require('./platform');
 
 // Generate device name dari hostname atau environment variable
 const DEVICE_NAME = getDeviceName();
 
 // ===================== Multer Setup =====================
-const uploadsDir = process.env.LANDROP_UPLOAD_DIR || path.join(__dirname, '..', 'uploads-temp');
-fs.mkdirSync(uploadsDir, { recursive: true });
+// Buffer upload ada di data dir (bukan di dalam paket) — lihat getUploadDir().
+// Gagal bikin folder TIDAK boleh mematikan server: lebih baik upload-nya yang
+// error (500 jelas) daripada dashboard & transfer peer ikut mati.
+const uploadsDir = getUploadDir();
+try {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+} catch (err) {
+  console.warn(`[Server] Folder upload tidak bisa dibuat (${uploadsDir}): ${err.message} — upload dari browser akan gagal.`);
+}
 
 // Batas ukuran upload default 2 GB (file video besar masih muat).
 // Override: LANDROP_MAX_UPLOAD_MB=<angka>

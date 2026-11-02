@@ -57,7 +57,7 @@ port on its own and prints the new address — no manual hunting.
 | `PORT` | Server port (if taken, LAN DROP moves up to a free one) | `3000` |
 | `LANDROP_SAVE_DIR` | Where received files land (flat, no categories) | `%USERPROFILE%\Downloads\LAN-DROP` (Windows) / `~/storage/pictures` (Termux) |
 | `LANDROP_DATA_DIR` | Folder for history, settings and upload buffers | `%APPDATA%\lan-drop` / `~/.lan-drop` |
-| `LANDROP_UPLOAD_DIR` | Upload buffer folder (separate only if you want it) | follows the data dir |
+| `LANDROP_UPLOAD_DIR` | Upload buffer folder (separate only if you want it) | `<data dir>/uploads` |
 | `LANDROP_MAX_UPLOAD_MB` | Size limit per file | `2048` |
 | `LANDROP_NO_BROWSER` | `1` = do not open the dashboard in a browser automatically | (empty) |
 | `LANDROP_PEERS` | Manual peers (`Name@ip:port@transferPort`, comma-separated) | auto-discovery |
@@ -75,12 +75,29 @@ port on its own and prints the new address — no manual hunting.
 
 ## Changelog
 
-Latest version: **1.2.2** — the UI now recovers by itself when a stale service
-worker shell leaves it half-broken (reported on Android: a red
-"element #... not found in DOM" toast that stopped the page before it started;
-cause was cached JavaScript from an older version, not a broken feature). The
-cache is dropped, the service worker is released, and the page reloads once —
-at most once per session, so it can never loop. No API changes.
+Latest version in the repo: **1.3.0**. The newest release on npm is still **1.2.2** —
+the security work below (64 KB frame cap, `Host` guard) is not published yet, so run
+LAN DROP from the repo if you want those fixes.
+
+### 1.3.0
+
+- Accent moved from blue to orange, and the logo mark was redrawn (squircle +
+  drop arrow); `--warning` shifted to amber so it cannot be read as "action".
+- Upload buffers moved out of the package folder into the data dir
+  (`<data dir>/uploads`), so a global install no longer writes into
+  `node_modules/` and an update cannot wipe a transfer that is being resumed.
+  A failed upload can also no longer stop the server from booting.
+- Files whose transfer was **rejected** are now deleted right away instead of
+  sitting in the upload buffer for 7 days.
+- GitHub Actions runs `npm test` (322 checks) on Node 18/20/22.
+
+### 1.2.2
+
+The UI recovers by itself when a stale service worker shell leaves it half-broken
+(reported on Android: a red "element #... not found in DOM" toast that stopped the
+page before it started; cause was cached JavaScript from an older version, not a
+broken feature). The cache is dropped, the service worker is released, and the page
+reloads once — at most once per session, so it can never loop. No API changes.
 
 ### 1.2.1
 
