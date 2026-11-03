@@ -5,7 +5,7 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
-## [Belum dirilis]
+## [1.2.9] — 2026-11-03
 
 ### Added — alamat IP disamarkan sampai dibuka
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshots/banner.png" alt="LAN DROP — share files over Wi-Fi, no cloud, no account" width="100%">
+  <img src="https://raw.githubusercontent.com/Godisheree/lan-drop-local/main/docs/screenshots/banner.png" alt="LAN DROP — share files over Wi-Fi, no cloud, no account" width="100%">
 </p>
 
 <p align="center">
@@ -16,11 +16,11 @@ straight in the save folder on your PC (or the other way around).
 
 ## Screenshots
 
-![Send and receive UI on a desktop browser](docs/screenshots/desktop.png)
+![Send and receive UI on a desktop browser](https://raw.githubusercontent.com/Godisheree/lan-drop-local/main/docs/screenshots/desktop.png)
 
 | Phone (390 px wide) | Monitoring dashboard (PIN-locked) |
 |---|---|
-| ![Send UI on a phone](docs/screenshots/mobile.png) | ![Dashboard with peers, disk, history and logs](docs/screenshots/dashboard.png) |
+| ![Send UI on a phone](https://raw.githubusercontent.com/Godisheree/lan-drop-local/main/docs/screenshots/mobile.png) | ![Dashboard with peers, disk, history and logs](https://raw.githubusercontent.com/Godisheree/lan-drop-local/main/docs/screenshots/dashboard.png) |
 
 ## What it does
 
@@ -123,9 +123,28 @@ Reasoning lives in [`docs/adr/`](docs/adr) — start with
 
 ## Changelog
 
-Latest version: **1.2.5** — this release carries the security work below (64 KB TCP
-frame cap, `Host` guard against DNS rebinding), so `npm i -g lan-drop-local` finally
-gets it.
+Latest version: **1.2.9** — streaming only starts after the receiver says yes,
+IP addresses are blurred until you click them, and the phone header no longer
+clips its own logo.
+
+### 1.2.9
+
+- **Ask, then upload.** A file is no longer pushed to the sender's buffer before
+  the other device answers. The request (name + size, a few hundred bytes) goes
+  first; a rejection now costs zero bytes instead of a full upload, and the
+  receiver's dialog shows up immediately instead of after a 2 GB copy.
+- **Why the delay is safe:** the receiver now waits between "accept" and the
+  first byte of data, so `startRawReceive` must not arm a socket timeout — locked
+  by `scripts/check-send-flow.js` and tested with a 1.5 s pause.
+- **IP addresses are blurred by default** in the device cards and the dashboard;
+  click or tap to reveal, click again to hide (Enter/Space works too).
+- **Retry actually retries**: the "Coba Lagi" button now waits for accept and then
+  uploads + streams, instead of leaving the row stuck on "waiting".
+- Phone header fixes: the "Sambungkan" button is no longer an empty box, the last
+  letter of "LAN DROP" is no longer clipped, and the dashboard no longer prints
+  `[object HTMLSpanElement]`.
+- `npm test` is now 342 checks (was 322) and runs in GitHub Actions on Node
+  18/20/22.
 
 ### 1.2.5
 
