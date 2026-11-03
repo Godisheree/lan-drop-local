@@ -5,7 +5,7 @@
  * bukan innerHTML. Lihat docs/product/ux-principles.md (Prinsip 5).
  */
 
-import { el, clear, byId } from '../core/dom.js';
+import { el, clear, byId, ipText } from '../core/dom.js';
 import { formatBytes } from '../core/format.js';
 import { getState, setState } from '../core/state.js';
 import { showToast } from './notify.js';
@@ -47,7 +47,7 @@ function buildCard(device, handlers) {
   const header = el('div', { class: 'device-header' }, [
     el('span', { class: 'indicator', 'aria-hidden': 'true' }),
     el('span', { class: 'dev-name truncate', text: device.deviceName || 'Tanpa nama' }),
-    el('span', { class: 'dev-ip', text: `${device.ip}:${device.port}` }),
+    ipText(`${device.ip}:${device.port}`, 'dev-ip'),
   ]);
 
   const meta = el('div', { class: 'dev-meta' }, [
@@ -55,17 +55,10 @@ function buildCard(device, handlers) {
     el('span', { text: 'tersambung' }),
   ]);
 
-  // Petunjuk menyesuaikan perangkat: di HP tidak ada drag-drop mouse maupun
-  // Ctrl+V, jadi teks desktop cuma bikin bingung (ketahuan saat ambil
-  // screenshot mobile).
-  const touchOnly = typeof window.matchMedia === 'function'
-    && window.matchMedia('(hover: none)').matches;
-  const dropHint = el('p', {
-    class: 'drop-hint',
-    text: touchOnly
-      ? 'Ketuk tombol di bawah untuk memilih file, atau tempel dari papan klip'
-      : 'Seret file ke sini, atau tekan Ctrl+V untuk menempel',
-  });
+  // Petunjuk drag-drop hanya tampil di perangkat berpointer presisi —
+  // `.drop-hint` disembunyikan CSS di layar sentuh (`@media (hover: hover)`),
+  // jadi tidak perlu teks alternatif di sini.
+  const dropHint = el('p', { class: 'drop-hint', text: 'Seret file ke sini, atau tekan Ctrl+V untuk menempel' });
 
   const actions = el('div', { class: 'btn-file-row' }, [
     el('button', {

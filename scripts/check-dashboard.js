@@ -43,6 +43,33 @@ function check(name, passed, detail = '') {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ===================== Penyamaran alamat IP =====================
+// Alamat LAN (192.168.x.x) itu peta jaringan rumah; begitu ikut terfoto untuk
+// screenshot atau rekaman layar, isinya tersebar. Default-nya sekarang blur,
+// dibuka dengan klik/ketuk. Dijaga statis di sini karena perilakunya berjalan
+// di browser (bukan di server yang bisa dipanggil dari skrip ini).
+console.log('\n[IP] Alamat IP disamarkan sampai dibuka');
+
+const domSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'core', 'dom.js'), 'utf-8');
+const devicesSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'features', 'devices.js'), 'utf-8');
+const dashSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'dashboard.js'), 'utf-8');
+// Gaya .ip-blur ada di base.css, bukan components.css: dashboard.html tidak
+// memuat components.css, jadi aturan di sana tidak akan berlaku di sana.
+const baseCss = fs.readFileSync(path.join(ROOT, 'public', 'css', 'base.css'), 'utf-8');
+
+check('ipText() tersedia di core/dom.js', /export function ipText\(/.test(domSrc));
+check('ipText() bisa dibuka-tutup (is-revealed) dan bisa diakses keyboard',
+  /is-revealed/.test(domSrc) && /keydown/.test(domSrc));
+check('.ip-blur disamarkan lewat filter: blur()',
+  /\.ip-blur\s*\{[^}]*filter:\s*blur\(/.test(baseCss));
+check('.ip-blur yang sudah dibuka tidak diblur lagi',
+  /\.ip-blur\.is-revealed\s*[,{][^}]*filter:\s*none/.test(baseCss));
+check('kartu perangkat memakai ipText()', devicesSrc.includes('ipText(`${device.ip}'));
+check('tidak ada lagi IP mentah lewat kelas dev-ip', !/class: 'dev-ip'/.test(devicesSrc));
+check('dashboard memakai ipText() (peer, interface, broadcast, Tailscale)',
+  (dashSrc.match(/ipText\(/g) || []).length >= 4,
+  `${(dashSrc.match(/ipText\(/g) || []).length} pemakaian`);
+
 /** Frame protokol transfer: panjang 4 byte big-endian + JSON. */
 function frame(obj) {
   const payload = Buffer.from(JSON.stringify(obj), 'utf-8');

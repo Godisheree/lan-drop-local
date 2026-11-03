@@ -199,17 +199,27 @@
   #devicesSection[hidden],
   #activitySection[hidden] { display: none; }
 
-  .logo { font-size: var(--text-lg); flex-shrink: 0; }
+  /* Label "Sambungkan" kembali tampil (dulu kosong tanpa ikon), jadi logo
+     harus ikut mengecil — kalau tidak, "LAN DROP" terpotong di 390 px. */
+  .logo { font-size: var(--text-base); flex-shrink: 0; }
 
-  /* Chip nama perangkat boleh menyusut, tapi tidak boleh meluber keluar layar. */
-  .header-left { flex: 0 1 auto; overflow: hidden; min-width: 0; }
-  .header-right { flex: 0 1 auto; min-width: 0; gap: var(--space-1); }
+  /* Chip nama perangkat boleh menyusut, tapi tidak boleh meluber keluar layar.
+     Logo TIDAK ikut menyusut: kalau ikut, huruf terakhir "LAN DROP" terpotong
+     untuk mendapat 1–2 px (kelihatan seperti salah ketik di screenshot). */
+  .header-left { flex: 0 0 auto; overflow: visible; min-width: 0; }
+  .header-right { flex: 1 1 auto; min-width: 0; gap: var(--space-1); }
 
   .device-name {
-    max-width: 34vw;
+    max-width: 24vw;
     font-size: var(--text-xs);
     padding: 4px var(--space-2);
   }
+
+  /* Di layar sempit chip nama perangkat disembunyikan: ruangnya dipakai logo
+     dan tombol "Sambungkan" supaya tidak ada teks yang terpotong (dulu huruf
+     terakhir "LAN DROP" kepotong 1–2 px dan kelihatan seperti salah ketik).
+     Nama perangkat tetap terlihat di dashboard. */
+  #deviceName { display: none; }
 
   /* Tombol "Sambungkan" dulu labelnya disembunyikan tanpa ikon pengganti, jadi
      di HP yang tampil cuma kotak kosong. Sekarang labelnya tetap ada, cuma

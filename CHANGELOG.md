@@ -7,30 +7,46 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum dirilis]
 
-### Fixed — cacat UI yang kelihatan begitu dipotret
+### Added — alamat IP disamarkan sampai dibuka
 
-Empat masalah ketemu saat menyiapkan screenshot README, semuanya cacat nyata,
-bukan soal fotonya:
+Alamat LAN adalah peta jaringan rumah, dan screenshot/rekaman layar adalah cara
+paling umum kebocoran itu terjadi. Sekarang setiap IP (kartu perangkat, tabel
+peer, tabel penemuan, IP Tailscale) tampil **blur sejak awal**; satu klik/ketuk —
+atau Enter/Spasi kalau lewat keyboard — membukanya, klik lagi menyamarkan.
+`aria-label` sengaja tidak memuat nilainya, dan opsi ini bukan pengaturan yang
+bisa "lupa dinyalakan": blur adalah keadaan default.
+
+- `public/js/core/dom.js` — `ipText()` (dipakai kartu perangkat + dashboard)
+- `public/css/base.css` — `.ip-blur` (di base, bukan components: dashboard tidak
+  memuat components.css)
+- `scripts/check-dashboard.js` — 7 pemeriksaan statis untuk penyamaran ini
+
+### Fixed — header HP: tombol kosong, logo & nama perangkat terpotong
 
 1. **Tombol "Sambungkan" kosong di HP.** Aturan `max-width: 640px` menyembunyikan
    labelnya dengan asumsi ada ikon pengganti — tidak ada. Sekarang labelnya tetap
-   tampil (diperkecil) dan header tetap muat tanpa overflow di 390 px maupun
-   360 px.
-2. **Petunjuk menyeret file muncul di layar sentuh**: "Seret file ke sini, atau
-   tekan Ctrl+V" — tidak ada drag-and-drop mouse maupun Ctrl+V di HP. Sekarang
-   teksnya menyesuaikan `(hover: none)`.
-3. **Dashboard mencetak `[object HTMLSpanElement]`** di "Perangkat dikenal" —
-   `ago()` mengembalikan elemen, lalu diinterpolasi ke template string.
-4. **Kolom terakhir tabel dashboard terpotong** tepi kartu (mis. "Err" di kartu
+   tampil (diperkecil); header tetap muat tanpa overflow di 390 px dan 360 px.
+2. **Huruf terakhir "LAN DROP" terpotong 1–2 px** karena logo ikut menyusut demi
+   memberi ruang ke chip nama perangkat. Logo sekarang tidak menyusut, dan chip
+   nama perangkat disembunyikan di layar sempit (namanya tetap ada di dashboard).
+3. **Tombol "Dashboard" selebar 44 px padahal teksnya 60 px**, jadi menabrak chip
+   nama perangkat: `.icon-btn-text` kalah urutan dari `.icon-btn`. Sekarang
+   `.icon-btn.icon-btn-text`.
+4. **Dashboard mencetak `[object HTMLSpanElement]`** di "Perangkat dikenal" —
+   `ago()` mengembalikan elemen, lalu diinterpolasi ke template string. Pakai
+   `agoText()`.
+5. **Kolom terakhir tabel dashboard terpotong** tepi kartu (mis. "Err" di kartu
    Penemuan perangkat). `table-layout: fixed` + sel boleh membungkus.
-5. Tombol "Dashboard" di header selebar 44 px padahal isinya teks 60 px, jadi
-   menabrak chip nama perangkat. Selector `.icon-btn-text` kalah urutan dari
-   `.icon-btn`; sekarang dua kelas.
+
+Catatan: petunjuk "Seret file ke sini, atau tekan Ctrl+V" memang **tidak** muncul
+di HP — `.drop-hint` sudah disembunyikan CSS di perangkat sentuh, jadi tidak perlu
+teks alternatif.
 
 ### Docs — README dengan banner, badge, dan screenshot
 
-- `docs/screenshots/` — banner, UI desktop, UI HP, dan dashboard (diambil dari
-  dua instance sungguhan, bukan mock).
+- `docs/screenshots/` — banner, UI desktop, UI HP, dan dashboard. Diambil dari dua
+  instance LAN DROP yang benar-benar jalan (bukan mock), dengan riwayat dari
+  transfer 2 GB sungguhan. Alamat IP di dalamnya tersamar karena fitur di atas.
 - `README.md` — header bergambar + badge npm/CI/lisensi/Node, bagian Screenshots,
   ringkasan fitur, dan bagian Security. Badge CI menunjuk workflow yang baru ada.
 

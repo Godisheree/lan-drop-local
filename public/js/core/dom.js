@@ -9,6 +9,50 @@
  */
 
 /**
+ * Alamat IP yang disamarkan sampai dibuka.
+ *
+ * Alamat LAN (`192.168.x.x`, `100.x` Tailscale) itu peta jaringan rumah: begitu
+ * ikut terfoto untuk screenshot atau rekaman layar, isinya tersebar. Karena itu
+ * blur jadi keadaan DEFAULT, dan satu klik/ketuk (atau Enter/Spasi) membukanya.
+ *
+ * `aria-label` sengaja tidak memuat nilainya — pembaca layar pun tidak perlu
+ * membacakan alamat yang sedang disamarkan.
+ *
+ * @param {string} value
+ * @param {string} [extraClass]
+ * @returns {HTMLElement}
+ */
+export function ipText(value, extraClass = '') {
+  const node = el('span', {
+    class: ['ip-blur', extraClass].filter(Boolean).join(' '),
+    text: String(value == null ? '' : value),
+    role: 'button',
+    tabindex: '0',
+    title: 'Alamat IP disamarkan — klik untuk lihat',
+    'aria-label': 'Alamat IP disamarkan. Klik untuk lihat.',
+  });
+
+  const toggle = () => {
+    const revealed = node.classList.toggle('is-revealed');
+    node.setAttribute('title', revealed
+      ? 'Klik untuk sembunyikan lagi'
+      : 'Alamat IP disamarkan — klik untuk lihat');
+    node.setAttribute('aria-label', revealed
+      ? 'Alamat IP terlihat. Klik untuk menyamarkan lagi.'
+      : 'Alamat IP disamarkan. Klik untuk lihat.');
+  };
+
+  node.addEventListener('click', toggle);
+  node.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggle();
+  });
+
+  return node;
+}
+
+/**
  * Buat elemen DOM.
  *
  * @param {string} tag

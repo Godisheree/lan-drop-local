@@ -31,6 +31,9 @@ straight in the save folder on your PC (or the other way around).
 - **Files, photos, video and text.** Text goes through the same flow, and `Ctrl+V`
   pastes straight onto a device card.
 - **Nothing leaves your LAN.** No telemetry, no CDN, no account, no cloud.
+- **IP addresses are blurred by default** — the device cards and the dashboard hide
+  them until you click (or tap) them, so a screenshot or a shared screen does not
+  hand out your network map.
 - **Runs anywhere Node runs** — Windows, Linux, macOS, Android/Termux. Saves to
   `Downloads\LAN-DROP` (or `~/storage/pictures` on Termux).
 - **Installable as a PWA** on the phone; the whole UI is one page, no app store.

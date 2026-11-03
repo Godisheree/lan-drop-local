@@ -14,7 +14,7 @@
  *     terbuka di jendela kedua sepanjang hari).
  */
 import { api, postJson } from './core/api.js';
-import { el, clear, byId } from './core/dom.js';
+import { el, clear, byId, ipText } from './core/dom.js';
 import { formatBytes, formatDuration, formatDateTime, formatTime, formatSpeed } from './core/format.js';
 import { healStaleShell, markShellHealthy } from './features/pwa.js';
 
@@ -305,8 +305,8 @@ async function refreshDiscovery() {
 
   const rows = (d.interfaces || []).map((iface) =>
     row([
-      el('span', { class: 'dash-mono', text: dash(iface.address) }),
-      el('span', { class: 'dash-mono', text: dash(iface.broadcast) }),
+      ipText(dash(iface.address), 'dash-mono'),
+      ipText(dash(iface.broadcast), 'dash-mono'),
       iface.bound ? 'ya' : 'tidak',
       iface.lastSentAt ? ago(iface.lastSentAt) : 'belum pernah',
       iface.lastError
@@ -327,7 +327,7 @@ async function refreshDiscovery() {
     // Di dalam template string dia jadi "[object HTMLSpanElement]" — yang
     // dibutuhkan di sini teksnya saja.
     ['Perangkat dikenal', `${dash(peers.count)} — sinyal terakhir ${peers.lastAnnounceAt ? agoText(peers.lastAnnounceAt) : 'belum ada'}`],
-    ['Tailscale', ts.selfIp ? `ip ${ts.selfIp}` : 'tidak aktif'],
+    ['Tailscale', ts.selfIp ? el('span', {}, ['ip ', ipText(ts.selfIp)]) : 'tidak aktif'],
     ['Tailscale CLI', ts.cliFound ? 'ada' : 'tidak ada (normal di HP)'],
     ['Perangkat tailnet', dash(ts.peerCount)],
   ]);
@@ -484,7 +484,7 @@ async function refreshPeers() {
   const rows = devices.map((peer) =>
     row([
       dash(peer.deviceName),
-      el('span', { class: 'dash-mono', text: dash(peer.ip) }),
+      ipText(dash(peer.ip), 'dash-mono'),
       peer.via === 'tailscale' ? 'Tailscale' : 'LAN',
       dash(peer.port),
       dash(peer.transferPort),
