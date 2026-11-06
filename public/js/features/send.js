@@ -8,6 +8,7 @@
 import { getState } from '../core/state.js';
 import { showToast, announce } from './notify.js';
 import { addTransferItem, updateTransferItem, pollProgress } from './transfers.js';
+import { t } from '../core/i18n.js';
 
 /** @type {Map<string, AbortController>} batchId -> controller upload */
 const uploadControllers = new Map();
@@ -41,16 +42,16 @@ function uploadFiles(files, onProgress, signal) {
         try {
           resolve(JSON.parse(xhr.responseText).files || []);
         } catch (err) {
-          reject(new Error('Respons upload tidak valid'));
+          reject(new Error(t('send.uploadBadResponse')));
         }
       } else {
-        reject(new Error(`Upload gagal (HTTP ${xhr.status})`));
+        reject(new Error(t('send.uploadHttp', { status: xhr.status })));
       }
     });
 
-    xhr.addEventListener('error', () => reject(new Error('Upload gagal — koneksi terputus')));
+    xhr.addEventListener('error', () => reject(new Error(t('send.uploadDropped'))));
     xhr.addEventListener('abort', () => {
-      const err = new Error('Upload dibatalkan');
+      const err = new Error(t('send.uploadCancelled'));
       err.name = 'AbortError';
       reject(err);
     });
@@ -88,7 +89,7 @@ export async function sendBatch(target, files) {
   const batchId = files.length > 1
     ? Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
     : undefined;
-  const batchLabel = `Kirim ke ${target.targetName}`;
+  const batchLabel = t('devices.send', { name: target.targetName });
 
   let sent = 0;
 
@@ -104,7 +105,7 @@ export async function sendBatch(target, files) {
         targetName: target.targetName,
       });
     } catch (err) {
-      showToast(`Gagal mengirim ${file.name}: ${err.message}`, 'error');
+      showToast(t('send.failed', { reason: `${file.name}: ${err.message}` }), 'error');
       continue;
     }
 
@@ -128,7 +129,7 @@ export async function sendBatch(target, files) {
       fileSize: item.fileSize,
       targetName: item.targetName,
       status: 'waiting',
-      statusText: 'Menunggu diterima...',
+      statusText: t('transfer.waitingSent'),
       batchId,
       batchSize: files.length,
       batchLabel,
@@ -143,8 +144,8 @@ export async function sendBatch(target, files) {
   if (sent > 0) {
     showToast(
       sent === 1
-        ? 'Permintaan dikirim, menunggu diterima...'
-        : `${sent} file dikirim, menunggu diterima...`,
+        ? t('transfer.waitingSent')
+        : t('transfer.waitingSentCount', { count: sent }),
       'info'
     );
   }
@@ -174,9 +175,9 @@ export async function waitForAccept(item) {
       clearInterval(timer);
       updateTransferItem(item.requestId, {
         status: 'failed',
-        statusText: 'Penerima tidak merespons dalam 60 detik',
+        statusText: t('send.timeout'),
       });
-      showToast('Penerima tidak merespons', 'error');
+      showToast(t('send.timeoutShort'), 'error');
       return;
     }
 
@@ -200,9 +201,9 @@ export async function waitForAccept(item) {
         // user mengira orangnya yang menolak.
         updateTransferItem(item.requestId, {
           status: 'rejected',
-          statusText: st.reason ? st.reason : 'Ditolak penerima',
+          statusText: st.reason ? st.reason : t('send.rejected'),
         });
-        showToast(st.reason || 'Permintaan ditolak', 'error');
+        showToast(st.reason || t('send.rejectedShort'), 'error');
         return;
       }
 
@@ -211,9 +212,9 @@ export async function waitForAccept(item) {
         state.waitStartedAt.delete(item.requestId);
         updateTransferItem(item.requestId, {
           status: 'failed',
-          statusText: 'Koneksi ke perangkat terputus',
+          statusText: t('send.disconnected'),
         });
-        showToast('Koneksi ke perangkat terputus', 'error');
+        showToast(t('send.disconnected'), 'error');
         return;
       }
     } catch (err) {
@@ -223,9 +224,9 @@ export async function waitForAccept(item) {
         state.waitStartedAt.delete(item.requestId);
         updateTransferItem(item.requestId, {
           status: 'failed',
-          statusText: 'Permintaan hilang — perangkat mungkin mati',
+          statusText: t('send.requestLost'),
         });
-        showToast('Permintaan hilang', 'error');
+        showToast(t('send.requestLostShort'), 'error');
         return;
       }
       // 404 (request hilang) diabaikan — coba lagi di tick berikutnya.
@@ -298,7 +299,7 @@ async function uploadThenStart(item, resumeOffset) {
   if (!filePath) {
     updateTransferItem(item.requestId, {
       status: 'failed',
-      statusText: 'File sumber tidak tersedia — kirim ulang filenya',
+      statusText: t('send.sourceMissing'),
     });
     return;
   }
@@ -312,7 +313,7 @@ async function uploadThenStart(item, resumeOffset) {
       const cancelled = st.status === 'cancelled';
       updateTransferItem(item.requestId, {
         status: cancelled ? 'cancelled' : 'failed',
-        statusText: cancelled ? 'Dibatalkan' : 'Koneksi ke perangkat terputus',
+        statusText: cancelled ? 'Dibatalkan' : t('send.disconnected'),
       });
       return;
     }
@@ -323,8 +324,8 @@ async function uploadThenStart(item, resumeOffset) {
   updateTransferItem(item.requestId, {
     status: 'transferring',
     statusText: resumeOffset > 0 && item.fileSize > 0
-      ? `↻ Melanjutkan dari ${Math.round((resumeOffset / item.fileSize) * 100)}%...`
-      : 'Mengirim file...',
+      ? t('transfer.resuming', { percent: Math.round((resumeOffset / item.fileSize) * 100) })
+      : t('send.uploading'),
     percent: 0,
   });
 
@@ -339,7 +340,7 @@ async function uploadThenStart(item, resumeOffset) {
       status: 'failed',
       statusText: 'Gagal kirim: ' + err.message,
     });
-    showToast('Gagal kirim file', 'error');
+    showToast(t('send.failedShort'), 'error');
   }
 }
 
@@ -382,7 +383,7 @@ export async function sendText(target, text) {
             resolve();
           } else if (st.status === 'rejected') {
             clearInterval(timer);
-            reject(new Error('Ditolak penerima'));
+            reject(new Error(t('send.rejected')));
           } else if (st.status === 'disconnected') {
             clearInterval(timer);
             reject(new Error('Koneksi terputus'));
@@ -395,7 +396,7 @@ export async function sendText(target, text) {
       // Batas waktu agar tidak menggantung selamanya.
       setTimeout(() => {
         clearInterval(timer);
-        reject(new Error('Penerima tidak merespons'));
+        reject(new Error(t('send.timeoutShort')));
       }, 30000);
     });
 

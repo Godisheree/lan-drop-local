@@ -5,6 +5,7 @@
  */
 
 import { el, clear, byId } from '../core/dom.js';
+import { t } from '../core/i18n.js';
 import { formatBytes, formatTime } from '../core/format.js';
 import { attachThumbnail } from './thumbnail.js';
 import { renderGallery } from './gallery.js';
@@ -26,17 +27,17 @@ export function renderHistory(items) {
 
   if (list.length === 0) {
     container.appendChild(el('div', { class: 'empty-state' }, [
-      el('span', { class: 'empty-title', text: 'Belum ada riwayat' }),
+      el('span', { class: 'empty-title', text: t('history.empty') }),
       el('span', {
         class: 'empty-hint',
-        text: 'Transfer yang selesai akan tercatat di sini.',
+        text: t('history.emptyHint'),
       }),
     ]));
     return;
   }
 
   for (const item of list.slice(0, 30)) {
-    const dirText = item.direction === 'send' ? 'Kirim ke' : 'Terima dari';
+    const dirText = item.direction === 'send' ? t('history.sentTo') : t('history.receivedFrom');
 
     const metaParts = [
       `${dirText} ${item.peer || '?'}`,
@@ -44,7 +45,7 @@ export function renderHistory(items) {
       formatTime(item.ts),
     ];
     if (item.resumed) metaParts.push('dilanjutkan');
-    if (item.status === 'unconfirmed') metaParts.push('belum dikonfirmasi');
+    if (item.status === 'unconfirmed') metaParts.push(t('history.unconfirmed'));
     else if (item.status === 'cancelled') metaParts.push('dibatalkan');
     else if (item.status === 'failed') metaParts.push('gagal');
     if (item.reason) metaParts.push(item.reason);
@@ -92,6 +93,6 @@ export function setupHistory() {
     const expanded = toggle.getAttribute('aria-expanded') === 'true';
     toggle.setAttribute('aria-expanded', String(!expanded));
     list.hidden = expanded;
-    heading.textContent = expanded ? 'Riwayat' : 'Riwayat (disembunyikan)';
+    heading.textContent = expanded ? t('history.heading') : t('history.headingHidden');
   });
 }

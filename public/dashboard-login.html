@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#F7F7F9">
   <meta name="color-scheme" content="light dark">
   <meta name="robots" content="noindex">
-  <title>LAN DROP — PIN Dashboard</title>
+  <title>LAN DROP — Dashboard PIN</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/base.css">
@@ -16,23 +16,23 @@
   <main class="pin-gate">
     <div class="pin-card">
       <p class="pin-logo">LAN DROP</p>
-      <h1 class="pin-title">Dashboard terkunci PIN</h1>
+      <h1 class="pin-title" data-i18n="dashboard.pinLocked">Dashboard locked by PIN</h1>
       <p class="pin-sub">
-        Halaman pantau dijaga PIN. Masukkan 4-8 angka.
+        <span data-i18n="dashboard.pinLockedHint">The monitoring page is PIN-protected. Enter 4-8 digits.</span>
       </p>
 
       <form id="pinForm" class="pin-form" autocomplete="off">
-        <label class="visually-hidden" for="pinInput">PIN dashboard</label>
+        <label class="visually-hidden" for="pinInput" data-i18n="dashboard.pinLabel">Dashboard PIN</label>
         <input id="pinInput" class="pin-input" type="password" inputmode="numeric"
                maxlength="8" autocomplete="off" aria-describedby="pinMessage pinHint">
-        <button class="btn btn-accent" type="submit" id="pinSubmit">Buka dashboard</button>
+        <button class="btn btn-accent" type="submit" id="pinSubmit" data-i18n="dashboard.openDashboard">Open dashboard</button>
       </form>
 
       <p class="pin-message" id="pinMessage" role="status"></p>
       <p class="pin-hint" id="pinHint" hidden></p>
 
       <p class="pin-foot">
-        Kirim file tidak dikunci — <a href="/">buka UI kirim file</a>.
+        <span data-i18n="dashboard.sendNotLocked">Sending files is not locked —</span> <a href="/" data-i18n="dashboard.openSendUi">open the file transfer UI</a>.
       </p>
     </div>
   </main>

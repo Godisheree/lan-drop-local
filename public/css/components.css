@@ -1310,3 +1310,78 @@
 .toast-error { border-left: 3px solid var(--danger); }
 .toast-warning { border-left: 3px solid var(--warning); }
 .toast-info { border-left: 3px solid var(--accent); }
+
+/* ==========================================================================
+   Pemilih bahasa (locale)
+   Bendera SVG, bukan emoji: Windows 10 tidak punya font emoji bendera.
+   ========================================================================== */
+
+.locale-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.locale-btn {
+  padding: 0;
+}
+
+.flag-icon {
+  display: block;
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+  /* Garis tepi tipis supaya bendera putih (Indonesia) tetap terlihat di
+     permukaan terang. */
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+
+/* Panel: muncul di bawah tombol, rata kanan supaya tidak keluar layar. */
+.locale-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 60;
+  min-width: 168px;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.16));
+}
+
+.locale-menu[hidden] {
+  display: none;
+}
+
+.locale-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.locale-option:hover,
+.locale-option:focus-visible {
+  background: var(--bg-sunken);
+}
+
+.locale-option.is-selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.locale-option.is-selected::after {
+  content: "✓";
+  margin-left: auto;
+}

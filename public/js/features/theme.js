@@ -7,6 +7,8 @@
  * Lihat docs/adr/0003-dark-mode-via-tokens.md
  */
 
+import { t } from '../core/i18n.js';
+
 const STORAGE_KEY = 'landrop-theme';
 
 /** @type {'light'|'dark'|'system'} */
@@ -94,7 +96,7 @@ export function setupThemeToggle(button) {
 
 function announceTheme(button) {
   const isDark = getEffectiveTheme() === 'dark';
-  button.setAttribute('aria-label', isDark ? 'Aktifkan mode terang' : 'Aktifkan mode gelap');
+  button.setAttribute('aria-label', isDark ? t('a11y.enableLight') : t('a11y.enableDark'));
 }
 
 /**

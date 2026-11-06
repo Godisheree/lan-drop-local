@@ -8,6 +8,8 @@
  * Lihat docs/adr/0001-frontend-modularization.md
  */
 
+import { t } from './i18n.js';
+
 /**
  * Alamat IP yang disamarkan sampai dibuka.
  *
@@ -28,18 +30,14 @@ export function ipText(value, extraClass = '') {
     text: String(value == null ? '' : value),
     role: 'button',
     tabindex: '0',
-    title: 'Alamat IP disamarkan — klik untuk lihat',
-    'aria-label': 'Alamat IP disamarkan. Klik untuk lihat.',
+    title: t('a11y.ipHiddenTitle'),
+    'aria-label': t('a11y.ipHidden'),
   });
 
   const toggle = () => {
     const revealed = node.classList.toggle('is-revealed');
-    node.setAttribute('title', revealed
-      ? 'Klik untuk sembunyikan lagi'
-      : 'Alamat IP disamarkan — klik untuk lihat');
-    node.setAttribute('aria-label', revealed
-      ? 'Alamat IP terlihat. Klik untuk menyamarkan lagi.'
-      : 'Alamat IP disamarkan. Klik untuk lihat.');
+    node.setAttribute('title', revealed ? t('a11y.ipShownTitle') : t('a11y.ipHiddenTitle'));
+    node.setAttribute('aria-label', revealed ? t('a11y.ipShown') : t('a11y.ipHidden'));
   };
 
   node.addEventListener('click', toggle);

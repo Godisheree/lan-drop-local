@@ -11,6 +11,7 @@ import { getState, setState } from '../core/state.js';
 import { showToast, notify, announce } from './notify.js';
 import { openModal, closeModal } from './a11y.js';
 import { addTransferItem, pollProgress } from './transfers.js';
+import { t } from '../core/i18n.js';
 
 let modalCloser = null;
 
@@ -38,7 +39,7 @@ export async function pollPending() {
           fileSize: req.fileSize,
           senderName: req.senderName,
           status: 'transferring',
-          statusText: 'Diterima otomatis',
+          statusText: t('receive.autoAccepted'),
           batchId: req.batchId,
         });
         pollProgress(req.requestId, 'receive');
@@ -85,7 +86,7 @@ export async function pollPending() {
       if (!stillPending && !byId('requestModal').classList.contains('hidden')) {
         const senderName = state.currentGroup.senderName || 'Pengirim';
         dismissModal();
-        showToast(`${senderName} membatalkan kiriman`, 'info');
+        showToast(t('receive.senderCancelled', { name: senderName }), 'info');
       }
     }
 
@@ -105,12 +106,12 @@ function renderGroup(group) {
 
   clear(info);
 
-  const sender = el('strong', { text: group.senderName || 'Tanpa nama' });
+  const sender = el('strong', { text: group.senderName || t('devices.unnamed') });
 
   if (files.length === 1) {
     info.appendChild(el('p', {}, [
       sender,
-      ' ingin mengirim file:',
+      t('receive.wantsFile'),
     ]));
     info.appendChild(el('div', { class: 'file-list-row' }, [
       el('span', { class: 'fl-name', text: files[0].fileName }),
@@ -119,7 +120,7 @@ function renderGroup(group) {
   } else {
     info.appendChild(el('p', {}, [
       sender,
-      ' ingin mengirim ',
+      t('receive.wantsSomething'),
       el('strong', { text: String(files.length) }),
       ' file:',
     ]));
@@ -137,7 +138,7 @@ function renderGroup(group) {
   const totalSize = files.reduce((sum, f) => sum + (f.fileSize || 0), 0);
   info.appendChild(el('p', {
     class: 'modal-fsize',
-    text: `Total ${formatBytes(totalSize)} — akan disimpan di folder LAN DROP`,
+    text: t('receive.totalSize', { size: formatBytes(totalSize) }),
   }));
 }
 
@@ -162,12 +163,12 @@ function showNextRequest() {
     },
   });
 
-  notify(`${group.senderName || 'Seseorang'} ingin mengirim file`, {
+  notify(`${group.senderName || t('receive.someone')} ingin mengirim file`, {
     type: 'info',
     sound: true,
     badge: true,
   });
-  announce(`Permintaan masuk dari ${group.senderName || 'seseorang'}`);
+  announce(`Permintaan masuk dari ${group.senderName || t('receive.someoneLower')}`);
 }
 
 /**
@@ -217,7 +218,7 @@ export async function acceptCurrent() {
         fileSize: request.fileSize,
         senderName: group.senderName,
         status: 'transferring',
-        statusText: 'Menunggu pengirim...',
+        statusText: t('receive.waitingSender'),
         batchId: group.requests.length > 1 ? group.batchId : undefined,
         batchSize: group.requests.length,
         batchLabel: `Dari ${group.senderName}`,
@@ -225,13 +226,13 @@ export async function acceptCurrent() {
 
       pollProgress(request.requestId, 'receive');
     } catch (err) {
-      showToast(`Gagal menerima ${request.fileName}: ${err.message}`, 'error');
+      showToast(t('receive.receiveFailed', { name: request.fileName, reason: err.message }), 'error');
     }
   }
 
   const count = group.requests.length;
   showToast(
-    count === 1 ? 'Diterima, menunggu file...' : `${count} file diterima, menunggu file...`,
+    count === 1 ? t('receive.acceptedWaiting') : t('receive.acceptedWaitingCount', { count }),
     'success'
   );
 
@@ -258,7 +259,7 @@ export async function rejectCurrent() {
     }
   }
 
-  showToast('Permintaan ditolak', 'info');
+  showToast(t('receive.rejected'), 'info');
   showNextRequest();
 }
 

@@ -5,6 +5,36 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.13] — 2026-11-07
+
+### Added — UI dua bahasa (English default) + pemilih bahasa
+
+Seluruh UI kini punya dua bahasa penuh: **English** (default untuk pengguna baru)
+dan **Indonesia**. Bahasa dipilih lewat tombol bendera di header, dan pilihannya
+tersimpan di `localStorage` sehingga bertahan antar sesi.
+
+- `public/js/core/i18n.js` — `t(key, vars)`, `setLocale()`, `applyDom()`, event
+  `landrop:locale`. Fallback berantai: bahasa aktif → English → key mentah, supaya
+  terjemahan yang kurang kelihatan saat dipakai, bukan hilang diam-diam.
+- `public/locales/en.json`, `id.json` — 284 key, paritas dijaga skrip.
+- `public/js/features/locale.js` — pemilih bahasa (dropdown, keyboard Escape,
+  klik di luar menutup).
+- `public/icons/flags/gb.svg`, `id.svg` — bendera SVG dari lipis/flag-icons (MIT).
+  SVG, bukan emoji: Windows 10 tidak punya font emoji bendera, jadi 🇬🇧/🇮🇩
+  tampil sebagai huruf "GB"/"ID". Aset ikut terbit lewat whitelist `public/`.
+- `public/js/core/format.js` — satuan durasi & format tanggal mengikuti bahasa
+  aktif ("9s ago" vs "9 dtk lalu").
+- `public/js/login.js` — halaman PIN tetap tanpa import (alasan lama: harus jalan
+  walau modul lain gagal), jadi memuat kamusnya sendiri.
+- `scripts/check-i18n.js` — 9 pemeriksaan: paritas key, key yatim, placeholder
+  `{x}` sama di dua bahasa, `data-i18n` tanpa key, sisa teks Indonesia di
+  `index.html`/`dashboard.html`, dan keberadaan bendera di paket npm.
+- `public/sw.js` — `CACHE_VERSION` v24 + precache kamus & bendera supaya UI
+  tidak jadi key mentah saat offline.
+
+Istilah teknis yang sengaja tidak diterjemahkan: LAN, Tailscale, PIN, Dashboard,
+Peer, Termux, PWA.
+
 ## [1.2.12] — 2026-11-06
 
 ### Added — ikon tray tanpa Electron

@@ -149,6 +149,28 @@ rate limiter in-memory per IP, dan validasi target IP (hanya LAN/Tailscale).
 Semua pure function + satu Map untuk rate limit — tanpa dependency baru.
 Detail di bagian [Keamanan](#keamanan).
 
+
+### Bahasa (`public/js/core/i18n.js`)
+
+UI punya dua bahasa penuh: **English (default)** dan **Indonesia**, dipilih lewat
+tombol bendera di header (`public/js/features/locale.js`). Kamus berupa JSON flat
+di `public/locales/{en,id}.json` — nol dependency, dan bisa diperiksa skrip.
+
+**Aturan mengikat:**
+- **Setiap teks UI baru wajib lewat `t('key')`** — jangan menulis kalimat langsung
+  di HTML atau string literal JS. `npm run check:i18n` gagal kalau ada key yang
+  hilang, key yatim, atau teks Indonesia tersisa di `index.html`/`dashboard.html`.
+- Placeholder `{name}` harus identik di kedua kamus (dijaga skrip).
+- Teks yang dibuat ulang setiap render pakai `t()` di tempat, **bukan** string
+  yang disimpan — kalau disimpan, ia tidak ikut berganti bahasa.
+- Tombol/atribut pakai `data-i18n` (textContent) atau `data-i18n-attr="aria-label:key,title:key"`.
+- Bendera berupa **SVG** (`public/icons/flags/`), bukan emoji: Windows 10 tidak
+  punya font emoji bendera.
+- Naikkan `CACHE_VERSION` di `sw.js` setiap shell berubah; kamus & bendera ikut
+  di-precache supaya UI tidak menampilkan key mentah saat offline.
+- Istilah yang **tidak** diterjemahkan: LAN, Tailscale, PIN, Dashboard, Peer,
+  Termux, PWA.
+
 ### Frontend (`public/`)
 
 Single-page app, **ES modules tanpa build step** (`<script type="module">`).

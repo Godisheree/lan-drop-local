@@ -14,6 +14,7 @@ import { el, clear, maybeById } from '../core/dom.js';
 import { formatBytes } from '../core/format.js';
 import { showToast } from './notify.js';
 import { thumbnailUrl } from './thumbnail.js';
+import { t } from '../core/i18n.js';
 
 const MAX_ITEMS = 12;
 
@@ -38,11 +39,11 @@ async function copyToClipboard(text, button) {
     }
 
     const original = button.getAttribute('aria-label');
-    button.setAttribute('aria-label', 'Lokasi file disalin');
+    button.setAttribute('aria-label', t('gallery.copied'));
     setTimeout(() => button.setAttribute('aria-label', original), 1500);
-    showToast('Lokasi file disalin', 'success');
+    showToast(t('gallery.copied'), 'success');
   } catch (_) {
-    showToast('Gagal menyalin lokasi file', 'error');
+    showToast(t('gallery.copyFailed'), 'error');
   }
 }
 
@@ -72,7 +73,7 @@ export function renderGallery(items) {
     const button = el('button', {
       class: 'gallery-item',
       type: 'button',
-      'aria-label': `Foto: ${item.fileName} — salin lokasi file`,
+      'aria-label': t('gallery.copyLabel', { name: item.fileName }),
       title: `${item.fileName} · ${formatBytes(item.fileSize)}`,
       onclick: (event) => copyToClipboard(item.savedTo || '', event.currentTarget),
     }, [

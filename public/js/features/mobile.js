@@ -15,6 +15,7 @@
 import { getState } from '../core/state.js';
 import { notify } from './notify.js';
 import { formatBytes } from '../core/format.js';
+import { t } from '../core/i18n.js';
 
 /** @type {WakeLockSentinel|null} */
 let wakeLock = null;
@@ -166,7 +167,7 @@ export function initMobileHardening() {
  */
 export function warnDiskSpace(free, needed) {
   notify(
-    `Ruang disk tidak cukup: perlu ${formatBytes(needed)}, tersedia ${formatBytes(free)}`,
+    t('mobile.diskLow', { needed: formatBytes(needed), free: formatBytes(free) }),
     { type: 'error', sound: true, badge: false }
   );
 }

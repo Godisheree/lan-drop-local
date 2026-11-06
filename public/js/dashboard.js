@@ -17,6 +17,7 @@ import { api, postJson } from './core/api.js';
 import { el, clear, byId, ipText } from './core/dom.js';
 import { formatBytes, formatDuration, formatDateTime, formatTime, formatSpeed } from './core/format.js';
 import { healStaleShell, markShellHealthy } from './features/pwa.js';
+import { t } from './core/i18n.js';
 
 // Shell service worker yang tertinggal (HTML dan JS beda versi) bikin elemen di
 // bawah hilang. Module ini membacanya di scope atas, jadi gagalnya senyap tanpa
@@ -44,16 +45,18 @@ const POLL_MS = {
   log: 2000,
 };
 
-const STATUS_LABEL = {
-  pending: 'Menunggu konfirmasi',
-  accepted: 'Diterima',
-  transferring: 'Sedang jalan',
-  completed: 'Berhasil',
-  unconfirmed: 'Belum dikonfirmasi',
-  disconnected: 'Terputus',
-  failed: 'Gagal',
-  rejected: 'Ditolak',
-  cancelled: 'Dibatalkan',
+// Dipetakan ke key kamus, bukan teks jadi: label ini dibuat ulang setiap
+// render, jadi harus ikut bahasa aktif saat itu.
+const STATUS_KEY = {
+  pending: 'dashboard.statusPending',
+  accepted: 'dashboard.statusAccepted',
+  transferring: 'dashboard.statusRunning',
+  completed: 'dashboard.statusCompleted',
+  unconfirmed: 'dashboard.statusUnconfirmed',
+  disconnected: 'dashboard.statusDisconnected',
+  failed: 'dashboard.statusFailed',
+  rejected: 'dashboard.statusRejected',
+  cancelled: 'dashboard.statusCancelled',
 };
 
 const STATUS_STATE = {
@@ -157,9 +160,10 @@ const dash = (value) => (value === null || value === undefined || value === '' ?
 function agoText(ts) {
   if (!ts) return '—';
   const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (seconds < 5) return 'baru saja';
-  if (seconds < 60) return `${seconds} dtk lalu`;
-  return `${formatDuration(seconds)} lalu`;
+  // Satuan ikut bahasa aktif — "9s ago" vs "9 dtk lalu".
+  if (seconds < 5) return t('unit.now');
+  if (seconds < 60) return t('unit.secondsAgo', { n: seconds });
+  return t('unit.agoLong', { duration: formatDuration(seconds) });
 }
 
 /**
@@ -205,7 +209,7 @@ function statusTag(status) {
   return el('span', {
     class: 'dash-tag',
     dataset: { state: STATUS_STATE[status] || '' },
-    text: STATUS_LABEL[status] || dash(status),
+    text: STATUS_KEY[status] ? t(STATUS_KEY[status]) : dash(status),
   });
 }
 
@@ -259,7 +263,7 @@ function guard(key, fn) {
       if (errorShown) return;
       errorShown = true;
       $.error.hidden = false;
-      $.error.textContent = `Gagal memperbarui ${key}: ${err.message}`;
+      $.error.textContent = t('dashboard.updateFailed', { key, reason: err.message });
     })
     .finally(() => busy.delete(key));
 }
@@ -276,7 +280,7 @@ async function refreshStatus() {
   paintUptime();
 
   fillKv($.statusKv, [
-    ['Perangkat', dash(s.deviceName)],
+    [t('field.device'), dash(s.deviceName)],
     ['Versi', dash(s.version)],
     ['Commit', el('span', { class: 'dash-mono', text: dash(s.commit) })],
     ['Proses', `pid ${dash(s.pid)}`],
@@ -284,10 +288,10 @@ async function refreshStatus() {
     ['Platform', dash(s.platform)],
     ['Uptime', uptimeDd],
     ['Port HTTP', dash(s.port)],
-    ['Port transfer', dash(s.transferPort)],
-    ['Port discovery', dash(s.discoveryPort)],
-    ['Folder simpan', el('span', { class: 'dash-mono', text: dash(s.saveDir) })],
-    ['Folder data', el('span', { class: 'dash-mono', text: dash(s.dataDir) })],
+    [t('dashboard.portTransfer'), dash(s.transferPort)],
+    [t('dashboard.portDiscovery'), dash(s.discoveryPort)],
+    [t('dashboard.saveFolder'), el('span', { class: 'dash-mono', text: dash(s.saveDir) })],
+    [t('dashboard.dataFolder'), el('span', { class: 'dash-mono', text: dash(s.dataDir) })],
   ]);
 }
 
@@ -311,40 +315,40 @@ function paintUptime() {
 async function refreshDiscovery() {
   const d = await api('/discovery/status');
 
-  $.discReady.textContent = d.ready ? 'Siap' : 'Bermasalah';
+  $.discReady.textContent = d.ready ? t('dashboard.ready') : t('dashboard.problem');
   $.discReady.dataset.state = d.ready ? 'ok' : 'err';
 
   const rows = (d.interfaces || []).map((iface) =>
     row([
       ipText(dash(iface.address), 'dash-mono'),
       ipText(dash(iface.broadcast), 'dash-mono'),
-      iface.bound ? 'ya' : 'tidak',
-      iface.lastSentAt ? ago(iface.lastSentAt) : 'belum pernah',
+      iface.bound ? t('dashboard.yes') : t('dashboard.no'),
+      iface.lastSentAt ? ago(iface.lastSentAt) : t('dashboard.never'),
       iface.lastError
         ? el('span', { class: 'dash-tag', dataset: { state: 'err' }, text: iface.lastError })
         : '—',
     ])
   );
-  fillTable($.discBody, 5, rows, 'Tidak ada interface LAN yang bisa dipakai broadcast.');
+  fillTable($.discBody, 5, rows, t('dashboard.noInterface'));
 
   const listener = d.listener || {};
   const peers = d.peers || {};
   const ts = d.tailscale || {};
 
   fillKv($.discKv, [
-    ['Listener', `port ${dash(listener.port)} — ${listener.bound ? 'terikat' : 'TIDAK terikat'}`],
-    ['Error listener', listener.error ? el('span', { class: 'dash-tag', dataset: { state: 'err' }, text: listener.error }) : '—'],
+    [t('dashboard.listener'), t('connect.listenerPort', { port: dash(listener.port), state: listener.bound ? t('dashboard.boundState') : t('dashboard.unboundState') })],
+    [t('dashboard.listenerError'), listener.error ? el('span', { class: 'dash-tag', dataset: { state: 'err' }, text: listener.error }) : '—'],
     // `ago()` mengembalikan ELEMEN (biar bisa dihitung ulang tiap detik).
     // Dulu di sini dipakai `agoText()` — string mati yang tidak ikut
     // `tickAges()`, jadi "sinyal terakhir" beku di angka terakhir poll dan
     // baru meloncat saat poll berikutnya. Sekarang elemennya hidup.
     [
-      'Perangkat dikenal',
-      [el('span', { text: `${dash(peers.count)} — sinyal terakhir ` }), peers.lastAnnounceAt ? ago(peers.lastAnnounceAt) : el('span', { text: 'belum ada' })],
+      t('dashboard.peersKnown'),
+      [el('span', { text: `${dash(peers.count)} — ${t('dashboard.lastSignal')}` }), peers.lastAnnounceAt ? ago(peers.lastAnnounceAt) : el('span', { text: t('dashboard.noneYet') })],
     ],
-    ['Tailscale', ts.selfIp ? el('span', {}, ['ip ', ipText(ts.selfIp)]) : 'tidak aktif'],
-    ['Tailscale CLI', ts.cliFound ? 'ada' : 'tidak ada (normal di HP)'],
-    ['Perangkat tailnet', dash(ts.peerCount)],
+    ['Tailscale', ts.selfIp ? el('span', {}, ['ip ', ipText(ts.selfIp)]) : t('dashboard.notActive')],
+    ['Tailscale CLI', ts.cliFound ? t('dashboard.cliPresent') : t('dashboard.cliMissing')],
+    [t('dashboard.tailnetPeers'), dash(ts.peerCount)],
   ]);
 }
 
@@ -359,7 +363,7 @@ async function refreshDisk() {
   } catch (err) {
     // 501 = server tidak bisa mengukur (filesystem virtual). Itu jawaban, bukan
     // kegagalan: tampilkan apa adanya, jangan bikin banner merah.
-    $.diskValue.textContent = 'tidak terukur';
+    $.diskValue.textContent = t('dashboard.unmeasured');
     fillKv($.diskKv, [['Keterangan', err.message]]);
     $.diskBar.hidden = true;
     return;
@@ -372,16 +376,16 @@ async function refreshDisk() {
     $.diskBar.hidden = false;
     $.diskBarFill.style.setProperty('width', `${usedPercent}%`);
     fillKv($.diskKv, [
-      ['Kapasitas', formatBytes(data.total)],
+      [t('dashboard.capacity'), formatBytes(data.total)],
       ['Terpakai', `${usedPercent}%`],
-      ['Folder', el('span', { class: 'dash-mono', text: dash(data.path) })],
+      [t('dashboard.folder'), el('span', { class: 'dash-mono', text: dash(data.path) })],
     ]);
   } else {
     // Kapasitas drive tidak selalu bisa dibaca (mis. share jaringan).
     $.diskBar.hidden = true;
     fillKv($.diskKv, [
-      ['Kapasitas', 'tidak tersedia'],
-      ['Folder', el('span', { class: 'dash-mono', text: dash(data.path) })],
+      [t('dashboard.capacity'), t('dashboard.unavailable')],
+      [t('dashboard.folder'), el('span', { class: 'dash-mono', text: dash(data.path) })],
     ]);
   }
 }
@@ -402,7 +406,7 @@ async function refreshAuto() {
   $.autoPeers.value = (s.peers || []).join(', ');
   $.autoInfo.textContent = s.enabled
     ? `Aktif — ${s.peers.length ? `hanya dari: ${s.peers.join(', ')}` : 'semua peer'}`
-    : 'Mati — file masuk selalu minta konfirmasi';
+    : t('dashboard.autoOff');
 }
 
 async function saveAuto() {
@@ -419,7 +423,7 @@ async function saveAuto() {
     });
 
     autoDirty = false;
-    toast(saved.enabled ? 'Terima otomatis: aktif' : 'Terima otomatis: mati');
+    toast(saved.enabled ? t('dashboard.autoOn') : t('dashboard.autoOffState'));
     $.autoInfo.textContent = saved.enabled
       ? `Tersimpan ${formatTime(Date.now())} — aktif untuk ${saved.peers.length ? saved.peers.join(', ') : 'semua peer'}`
       : `Tersimpan ${formatTime(Date.now())} — terima otomatis mati`;
@@ -439,10 +443,10 @@ async function refreshPin() {
   const info = await api('/dashboard/pin-info');
 
   $.pinStatus.dataset.state = info.default ? 'warn' : 'ok';
-  $.pinStatusText.textContent = info.default ? 'Masih PIN bawaan' : 'Sudah diganti';
+  $.pinStatusText.textContent = info.default ? t('dashboard.pinDefault') : t('dashboard.pinChanged');
   $.pinInfo.textContent = info.default
-    ? 'PIN masih bawaan (123456). Siapa pun di Wi-Fi yang sama bisa membuka dashboard ini — sebaiknya segera diganti.'
-    : 'PIN bawaan sudah tidak dipakai. Angka PIN tidak ditampilkan di sini.';
+    ? t('dashboard.pinDefaultWarn')
+    : t('dashboard.pinDefaultCleared');
 }
 
 /** PIN valid menurut aturan server: 4-8 angka. */
@@ -465,13 +469,13 @@ async function savePin() {
     // Server mencabut SEMUA sesi, termasuk yang barusan dipakai mengganti —
     // jadi halaman ini sudah tidak punya izin apa pun lagi. Diberi jeda 1,5 dtk
     // supaya pesannya sempat terbaca sebelum halaman login muncul.
-    $.pinMsg.textContent = 'PIN diganti. Semua browser harus masuk ulang.';
+    $.pinMsg.textContent = t('dashboard.pinChangedOk');
     $.pinNew.value = '';
     setTimeout(() => {
       window.location.href = '/dashboard';
     }, 1500);
   } catch (err) {
-    $.pinMsg.textContent = `Gagal mengganti PIN: ${err.message}`;
+    $.pinMsg.textContent = t('dashboard.pinChangeFailed', { reason: err.message });
     $.pinSave.disabled = false;
   }
 }
@@ -506,7 +510,7 @@ async function refreshPeers() {
       ago(peer.lastSeen),
     ])
   );
-  fillTable($.peerBody, 6, rows, 'Belum ada perangkat lain yang terlihat.');
+  fillTable($.peerBody, 6, rows, t('dashboard.noPeer'));
 }
 
 // ---------------------------------------------------------------------------
@@ -568,7 +572,7 @@ async function refreshActive() {
     });
 
     return row([
-      t.direction === 'receive' ? 'Terima' : 'Kirim',
+      t.direction === 'receive' ? t('field.received') : t('field.sent'),
       el('div', { class: 'dash-file', text: dash(t.fileName), title: dash(t.fileName) }),
       formatBytes(t.fileSize),
       dash(t.peer),
@@ -577,7 +581,7 @@ async function refreshActive() {
       cancel,
     ]);
   });
-  fillTable($.activeBody, 7, rows, 'Tidak ada transfer yang sedang berjalan.');
+  fillTable($.activeBody, 7, rows, t('dashboard.noActive'));
 }
 
 async function cancelTransfer(requestId, role, button) {
@@ -589,7 +593,7 @@ async function cancelTransfer(requestId, role, button) {
   } catch (err) {
     button.disabled = false;
     $.error.hidden = false;
-    $.error.textContent = `Gagal membatalkan transfer: ${err.message}`;
+    $.error.textContent = t('dashboard.cancelFailed', { reason: err.message });
   }
 }
 
@@ -618,7 +622,7 @@ function renderHistory() {
 
     const main = row([
       formatDateTime(entry.ts),
-      entry.direction === 'receive' ? 'Terima' : 'Kirim',
+      entry.direction === 'receive' ? t('field.received') : t('field.sent'),
       statusTag(entry.status),
       el('div', { class: 'dash-file', text: dash(entry.fileName), title: dash(entry.fileName) }),
       entry.fileSize ? formatBytes(entry.fileSize) : '—',
@@ -639,7 +643,7 @@ function renderHistory() {
           el('dt', { text: 'Waktu' }),
           el('dd', { text: formatDateTime(entry.ts) }),
           el('dt', { text: 'Arah' }),
-          el('dd', { text: entry.direction === 'receive' ? 'Terima' : 'Kirim' }),
+          el('dd', { text: entry.direction === 'receive' ? t('field.received') : t('field.sent') }),
           el('dt', { text: 'Status' }),
           el('dd', {}, [
             statusTag(entry.status),
@@ -675,7 +679,7 @@ function renderHistory() {
     rows.push(main, detail);
   }
 
-  fillTable($.histBody, 7, rows, 'Belum ada riwayat yang cocok dengan filter ini.');
+  fillTable($.histBody, 7, rows, t('dashboard.historyEmpty'));
 
   renderGallery();
 }
@@ -707,13 +711,13 @@ async function refreshHistory() {
 }
 
 async function clearHistory() {
-  if (!window.confirm('Hapus seluruh riwayat transfer? Tindakan ini tidak bisa dibatalkan.')) return;
+  if (!window.confirm(t('dashboard.clearConfirm'))) return;
   $.histClear.disabled = true;
   try {
     await postJson('/history/clear', {});
     historyRows = [];
     renderHistory();
-    toast('Riwayat dihapus');
+    toast(t('dashboard.cleared'));
   } finally {
     $.histClear.disabled = false;
   }
@@ -894,7 +898,7 @@ $.histFilter.addEventListener('change', renderHistory);
 $.histClear.addEventListener('click', () => {
   clearHistory().catch((err) => {
     $.error.hidden = false;
-    $.error.textContent = `Gagal menghapus riwayat: ${err.message}`;
+    $.error.textContent = t('dashboard.clearFailed', { reason: err.message });
   });
 });
 
@@ -922,7 +926,7 @@ $.pinNew.addEventListener('input', () => {
 });
 $.pinSave.addEventListener('click', () => {
   savePin().catch((err) => {
-    $.pinMsg.textContent = `Gagal mengganti PIN: ${err.message}`;
+    $.pinMsg.textContent = t('dashboard.pinChangeFailed', { reason: err.message });
     $.pinSave.disabled = false;
   });
 });
@@ -938,7 +942,7 @@ $.autoPeers.addEventListener('input', () => {
 });
 $.autoSave.addEventListener('click', () => {
   saveAuto().catch((err) => {
-    $.autoInfo.textContent = `Gagal menyimpan: ${err.message}`;
+    $.autoInfo.textContent = t('dashboard.saveFailed', { reason: err.message });
   });
 });
 

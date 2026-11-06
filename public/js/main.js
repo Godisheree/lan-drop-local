@@ -23,6 +23,8 @@ import { setupPaste } from './features/paste.js';
 import { setupAutoApprove, renderAutoApprove } from './features/autoapprove.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
+import { initLocale } from './features/locale.js';
+import { initI18n } from './core/i18n.js';
 import { initPwa, applyUpdate, healStaleShell, markShellHealthy } from './features/pwa.js';
 import { initLiveRegion, showToast, clearBadge } from './features/notify.js';
 import { initMobileHardening } from './features/mobile.js';
@@ -223,6 +225,10 @@ function setupHeader() {
 
   setupThemeToggle(byId('btnTheme'));
 
+  // Pemilih bahasa. Ditaruh di header, sebaris dengan tombol tema.
+  const headerRight = document.querySelector('.header-right');
+  initLocale(headerRight);
+
   // PWA: registrasi service worker (hanya di secure context) + UI install.
   initPwa();
 
@@ -354,6 +360,10 @@ async function loadIdentity() {
  * Inisialisasi aplikasi.
  */
 async function init() {
+  // i18n lebih dulu: semua teks bertanda data-i18n perlu terjemahan sebelum
+  // apa pun dirender. Musuh utamanya cache basi, dan itu ditangani di bawah.
+  await initI18n();
+
   initLiveRegion();
   initShortcuts();
 

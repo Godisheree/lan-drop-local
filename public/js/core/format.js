@@ -5,6 +5,8 @@
  * "12,4 MB", "1,2 GB/s", "8 detik lagi".
  */
 
+import { t, getLocale } from './i18n.js';
+
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
 /**
@@ -56,23 +58,30 @@ export function formatSpeed(bytesPerSecond) {
  */
 export function formatDuration(seconds) {
   const s = Math.max(0, Math.round(Number(seconds) || 0));
-  if (s < 1) return 'kurang dari 1 dtk';
-  if (s < 60) return `${s} dtk`;
+  // Satuan dari kamus, bukan literal: bahasa Inggris butuh "8s / 2m 5s",
+  // Indonesia "8 dtk / 2 mnt 5 dtk". Tanpa ini UI Inggris tetap bilang "dtk".
+  const U = (key) => t(key);
+  if (s < 1) return t('unit.lessThanSecond');
+  if (s < 60) return `${s}${U('unit.secondShort')}`;
 
   const minutes = Math.floor(s / 60);
   const remSeconds = s % 60;
   if (minutes < 60) {
-    return remSeconds > 0 ? `${minutes} mnt ${remSeconds} dtk` : `${minutes} mnt`;
+    return remSeconds > 0
+      ? `${minutes}${U('unit.minuteShort')} ${remSeconds}${U('unit.secondShort')}`
+      : `${minutes}${U('unit.minuteShort')}`;
   }
 
   const hours = Math.floor(minutes / 60);
   const remMinutes = minutes % 60;
   if (hours < 24) {
-    return remMinutes > 0 ? `${hours} jam ${remMinutes} mnt` : `${hours} jam`;
+    return remMinutes > 0
+      ? `${hours}${U('unit.hourShort')} ${remMinutes}${U('unit.minuteShort')}`
+      : `${hours}${U('unit.hourShort')}`;
   }
 
   const days = Math.floor(hours / 24);
-  return `${days} hari ${hours % 24} jam`;
+  return `${days}${U('unit.dayShort')} ${hours % 24}${U('unit.hourShort')}`;
 }
 
 /**
@@ -82,7 +91,7 @@ export function formatDuration(seconds) {
  */
 export function formatTime(ts) {
   const date = ts instanceof Date ? ts : new Date(ts);
-  return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString(getLocale() === 'id' ? 'id-ID' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -92,7 +101,7 @@ export function formatTime(ts) {
  */
 export function formatDateTime(ts) {
   const date = ts instanceof Date ? ts : new Date(ts);
-  return date.toLocaleString('id-ID', {
+  return date.toLocaleString(getLocale() === 'id' ? 'id-ID' : 'en-GB', {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',

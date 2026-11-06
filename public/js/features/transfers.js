@@ -130,10 +130,10 @@ function buildItem(requestId, data) {
     el('button', {
       class: 'btn-mini btn-copy-name',
       type: 'button',
-      title: 'Salin nama file',
-      'aria-label': `Salin nama file ${data.fileName || 'transfer'}`,
+      title: t('toast.copyFileName'),
+      'aria-label': t('toast.copyFileNameLabel', { name: data.fileName || 'transfer' }),
       onclick: () => copyText(data.fileName || '', 'Nama file disalin'),
-    }, 'Salin nama'),
+    }, t('toast.copyName')),
   ]);
 
   const header = el('div', { class: 'tf-header' }, [
@@ -299,7 +299,7 @@ export function updateTransferItem(requestId, data) {
         el('button', {
           class: 'tf-path-copy',
           type: 'button',
-          'aria-label': 'Salin lokasi folder',
+          'aria-label': t('toast.copyFolder'),
           onclick: () => copyText(data.savedTo, 'Lokasi folder disalin'),
         }, 'Salin'),
       ]);
@@ -372,7 +372,7 @@ function updateActions(requestId, data) {
  */
 async function copyText(text, okMessage) {
   if (!text) {
-    showToast('Tidak ada yang bisa disalin', 'error');
+    showToast(t('toast.nothingToCopy'), 'error');
     return;
   }
 
@@ -391,7 +391,7 @@ async function copyText(text, okMessage) {
     }
     showToast(okMessage, 'success');
   } catch (_) {
-    showToast('Gagal menyalin', 'error');
+    showToast(t('toast.copyFailed'), 'error');
   }
 }
 
@@ -496,7 +496,7 @@ export function pollProgress(requestId, direction, onComplete) {
           transferred,
           total,
         });
-        announce('Transfer dibatalkan');
+        announce(t('transfer.cancelled'));
         return;
       }
 
@@ -506,8 +506,8 @@ export function pollProgress(requestId, direction, onComplete) {
         finalizeTransfer(requestId, {
           status: 'completed',
           statusText: direction === 'send'
-            ? (prog.reason ? `Terkirim — ${prog.reason}` : 'Terkirim')
-            : 'Selesai diterima',
+            ? (prog.reason ? t('transfer.sentWithReason', { reason: prog.reason }) : t('transfer.sent'))
+            : t('transfer.received'),
           percent: 100,
           transferred,
           total,
@@ -529,13 +529,13 @@ export function pollProgress(requestId, direction, onComplete) {
         state.progressTimers.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'unconfirmed',
-          statusText: 'Terkirim, tapi penerima tidak konfirmasi tersimpan',
+          statusText: t('transfer.unconfirmed'),
           percent: 100,
           transferred,
           total,
         });
         showToast(
-          `${prog.fileName} — terkirim, tapi belum dikonfirmasi tersimpan di perangkat penerima`,
+          t('transfer.unconfirmedDetail', { name: prog.fileName }),
           'error'
         );
         if (onComplete) onComplete(prog);
@@ -547,12 +547,12 @@ export function pollProgress(requestId, direction, onComplete) {
         state.progressTimers.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'failed',
-          statusText: prog.reason ? `${prog.reason}` : 'Gagal — periksa koneksi',
+          statusText: prog.reason ? `${prog.reason}` : t('transfer.failedCheck'),
           percent,
           transferred,
           total,
         });
-        showToast('Transfer gagal', 'error');
+        showToast(t('transfer.failed'), 'error');
         return;
       }
 
@@ -578,7 +578,7 @@ export function pollProgress(requestId, direction, onComplete) {
         state.sawProgress.delete(requestId);
         finalizeTransfer(requestId, {
           status: 'failed',
-          statusText: 'Gagal — transfer tidak ditemukan di-peer',
+          statusText: t('transfer.failedNotFound'),
           percent: 0,
         });
         return;
@@ -623,9 +623,9 @@ export async function cancelTransfer(requestId, role) {
     await postJson(`/transfer/cancel/${encodeURIComponent(requestId)}`, { role });
     finalizeTransfer(requestId, { status: 'cancelled', statusText: 'Dibatalkan' });
     state.activeTransfers.delete(requestId);
-    showToast('Transfer dibatalkan', 'info');
+    showToast(t('transfer.cancelled'), 'info');
   } catch (err) {
-    showToast('Gagal membatalkan: ' + err.message, 'error');
+    showToast(t('transfer.cancelFailed', { reason: err.message }), 'error');
   }
 }
 
@@ -667,7 +667,7 @@ export async function retryTransfer(requestId, onResent) {
       fileSize: info.fileSize,
       targetName: info.targetName,
       status: 'waiting',
-      statusText: 'Menunggu diterima...',
+      statusText: t('transfer.waitingSent'),
       batchId: info.batchId,
       filePath: info.filePath,
       file: info.file,
@@ -675,12 +675,12 @@ export async function retryTransfer(requestId, onResent) {
       port: info.port,
     });
 
-    showToast('↻ Mengirim ulang...', 'info');
+    showToast(t('transfer.retrying'), 'info');
     // `info` ikut dikirim: pemanggil butuh `file` (kalau masih ada) untuk
     // meng-upload ulang, karena file baru di-upload setelah penerima setuju.
     if (onResent) onResent(newId, info);
   } catch (err) {
-    showToast('Gagal mengirim ulang: ' + err.message, 'error');
+    showToast(t('transfer.retryFailed', { reason: err.message }), 'error');
   }
 }
 
@@ -718,8 +718,8 @@ export function updateStickyProgress() {
 
   if (label) {
     label.textContent = total === 1
-      ? 'Transfer berjalan…'
-      : `${total} transfer berjalan…`;
+      ? t('transfer.running')
+      : t('transfer.runningCount', { count: total });
   }
   if (count) count.textContent = `${Math.round(percent)}%`;
   if (fill) fill.style.width = percent + '%';

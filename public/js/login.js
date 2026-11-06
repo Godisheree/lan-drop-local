@@ -4,6 +4,78 @@
 // masuk ke innerHTML. Script ini sengaja TANPA import — halaman login harus
 // jalan walau modul lain gagal dimuat.
 (() => {
+  // Halaman login sengaja tanpa import (lihat catatan di atas): kalau modul
+  // lain gagal dimuat, gerbang PIN tetap harus bisa dibuka. Karena itu kamus
+  // diambil sendiri di sini, bukan lewat core/i18n.js.
+  const STORAGE_KEY = 'landrop-locale';
+  const DEFAULT_LOCALE = 'en';
+
+  /** @type {Record<string,string>} */
+  let messages = {};
+
+  function preferredLocale() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored === 'en' || stored === 'id') return stored;
+    } catch (_) {
+      // localStorage bisa diblokir — pakai default.
+    }
+    return DEFAULT_LOCALE;
+  }
+
+  /**
+   * Ambil pesan dari peta inline, ganti placeholder {name}.
+   * @param {string} key
+   * @param {Record<string,string>} [vars]
+   * @returns {string}
+   */
+  function msg(key, vars) {
+    let text = messages[key];
+    if (text === undefined) return key;
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) text = text.replaceAll(`{${k}}`, String(v));
+    }
+    return text;
+  }
+
+  /**
+   * Terapkan terjemahan ke seluruh DOM bertanda, sama seperti core/i18n.js.
+   * Duplikasi kecil ini disengaja: halaman login tidak boleh bergantung pada
+   * modul lain.
+   */
+  function applyDom() {
+    for (const node of document.querySelectorAll('[data-i18n]')) {
+      const key = node.getAttribute('data-i18n');
+      if (key && messages[key] !== undefined) node.textContent = messages[key];
+    }
+    for (const node of document.querySelectorAll('[data-i18n-attr]')) {
+      for (const pair of (node.getAttribute('data-i18n-attr') || '').split(',')) {
+        const [attr, key] = pair.split(':');
+        if (attr && key && messages[key.trim()] !== undefined) {
+          node.setAttribute(attr.trim(), messages[key.trim()]);
+        }
+      }
+    }
+    document.documentElement.lang = preferredLocale();
+  }
+
+  // Gagal memuat kamus bukan alasan menahan user di luar: teks Inggris sudah
+  // tertulis langsung di HTML, jadi halaman tetap terbaca.
+  fetch(`/locales/${preferredLocale()}.json`, { cache: 'no-cache' })
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((dict) => {
+      messages = dict || {};
+      applyDom();
+      if (defaultHint) {
+        hint.textContent = msg('dashboard.pinHint', { pin: defaultHint });
+        hint.hidden = false;
+      }
+      submit.textContent = msg('dashboard.signIn');
+    })
+    .catch(() => {});
+
+  let defaultHint = null;
+
   const form = document.getElementById('pinForm');
   const input = document.getElementById('pinInput');
   const submit = document.getElementById('pinSubmit');
@@ -18,7 +90,8 @@
     .then((r) => r.json())
     .then((info) => {
       if (!info || !info.default || !info.hint) return;
-      hint.textContent = `PIN bawaan: ${info.hint} — sebaiknya diganti setelah masuk.`;
+      defaultHint = info.hint;
+      hint.textContent = msg('dashboard.pinHint', { pin: info.hint });
       hint.hidden = false;
     })
     .catch(() => {
@@ -30,7 +103,7 @@
     message.textContent = '';
     message.dataset.level = '';
     submit.disabled = true;
-    submit.textContent = 'Memeriksa…';
+    submit.textContent = msg('dashboard.signingIn');
 
     try {
       const response = await fetch('/dashboard/login', {
@@ -53,14 +126,14 @@
       message.textContent =
         data.error ||
         (response.status === 429
-          ? 'Terlalu banyak percobaan PIN. Tunggu sebentar.'
-          : 'PIN salah. Coba lagi.');
+          ? msg('dashboard.pinTooMany')
+          : msg('dashboard.pinWrong'));
 
       input.value = '';
       input.focus();
     } catch (_) {
       message.dataset.level = 'err';
-      message.textContent = 'Tidak bisa menghubungi server. Cek koneksi lalu coba lagi.';
+      message.textContent = msg('dashboard.serverUnreachable');
       input.focus();
     } finally {
       submit.disabled = false;

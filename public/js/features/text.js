@@ -8,6 +8,7 @@ import { byId } from '../core/dom.js';
 import { getState, setState } from '../core/state.js';
 import { showToast, notify } from './notify.js';
 import { openModal, closeModal } from './a11y.js';
+import { t } from '../core/i18n.js';
 
 // ---------------------------------------------------------------------------
 // Composer
@@ -135,10 +136,9 @@ export function showTextOverlay(text) {
   const warn = byId('textOverlayWarn');
   if (warn) {
     const fact = text.senderIp
-      ? `Pesan ini benar-benar datang dari alamat ${text.senderIp}.`
-      : 'Alamat pengirimnya tidak terbaca, jadi tidak ada yang bisa dipastikan.';
-    warn.textContent = `Nama pengirim di atas cuma klaim, bukan identitas terverifikasi. ${fact} `
-      + 'Jangan kirim PIN, password, atau kode apa pun lewat pesan seperti ini.';
+      ? t('text.warnVerified', { ip: text.senderIp })
+      : t('text.warnUnknown');
+    warn.textContent = t('text.warnClaim', { fact }) + t('text.warnDanger');
     warn.hidden = false;
   }
 
@@ -146,7 +146,7 @@ export function showTextOverlay(text) {
   body.textContent = text.text;
 
   const copyBtn = byId('btnCopyText');
-  copyBtn.textContent = 'Salin';
+  copyBtn.textContent = t('modal.copy');
 
   openModal('textOverlay', {
     onEscape: () => hideTextOverlay(),
@@ -193,7 +193,7 @@ export async function copyCurrentText() {
   const btn = byId('btnCopyText');
   const setLabel = (label, ms) => {
     btn.textContent = label;
-    window.setTimeout(() => { btn.textContent = 'Salin'; }, ms);
+    window.setTimeout(() => { btn.textContent = t('modal.copy'); }, ms);
   };
 
   try {
@@ -217,7 +217,7 @@ export async function copyCurrentText() {
     document.execCommand('copy');
     setLabel('Disalin!', 1500);
   } catch (_) {
-    setLabel('Gagal copy', 3000);
+    setLabel(t('modal.copyFailed'), 3000);
   }
   document.body.removeChild(ta);
 }
@@ -255,13 +255,13 @@ export async function pollReceivedTexts() {
       if (isComposerActive()) {
         state.textOverlayQueue.push(text);
         showToast(
-          `Teks dari ${text.senderName || '?'} — ditampilkan setelah selesai mengetik`,
+          t('text.readyTitle', { name: text.senderName || '?' }),
           'info'
         );
       } else if (state.textOverlayQueue.length === 0 && !state.currentText && isOverlayIdle()) {
         showTextOverlay(text);
         // Beri tahu lewat judul tab + bunyi — user mungkin di tab lain.
-        notify(`Teks masuk dari ${text.senderName || '?'}`, {
+        notify(t('text.incomingTitle', { name: text.senderName || '?' }), {
           type: 'info',
           sound: true,
           badge: true,

@@ -12,6 +12,7 @@
 import { byId } from '../core/dom.js';
 import { hasOpenModal } from './a11y.js';
 import { showToast } from './notify.js';
+import { t } from '../core/i18n.js';
 
 /**
  * Target bisa menerima paste sendiri? Kalau ya, jangan direbut — user
@@ -69,7 +70,7 @@ export function setupPaste(handlers) {
       // tidak menjalankan paste native (mis. membuka file di tab baru),
       // lalu kasih tahu user.
       event.preventDefault();
-      showToast('Belum ada perangkat tujuan. Tunggu sampai perangkat muncul di daftar.', 'warning');
+      showToast(t('paste.noTarget'), 'warning');
       return;
     }
 

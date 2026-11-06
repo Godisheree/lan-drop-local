@@ -12,6 +12,7 @@
 import { el, clear, maybeById } from '../core/dom.js';
 import { setState, getState } from '../core/state.js';
 import { showToast } from './notify.js';
+import { t } from '../core/i18n.js';
 
 /** @type {BeforeInstallPromptEvent|null} */
 let installPrompt = null;
@@ -80,7 +81,7 @@ export async function registerServiceWorker() {
       installing.addEventListener('statechange', () => {
         if (installing.state === 'installed' && navigator.serviceWorker.controller) {
           setState({ swUpdateAvailable: true });
-          showToast('Versi baru tersedia — muat ulang untuk memperbarui', 'info');
+          showToast(t('pwa.updateAvailable'), 'info');
         }
       });
     });
@@ -174,7 +175,7 @@ export function setupInstallPrompt() {
   window.addEventListener('appinstalled', () => {
     installPrompt = null;
     setState({ installPrompt: null });
-    showToast('Aplikasi terpasang', 'success');
+    showToast(t('pwa.installed'), 'success');
     renderInstallSection();
   });
 }
@@ -193,11 +194,11 @@ export async function promptInstall() {
   try {
     prompt.prompt();
     const { outcome } = await prompt.userChoice;
-    if (outcome === 'accepted') showToast('Aplikasi sedang dipasang', 'success');
-    else showToast('Pemasangan dibatalkan', 'info');
+    if (outcome === 'accepted') showToast(t('install.installing'), 'success');
+    else showToast(t('install.cancelled'), 'info');
     return outcome;
   } catch (err) {
-    showToast('Gagal membuka prompt pemasangan', 'error');
+    showToast(t('install.promptFailed'), 'error');
     return null;
   } finally {
     renderInstallSection();
@@ -215,23 +216,23 @@ function manualInstructions() {
 
   if (platform === 'ios') {
     return [
-      'Buka menu Bagikan (tombol kotak dengan panah atas) di Safari.',
-      'Pilih "Tambah ke Layar Utama".',
-      'Ketuk "Tambahkan" — ikon LAN DROP muncul di layar utama.',
+      t('install.ios1'),
+      t('install.ios2'),
+      t('install.ios3'),
     ];
   }
 
   if (platform === 'android') {
     return [
-      'Ketuk tombol ⋮ di pojok kanan atas browser.',
-      'Pilih "Tambahkan ke layar utama" (atau "Install aplikasi").',
-      'Ketuk "Tambahkan" — ikon LAN DROP muncul di layar utama.',
+      t('install.android1'),
+      t('install.android2'),
+      t('install.android3'),
     ];
   }
 
   return [
-    'Klik ikon install (⊕) di address bar Chrome, atau',
-    'Buka menu browser → "Instalasi" / "Install LAN DROP".',
+    t('install.desktop1'),
+    t('install.desktop2'),
   ];
 }
 
@@ -250,7 +251,7 @@ export function renderInstallSection() {
   // Sudah terpasang — tidak perlu menawarkan apa-apa.
   if (installed) {
     container.appendChild(el('div', { class: 'install-status is-installed' }, [
-      el('span', { text: 'Aplikasi sudah terpasang di layar utama.' }),
+      el('span', { text: t('install.installed') }),
     ]));
     return;
   }
@@ -261,7 +262,7 @@ export function renderInstallSection() {
       class: 'btn btn-accent install-button',
       type: 'button',
       onclick: () => promptInstall(),
-    }, 'Pasang aplikasi'));
+    }, t('connect.install')));
     return;
   }
 
@@ -273,7 +274,7 @@ export function renderInstallSection() {
 
   container.appendChild(el('p', {
     class: 'install-note',
-    text: 'Tambahkan LAN DROP ke layar utama:',
+    text: t('install.addToHome'),
   }));
   container.appendChild(list);
 
@@ -281,8 +282,8 @@ export function renderInstallSection() {
   if (!window.isSecureContext) {
     container.appendChild(el('p', {
       class: 'install-note install-note-muted',
-      text: 'Install penuh (jalan tanpa internet & bisa dibuka saat server lambat) butuh HTTPS. ' +
-        'Di jaringan HTTP, tombol tambah-ke-layar-utama di atas tetap bisa dipakai.',
+      text: t('install.fullNote') +
+        '',
     }));
   }
 }

@@ -12,6 +12,7 @@ import { showToast } from './notify.js';
 import { openModal, closeModal } from './a11y.js';
 import { renderInstallSection } from './pwa.js';
 import { fetchDiscoveryStatus } from '../core/api.js';
+import { t } from '../core/i18n.js';
 
 const STATUS_POLL_MS = 5000;
 let statusTimer = null;
@@ -24,7 +25,7 @@ let statusTimer = null;
 function buildQrSvg(text) {
   // qrcode-generator diekspos sebagai global `qrcode` oleh script vendor.
   if (typeof window.qrcode !== 'function') {
-    throw new Error('Library QR tidak termuat');
+    throw new Error(t('connect.qrLibraryMissing'));
   }
 
   // Tipe 0 = auto-pilih versi. Level M = toleransi error cukup untuk layar.
@@ -89,21 +90,21 @@ function renderNetStatus(status) {
   if (!status) {
     box.appendChild(el('p', {
       class: 'net-status-line is-warn',
-      text: 'Status tidak bisa diambil dari server — cek koneksi ke server ini.',
+      text: t('connect.statusUnavailable'),
     }));
     return;
   }
 
-  box.appendChild(statusRow('Server ini', status.deviceName || '-'));
+  box.appendChild(statusRow(t('connect.thisServer'), status.deviceName || '-'));
 
   const interfaces = Array.isArray(status.interfaces) ? status.interfaces : [];
   if (interfaces.length === 0) {
-    box.appendChild(statusRow('Broadcast LAN', 'tidak ada interface LAN', 'warn'));
+    box.appendChild(statusRow('Broadcast LAN', t('connect.noLanInterface'), 'warn'));
   } else {
     for (const iface of interfaces) {
       const label = `Broadcast ${iface.address || '?'}`;
       if (!iface.bound) {
-        box.appendChild(statusRow(label, 'tidak aktif', 'warn'));
+        box.appendChild(statusRow(label, t('connect.inactive'), 'warn'));
       } else if (iface.lastError) {
         box.appendChild(statusRow(label, `gagal (${iface.lastError})`, 'warn'));
       } else {
@@ -117,14 +118,14 @@ function renderNetStatus(status) {
     box.appendChild(statusRow('Listener UDP', `port ${listener.port} · aktif`, 'ok'));
   } else {
     const suffix = listener.error ? ` (${listener.error})` : '';
-    box.appendChild(statusRow('Listener UDP', `port ${listener.port} · tidak aktif${suffix}`, 'warn'));
+    box.appendChild(statusRow('Listener UDP', t('connect.listenerPort', { port: listener.port, state: t('connect.inactive') + suffix }), 'warn'));
   }
 
   const peers = status.peers || {};
   const peerCount = Number(peers.count) || 0;
   box.appendChild(statusRow(
-    'Perangkat ditemukan',
-    peerCount > 0 ? String(peerCount) : 'belum ada',
+    t('connect.peersFound'),
+    peerCount > 0 ? String(peerCount) : t('connect.noneYet'),
     peerCount > 0 ? 'ok' : 'warn'
   ));
 
@@ -133,7 +134,7 @@ function renderNetStatus(status) {
     const note = ts.cliFound ? '' : ' (tanpa CLI — peer dicari lewat reply-back)';
     box.appendChild(statusRow('Tailscale', `${ts.selfIp}${note}`, 'ok'));
   } else {
-    box.appendChild(statusRow('Tailscale', 'belum terdeteksi', 'warn'));
+    box.appendChild(statusRow('Tailscale', t('connect.notDetected'), 'warn'));
   }
 }
 
@@ -177,7 +178,7 @@ export function renderConnectPanel() {
   if (lanUrls.length === 0) {
     frame.className = 'qr-frame is-error';
     frame.textContent =
-      'Tidak ada alamat yang terdeteksi. Pastikan perangkat terhubung ke Wi-Fi, lalu muat ulang halaman.';
+      t('connect.noAddress');
     return;
   }
 
@@ -195,7 +196,7 @@ export function renderConnectPanel() {
     frame.innerHTML = buildQrSvg(primary.url);
   } catch (err) {
     frame.className = 'qr-frame is-error';
-    frame.textContent = 'Gagal membuat QR: ' + err.message;
+    frame.textContent = t('connect.qrFailed', { reason: err.message });
   }
 
   // Hint menyesuaikan alamat yang dipilih — dua kasusnya beda jauh.
@@ -204,24 +205,14 @@ export function renderConnectPanel() {
   // Kalau HP membuka QR dari laptop, yang tampil adalah identitas LAPTOP —
   // itu bukan bug, tapi perlu dijelaskan supaya tidak bikin bingung
   // ("kok namanya deviceku sama dengan laptop?").
-  const owner = getState().deviceName || 'server ini';
+  const owner = getState().deviceName || t('connect.thisServer').toLowerCase();
   const twoWay =
-    `Halaman ini milik "${owner}". Supaya dua arah, perangkat kedua juga harus ` +
-    'menjalankan LAN DROP-nya sendiri — membuka halaman saja tidak cukup.';
+    t('connect.noteOwner', { owner }) + t('connect.noteOwnerRest');
 
   const hint = maybeById('urlHint');
   if (hint) {
-    if (primary.via === 'tailscale') {
-      hint.textContent =
-        'Pindai QR ini dengan kamera HP. Alamat Tailscale bisa dibuka dari mana saja ' +
-        'selama HP-nya terhubung ke tailnet yang sama — tidak harus Wi-Fi yang sama. ' +
-        twoWay;
-    } else {
-      hint.textContent =
-        'Pindai QR ini dengan kamera HP, atau buka alamat di bawah. ' +
-        'Pastikan kedua perangkat di Wi-Fi yang sama. ' +
-        twoWay;
-    }
+    const intro = primary.via === 'tailscale' ? t('connect.introTailscale') : t('connect.intro');
+    hint.textContent = `${intro} ${twoWay}`;
   }
 
   for (let i = 0; i < lanUrls.length; i++) {
@@ -233,7 +224,7 @@ export function renderConnectPanel() {
         class: 'url-select',
         type: 'button',
         'aria-pressed': String(isActive),
-        title: isActive ? 'Alamat ini dipakai untuk QR' : 'Pakai alamat ini untuk QR',
+        title: isActive ? t('connect.useForQr') : t('connect.useForQr'),
         onclick: () => {
           setState({ selectedUrlIndex: i });
           renderConnectPanel();
@@ -248,7 +239,7 @@ export function renderConnectPanel() {
       el('button', {
         class: 'copy-btn',
         type: 'button',
-        'aria-label': `Salin alamat ${entry.url}`,
+        'aria-label': t('connect.copyAddress', { url: entry.url }),
         onclick: (event) => copyUrl(entry.url, event.currentTarget),
       }, 'Salin'),
     ]);
@@ -283,7 +274,7 @@ export async function copyText(text, button) {
       button.textContent = 'Tersalin';
       window.setTimeout(() => { button.textContent = original; }, 1500);
     }
-    showToast('Alamat disalin', 'success');
+    showToast(t('connect.copied'), 'success');
     return true;
   } catch (_) {
     showToast('Gagal menyalin — salin manual dari layar', 'warning');

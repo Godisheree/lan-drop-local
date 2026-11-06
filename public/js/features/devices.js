@@ -9,10 +9,11 @@ import { el, clear, byId, ipText } from '../core/dom.js';
 import { formatBytes } from '../core/format.js';
 import { getState, setState } from '../core/state.js';
 import { showToast } from './notify.js';
+import { t } from '../core/i18n.js';
 
 /** Ambil label jaringan dari field `via` milik discovery. */
 function viaLabel(via) {
-  return via === 'tailscale' ? 'Tailscale' : 'Wi-Fi langsung';
+  return via === 'tailscale' ? 'Tailscale' : t('devices.wifi');
 }
 
 /**
@@ -46,7 +47,7 @@ function buildCard(device, handlers) {
 
   const header = el('div', { class: 'device-header' }, [
     el('span', { class: 'indicator', 'aria-hidden': 'true' }),
-    el('span', { class: 'dev-name truncate', text: device.deviceName || 'Tanpa nama' }),
+    el('span', { class: 'dev-name truncate', text: device.deviceName || t('devices.unnamed') }),
     ipText(`${device.ip}:${device.port}`, 'dev-ip'),
   ]);
 
@@ -58,7 +59,7 @@ function buildCard(device, handlers) {
   // Petunjuk drag-drop hanya tampil di perangkat berpointer presisi —
   // `.drop-hint` disembunyikan CSS di layar sentuh (`@media (hover: hover)`),
   // jadi tidak perlu teks alternatif di sini.
-  const dropHint = el('p', { class: 'drop-hint', text: 'Seret file ke sini, atau tekan Ctrl+V untuk menempel' });
+  const dropHint = el('p', { class: 'drop-hint', text: t('drop.hint') });
 
   const actions = el('div', { class: 'btn-file-row' }, [
     el('button', {
@@ -66,13 +67,13 @@ function buildCard(device, handlers) {
       type: 'button',
       dataset: { action: 'media', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickMedia(device),
-    }, 'Foto atau video'),
+    }, t('devices.photoVideo')),
     el('button', {
       class: 'btn-file-pick',
       type: 'button',
       dataset: { action: 'file', ip: target.ip, port: target.port, name: target.targetName },
       onclick: () => handlers.onPickFile(device),
-    }, 'File lain'),
+    }, t('devices.otherFiles')),
     el('button', {
       class: 'btn-file-pick btn-text-pick',
       type: 'button',
@@ -108,10 +109,10 @@ export function renderDevices(devices, handlers) {
   if (listDevices.length === 0) {
     clear(list);
     list.appendChild(el('div', { class: 'empty-state' }, [
-      el('span', { class: 'empty-title', text: 'Belum ada perangkat lain' }),
+      el('span', { class: 'empty-title', text: t('devices.empty') }),
       el('span', {
         class: 'empty-hint',
-        text: 'Pastikan perangkat lain terhubung ke Wi-Fi yang sama, lalu buka alamat yang tertera di panel Sambung.',
+        text: t('devices.emptyHint'),
       }),
     ]));
     setState({ devices: new Map() });
@@ -135,7 +136,7 @@ export function renderDevices(devices, handlers) {
     } else {
       // Perbarui label tanpa mengganti node (node lain mungkin sedang disorot).
       const nameEl = card.querySelector('.dev-name');
-      if (nameEl) nameEl.textContent = device.deviceName || 'Tanpa nama';
+      if (nameEl) nameEl.textContent = device.deviceName || t('devices.unnamed');
       const ipEl = card.querySelector('.dev-ip');
       if (ipEl) ipEl.textContent = `${device.ip}:${device.port}`;
     }

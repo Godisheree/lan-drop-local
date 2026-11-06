@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#F7F7F9">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Kirim file antar perangkat di Wi-Fi yang sama. Tanpa cloud, tanpa akun.">
+  <meta name="description" content="Send files between devices on the same Wi-Fi. No cloud, no account.">
 
   <!-- PWA -->
   <link rel="manifest" href="/manifest.webmanifest">
@@ -38,38 +38,38 @@
       <div class="header-right">
         <button id="btnConnect" class="connect-trigger" type="button"
                 aria-haspopup="dialog" aria-controls="connectModal">
-          <span class="connect-label">Sambungkan</span>
+          <span class="connect-label" data-i18n="nav.connect">Connect</span>
         </button>
 
-        <button id="btnTheme" class="icon-btn" type="button" aria-label="Ganti tema terang/gelap">
+        <button id="btnTheme" class="icon-btn" type="button" data-i18n-attr="aria-label:a11y.toggleTheme">
           <span class="theme-icon theme-icon-light" aria-hidden="true"></span>
           <span class="theme-icon theme-icon-dark" aria-hidden="true"></span>
         </button>
 
-        <div class="device-name" id="deviceName" title="Nama perangkat ini">—</div>
+        <div class="device-name" id="deviceName" data-i18n-attr="title:a11y.deviceName">—</div>
 
         <!-- Dashboard monitoring: layar pantau untuk desktop (log live,
              discovery, disk). Dipisah dari UI ini supaya shell PWA di HP
              tidak ikut mengangkut halaman admin — lihat public/dashboard.html. -->
-        <a class="icon-btn icon-btn-text" href="/dashboard" title="Dashboard monitoring"
-           aria-label="Buka dashboard monitoring">Dashboard</a>
+        <a class="icon-btn icon-btn-text" href="/dashboard" data-i18n-attr="title:a11y.openDashboard,aria-label:a11y.openDashboard"
+           data-i18n="nav.dashboard">Dashboard</a>
       </div>
     </header>
 
     <!-- Badge mode terima otomatis — harus terlihat tanpa membuka panel -->
     <div id="autoApproveBadge" class="auto-badge" role="status" hidden>
-      <span>Terima otomatis aktif</span>
+      <span data-i18n="auto.badge">Auto-accept on</span>
     </div>
 
     <!-- ===== Tab mobile ===== -->
-    <nav id="mobileTabs" class="mobile-tabs" role="tablist" aria-label="Tampilan utama">
+    <nav id="mobileTabs" class="mobile-tabs" role="tablist" data-i18n-attr="aria-label:a11y.mainView">
       <button class="tab" type="button" role="tab" data-tab="devices"
               id="tabDevices" aria-controls="devicesSection" aria-selected="true">
-        Perangkat
+        <span data-i18n="nav.devices">Devices</span>
       </button>
       <button class="tab" type="button" role="tab" data-tab="activity"
               id="tabActivity" aria-controls="activitySection" aria-selected="false">
-        Aktivitas
+        <span data-i18n="nav.activity">Activity</span>
         <span class="tab-badge" id="tabActivityBadge" aria-hidden="true"></span>
       </button>
     </nav>
@@ -79,12 +79,12 @@
       <!-- Perangkat -->
       <section id="devicesSection" aria-labelledby="devicesHeading">
         <div class="section-heading">
-          <h2 id="devicesHeading">Perangkat terhubung</h2>
+          <h2 id="devicesHeading" data-i18n="devices.heading">Connected devices</h2>
         </div>
         <div id="deviceList" class="device-list">
           <div class="empty-state">
-            <span class="empty-title">Mencari perangkat lain…</span>
-            <span class="empty-hint">Pastikan perangkat lain terhubung ke Wi-Fi yang sama.</span>
+            <span class="empty-title" data-i18n="devices.searching">Looking for other devices…</span>
+            <span class="empty-hint" data-i18n="devices.searchingHint">Make sure the other device is on the same Wi-Fi.</span>
           </div>
         </div>
       </section>
@@ -92,25 +92,25 @@
       <!-- Aktivitas + riwayat -->
       <section id="activitySection" aria-labelledby="activityHeading">
         <div class="section-heading">
-          <h2 id="activityHeading">Transfer berjalan</h2>
+          <h2 id="activityHeading" data-i18n="transfer.heading">Active transfers</h2>
         </div>
         <div id="transferList" class="transfer-list">
           <div class="empty-state">
-            <span class="empty-title">Belum ada transfer</span>
-            <span class="empty-hint">Pilih perangkat di sebelah, lalu kirim file, foto, video, atau teks.</span>
+            <span class="empty-title" data-i18n="transfer.empty">No transfers yet</span>
+            <span class="empty-hint" data-i18n="transfer.emptyHint">Pick a device on the left, then send a file, photo, video or text.</span>
           </div>
         </div>
 
         <section id="gallerySection" class="gallery-section" hidden aria-labelledby="galleryHeading">
-          <h2 id="galleryHeading" class="gallery-heading">Galeri</h2>
+          <h2 id="galleryHeading" class="gallery-heading" data-i18n="gallery.heading">Gallery</h2>
           <div id="galleryGrid" class="gallery-grid"></div>
         </section>
 
         <div class="history-head">
-          <h2 id="historyHeading">Riwayat</h2>
+          <h2 id="historyHeading" data-i18n="history.heading">History</h2>
           <button id="btnToggleHistory" class="history-toggle" type="button"
                   aria-expanded="true" aria-controls="historyList">
-            <span class="chevron" aria-hidden="true">▾</span> Lipat
+            <span class="chevron" aria-hidden="true">▾</span> <span data-i18n="history.collapse">Collapse</span>
           </button>
         </div>
         <div id="historyList" class="history-list"></div>
@@ -121,7 +121,7 @@
   <!-- ===== Sticky progress bar (mobile) ===== -->
   <div id="stickyProgress" class="sticky-progress" role="status" aria-live="polite">
     <div class="sp-body">
-      <span class="sp-label">Transfer berjalan…</span>
+      <span class="sp-label" data-i18n="sticky.transferring">Transfer in progress…</span>
       <div class="sp-bar"><div style="width: 0%"></div></div>
     </div>
     <span class="sp-count">0%</span>
@@ -132,12 +132,12 @@
        aria-labelledby="requestModalTitle" aria-hidden="true">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 id="requestModalTitle">Permintaan masuk</h3>
+        <h3 id="requestModalTitle" data-i18n="modal.requestTitle">Incoming request</h3>
       </div>
       <div id="modalInfo"></div>
       <div class="modal-actions">
-        <button id="btnReject" class="btn btn-reject" type="button" aria-keyshortcuts="Escape">Tolak</button>
-        <button id="btnAccept" class="btn btn-accept" type="button" autofocus aria-keyshortcuts="Enter">Terima</button>
+        <button id="btnReject" class="btn btn-reject" type="button" aria-keyshortcuts="Escape" data-i18n="modal.reject">Reject</button>
+        <button id="btnAccept" class="btn btn-accept" type="button" autofocus aria-keyshortcuts="Enter" data-i18n="modal.accept">Accept</button>
       </div>
     </div>
   </div>
@@ -147,17 +147,17 @@
        aria-labelledby="textComposerTitle" aria-hidden="true">
     <div class="modal-content text-composer">
       <div class="modal-header">
-        <h3 id="textComposerTitle">Kirim teks</h3>
-        <button id="btnCloseTextComposer" class="modal-x" type="button" aria-label="Tutup">✕</button>
+        <h3 id="textComposerTitle" data-i18n="modal.textTitle">Send text</h3>
+        <button id="btnCloseTextComposer" class="modal-x" type="button" data-i18n-attr="aria-label:a11y.close">✕</button>
       </div>
-      <p class="composer-target" id="textTargetName">ke —</p>
+      <p class="composer-target" id="textTargetName" data-i18n="modal.textTo">to —</p>
       <label class="visually-hidden" for="textInput">Isi pesan</label>
-      <textarea id="textInput" rows="5" placeholder="Tulis pesan atau tempel tautan..."
+      <textarea id="textInput" rows="5" data-i18n-attr="placeholder:modal.textPlaceholder" placeholder="Write a message or paste a link…"
                 autocorrect="off" spellcheck="false"></textarea>
       <span class="char-count" id="charCount" aria-live="polite"></span>
       <div class="modal-actions">
-        <button id="btnCancelText" class="btn btn-reject" type="button">Batal</button>
-        <button id="btnSendText" class="btn btn-accept" type="button" aria-keyshortcuts="Control+Enter">Kirim</button>
+        <button id="btnCancelText" class="btn btn-reject" type="button" data-i18n="modal.cancel">Cancel</button>
+        <button id="btnSendText" class="btn btn-accept" type="button" aria-keyshortcuts="Control+Enter" data-i18n="modal.send">Send</button>
       </div>
     </div>
   </div>
@@ -167,13 +167,13 @@
        aria-labelledby="textOverlayTitle" aria-hidden="true">
     <div class="modal-content text-overlay" id="textOverlayContent">
       <div class="modal-header">
-        <h3 id="textOverlayTitle">Teks dari <span id="textOverlaySender">—</span></h3>
-        <button id="btnCloseTextOverlay" class="modal-x" type="button" aria-label="Tutup">✕</button>
+        <h3 id="textOverlayTitle"><span data-i18n="modal.textFromLabel">Text from</span> <span id="textOverlaySender">—</span></h3>
+        <button id="btnCloseTextOverlay" class="modal-x" type="button" data-i18n-attr="aria-label:a11y.close">✕</button>
       </div>
       <p id="textOverlayWarn" class="text-warn" hidden></p>
       <div id="textOverlayBody" class="text-body"></div>
       <div class="modal-actions">
-        <button id="btnCopyText" class="btn btn-accept" type="button">Salin</button>
+        <button id="btnCopyText" class="btn btn-accept" type="button" data-i18n="modal.copy">Copy</button>
       </div>
     </div>
   </div>
@@ -183,41 +183,35 @@
        aria-labelledby="connectTitle" aria-hidden="true">
     <div class="modal-content connect-panel">
       <div class="modal-header">
-        <h3 id="connectTitle">Sambungkan perangkat</h3>
-        <button id="btnCloseConnect" class="modal-x" type="button" aria-label="Tutup">✕</button>
+        <h3 id="connectTitle" data-i18n="connect.title">Connect a device</h3>
+        <button id="btnCloseConnect" class="modal-x" type="button" data-i18n-attr="aria-label:a11y.close">✕</button>
       </div>
-      <p class="connect-intro" id="urlHint">
-        Pindai QR ini dengan kamera HP, atau buka alamat di bawah. Pastikan kedua
-        perangkat di Wi-Fi yang sama.
-      </p>
+      <p class="connect-intro" id="urlHint" data-i18n="connect.intro">Scan this QR with your phone camera, or open the address below. Both devices must be on the same Wi-Fi.</p>
 
       <!-- Terima otomatis TIDAK punya toggle di sini lagi: mode ini menerima
            file tanpa dialog sama sekali, jadi menyalakannya butuh PIN dan
            pindah ke Dashboard. Halaman ini terbuka untuk siapa saja di Wi-Fi
            — kalau toggle-nya di sini, tetangga cukup satu klik. -->
-      <p class="connect-note">
-        Terima file tanpa konfirmasi diatur di <a href="/dashboard">Dashboard</a> (perlu PIN).
-      </p>
+      <p class="connect-note" data-i18n="connect.autoNote">Accepting files without a prompt is configured in the Dashboard (PIN required).</p>
 
       <div id="qrFrame" class="qr-frame"></div>
       <ul id="urlList" class="url-list"></ul>
 
-      <h4 class="connect-subtitle">Status jaringan</h4>
+      <h4 class="connect-subtitle" data-i18n="connect.networkStatus">Network status</h4>
       <div id="netStatus" class="net-status" aria-live="polite">
-        <p class="net-status-line">Memuat status…</p>
+        <p class="net-status-line" data-i18n="connect.loadingStatus">Loading status…</p>
       </div>
       <ul class="net-checklist">
-        <li>Kedua perangkat harus di Wi-Fi yang sama (atau satu di Tailscale).</li>
-        <li><strong>Kedua perangkat harus menjalankan LAN DROP sendiri</strong> — membuka
-          halaman saja tidak cukup, supaya bisa kirim &amp; terima dua arah.</li>
-        <li>Router/firewall tidak boleh memblokir UDP 41234 dan TCP 3000–3001.</li>
-        <li>Kalau perangkat tidak muncul, cek blok "Status jaringan" di atas.</li>
+        <li data-i18n="connect.checklist1">Both devices must be on the same Wi-Fi (or one on Tailscale).</li>
+        <li data-i18n="connect.checklist2">Both devices must run their own LAN DROP — opening the page alone is not enough, otherwise sending and receiving cannot work both ways.</li>
+        <li data-i18n="connect.checklist3">The router/firewall must not block UDP 41234 and TCP 3000–3001.</li>
+        <li data-i18n="connect.checklist4">If a device does not show up, check the "Network status" block above.</li>
       </ul>
 
-      <h4 class="connect-subtitle">Aplikasi</h4>
+      <h4 class="connect-subtitle" data-i18n="connect.appSection">App</h4>
       <div id="installSection" class="install-section"></div>
 
-      <h4 class="connect-subtitle">Pintasan keyboard</h4>
+      <h4 class="connect-subtitle" data-i18n="connect.shortcuts">Keyboard shortcuts</h4>
       <ul id="shortcutList" class="shortcut-list"></ul>
     </div>
   </div>

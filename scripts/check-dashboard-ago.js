@@ -38,19 +38,45 @@ function extractFunction(source, name, stopAfter) {
 const dashSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'dashboard.js'), 'utf8');
 const fmtSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'core', 'format.js'), 'utf8');
 
+/**
+ * Kamus mini untuk tes — hanya key yang dipakai `formatDuration`/`agoText`.
+ * Dua-duanya sekarang lewat `t()`, jadi tesnya butuh terjemahan; memakai
+ * kamus Indonesia menjaga asersi lama (`"9 dtk lalu"`) tetap bermakna.
+ */
+const TEST_DICT = {
+  'unit.now': 'baru saja',
+  'unit.secondsAgo': '{n} dtk lalu',
+  'unit.lessThanSecond': 'kurang dari 1 dtk',
+  'unit.secondShort': ' dtk',
+  'unit.minuteShort': ' mnt',
+  'unit.hourShort': ' jam',
+  'unit.dayShort': ' hari',
+};
+
+function fakeT(key, vars) {
+  let text = TEST_DICT[key];
+  if (text === undefined) throw new Error(`key tes tidak dikenal: ${key}`);
+  if (vars) for (const [k, v] of Object.entries(vars)) text = text.replaceAll(`{${k}}`, String(v));
+  return text;
+}
+
+const fmtStart = fmtSrc.indexOf('export function formatDuration');
 const formatDuration = new Function(
+  't',
   fmtSrc
     .slice(
-      fmtSrc.indexOf('export function formatDuration'),
-      fmtSrc.indexOf('\n}\n', fmtSrc.indexOf('return `${days} hari')) + 2
+      fmtStart,
+      // Cari dari dalam fungsi: `unit.dayShort` juga muncul di komentar header.
+      fmtSrc.indexOf('\n}', fmtSrc.indexOf('unit.dayShort', fmtStart)) + 2
     )
     .replace('export ', '') + '\nreturn formatDuration;'
-)();
+)(fakeT);
 
 const agoText = new Function(
   'formatDuration',
-  extractFunction(dashSrc, 'agoText', 'return `${formatDuration') + '\nreturn agoText;'
-)(formatDuration);
+  't',
+  extractFunction(dashSrc, 'agoText', 'return t(') + '\nreturn agoText;'
+)(formatDuration, fakeT);
 
 /** Jalankan agoText dengan "sekarang" yang dipatok. */
 function ageAt(elapsedMs) {
@@ -106,7 +132,7 @@ check('umur tidak pernah mundur (0..12 dtk)', () => {
 });
 
 check('agoText memakai Math.floor, bukan Math.round', () => {
-  const body = extractFunction(dashSrc, 'agoText', 'return `${formatDuration');
+  const body = extractFunction(dashSrc, 'agoText', 'return t(');
   assert.ok(/Math\.floor/.test(body), 'agoText harus memotong, bukan membulatkan');
   assert.ok(!/Math\.round/.test(body), 'agoText masih membulatkan — umur meloncat ke atas lalu reset');
 });
@@ -114,8 +140,9 @@ check('agoText memakai Math.floor, bukan Math.round', () => {
 // ── "sinyal terakhir" harus hidup, bukan string mati ───────────────────────
 
 check('sinyal terakhir memakai ago() (elemen hidup), bukan agoText()', () => {
-  const idx = dashSrc.indexOf("'Perangkat dikenal'");
-  assert.ok(idx !== -1, 'baris "Perangkat dikenal" tidak ditemukan');
+  // Label sekarang lewat kamus (`t('dashboard.peersKnown')`), bukan literal.
+  const idx = dashSrc.indexOf("t('dashboard.peersKnown')");
+  assert.ok(idx !== -1, "baris t('dashboard.peersKnown') tidak ditemukan");
   const slice = dashSrc.slice(idx, idx + 500);
   assert.ok(/ago\(peers\.lastAnnounceAt\)/.test(slice), 'pakai ago() supaya ikut tickAges() tiap detik');
   assert.ok(!/agoText\(peers\.lastAnnounceAt\)/.test(slice), 'agoText() = string mati, beku sampai poll berikutnya');
