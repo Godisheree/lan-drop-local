@@ -35,6 +35,13 @@ function normalizePin(value) {
 
 let cache = null;
 
+// Kunci yang benar-benar diubah oleh proses INI. Dipakai `writeNow()` supaya
+// dua server yang jalan bersamaan di satu data dir tidak saling menimpa:
+// dulu seluruh objek ditulis dari cache memori, jadi instance yang sudah lama
+// hidup (cache-nya masih PIN lama) menghapus PIN baru begitu ia menulis apa
+// pun — gejalanya "PIN balik ke bawaan" tanpa sebab yang kelihatan.
+const changedKeys = new Set();
+
 function normalizeAutoApprove(value) {
   const v = value && typeof value === 'object' ? value : {};
   return {
@@ -72,11 +79,24 @@ function load() {
  * tutup jendela Electron) membuat toggle kembali ke keadaan semula seolah
  * tidak pernah dinyalakan.
  */
+function readDisk() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch (_) {
+    return {};
+  }
+}
+
 function writeNow() {
   try {
     fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+    // Mulai dari isi disk, bukan dari cache: instance lain mungkin sudah
+    // menulis kunci yang proses ini tidak pernah sentuh.
+    const merged = readDisk();
+    for (const key of changedKeys) merged[key] = cache[key];
     const tmp = dataFile + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(cache));
+    fs.writeFileSync(tmp, JSON.stringify(merged));
     fs.renameSync(tmp, dataFile);
   } catch (_) {
     // Disk penuh / read-only — biarkan nilai tetap hidup di memori.
@@ -97,6 +117,7 @@ function setAutoApprove(patch) {
     enabled: patch && patch.enabled !== undefined ? patch.enabled : current.enabled,
     peers: patch && patch.peers !== undefined ? patch.peers : current.peers,
   });
+  changedKeys.add('autoApprove');
   writeNow();
   return cache.autoApprove;
 }
@@ -124,6 +145,7 @@ function getDashboardPin() {
 function setDashboardPin(value) {
   const next = normalizePin(value);
   load().dashboardPin = next;
+  changedKeys.add('dashboardPin');
   writeNow();
   return next;
 }

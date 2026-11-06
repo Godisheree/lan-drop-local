@@ -142,6 +142,26 @@ const HISTORY = `require(${JSON.stringify(path.join(ROOT, 'server', 'history.js'
     !/flushTimer/.test(fs.readFileSync(path.join(ROOT, 'server', 'settings.js'), 'utf-8'))
   );
 
+  // 7. Dua instance berbagi satu data dir: PIN yang diganti instance A tidak
+  // boleh hilang saat instance B (cache memori masih PIN lama) menulis setting
+  // lain. Dulu writeNow() menulis SELURUH cache, jadi toggle auto-approve di
+  // instance lama menghapus PIN baru — user melihat "PIN balik ke bawaan".
+  const twoInstances =
+    `const p = ${JSON.stringify(path.join(ROOT, 'server', 'settings.js'))};` +
+    `const fresh = () => { delete require.cache[p]; return require(p); };` +
+    `const a = fresh(); const b = fresh();` +
+    `b.getAutoApprove();` + // B memuat cache lama lebih dulu
+    `a.setDashboardPin('1234');` +
+    `b.setAutoApprove({ enabled: true });` +
+    `process.exit(0);`;
+  runAndDie(twoInstances, dir);
+  const shared = readJson(settingsPath(dir));
+  check(
+    'PIN tidak tertimpa instance lain yang menulis setting',
+    shared && shared.dashboardPin === '1234',
+    shared ? `dashboardPin=${shared.dashboardPin}` : 'settings.json hilang'
+  );
+
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

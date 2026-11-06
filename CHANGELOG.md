@@ -5,6 +5,26 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.10] — 2026-11-06
+
+### Fixed — PIN dashboard balik ke bawaan sendiri
+
+PIN yang sudah diganti bisa kembali ke `123456` tanpa user menyentuhnya.
+`writeNow()` di `server/settings.js` menulis **seluruh** isi cache memori ke
+`settings.json`, jadi begitu ada dua server yang jalan di satu data dir — kasus
+nyata: instance lama masih hidup saat `lan-drop` dijalankan lagi, atau jendela
+Electron + server terminal — instance yang cache-nya masih memuat PIN lama
+menghapus PIN baru ketika ia menulis setting lain (mis. toggle terima otomatis).
+
+Sekarang yang ditulis cuma kunci yang benar-benar diubah proses itu
+(`changedKeys`), digabung dengan isi disk terbaru.
+
+- `server/settings.js` — `readDisk()` + merge per kunci
+- `scripts/check-settings.js` — pemeriksaan ke-10: dua instance berbagi data dir
+
+Catatan: instance yang sudah terlanjur jalan tetap memakai PIN lamanya di
+memori sampai di-restart — nilai di disk sudah benar.
+
 ## [1.2.9] — 2026-11-03
 
 ### Added — alamat IP disamarkan sampai dibuka
