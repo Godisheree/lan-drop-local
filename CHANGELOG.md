@@ -36,6 +36,30 @@ sekali di jalur itu, dan pola yang dipakai mengikuti 9router:
 - `scripts/check-tray.js` — struktur `.ico`, ukuran tray kecil, dan penjaga
   supaya Electron tidak diam-diam kembali ke jalur ini.
 
+### Fixed — sekali jalan, prosesnya jadi banyak
+
+Ketahuan saat menguji tray: satu `lan-drop` bisa memunculkan **tiga ikon** dan
+dua proses server sekaligus. Bukan salah tray — tray cuma memperlihatkan bug yang
+sudah lama ada.
+
+`server.listen(port, host, callback)` mendaftarkan `callback` sebagai
+`once('listening')`, dan listener itu **tidak dilepas** ketika listen-nya gagal
+(`EADDRINUSE`). Jadi kalau 3000–3006 terpakai, tujuh callback menumpuk di server
+yang sama; begitu port kedelapan berhasil, ketujuhnya menyala bersamaan:
+`onListening()` jalan 7×, masing-masing menyalakan discovery, TCP transfer server,
+dan ikon tray sendiri. Yang tersisa di log cuma satu baris
+`MaxListenersExceededWarning` yang mudah terlewat.
+
+- `server/index.js` — `onListening` dipasang **sekali** lewat
+  `server.once('listening', onListening)`, di luar retry loop; `listenHttp` juga
+  melepas handler `error` sebelum mencoba port berikutnya.
+- `server/transfer.js` — `listenTransfer` melepas handler `error` **dan**
+  `listening` sebelum retry; `startTransferServer()` idempoten supaya
+  pemanggilan kedua tidak meninggalkan `tcpServer` lama tanpa ditutup.
+- `scripts/check-tray.js` — 4 pemeriksaan baru: `onListening` tidak boleh jadi
+  callback `listen()`, kedua handler harus dilepas saat retry, dan
+  `startTransferServer` harus idempoten.
+
 Catatan rilis: `README.md` di tarball 1.2.10 masih versi 1.2.9 — entri changelog
 dan bagian tray yang sudah di-commit belum ikut terbit. Rilis ini membawanya.
 

@@ -941,6 +941,13 @@ function decideAutoAccept(msg, resumeOffset = 0) {
  */
 function listenTransfer(port, triesLeft) {
   const onError = (err) => {
+    // Lepas kedua handler percobaan ini dulu. `listen()` mendaftarkan
+    // onListening sebagai `once('listening')`, dan listener itu TIDAK dilepas
+    // ketika listen-nya gagal — tiap retry menumpuk satu lagi, lalu semuanya
+    // menyala sekaligus begitu port terakhir berhasil.
+    tcpServer.removeListener('error', onError);
+    tcpServer.removeListener('listening', onListening);
+
     if (err.code !== 'EADDRINUSE' || triesLeft <= 0) {
       console.error(`[Transfer] TCP server gagal di port ${port}: ${err.message}`);
       return;
@@ -952,14 +959,22 @@ function listenTransfer(port, triesLeft) {
     listenTransfer(port + 1, triesLeft - 1);
   };
 
-  tcpServer.once('error', onError);
-  tcpServer.listen(port, '0.0.0.0', () => {
+  const onListening = () => {
     tcpServer.removeListener('error', onError);
     console.log(`[Transfer] TCP server listening on port ${port}`);
-  });
+  };
+
+  tcpServer.once('error', onError);
+  tcpServer.once('listening', onListening);
+  tcpServer.listen(port, '0.0.0.0');
 }
 
 function startTransferServer() {
+  // Idempoten: pemanggil boleh terpanggil dua kali (mis. retry listen yang
+  // dulu menumpuk listener). Tanpa ini, `tcpServer` lama ditinggal tanpa
+  // ditutup dan port-nya ikut tertahan.
+  if (tcpServer && tcpServer.listening) return;
+
   cleanupStale(); // buang upload & partial yang udah kedaluwarsa
   ensureSaveDirExists(); // pastikan folder simpan (mis. Downloads\LAN-DROP) ada dari awal
   tcpServer = net.createServer((socket) => {

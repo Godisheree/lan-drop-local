@@ -665,6 +665,10 @@ const MAX_PORT_TRIES = 10;
  */
 function listenHttp(port, triesLeft) {
   const onError = (err) => {
+    // Lepas handler percobaan ini sebelum mencoba port berikutnya. Tanpa ini
+    // tiap percobaan menyisakan satu listener `error` di server yang sama.
+    server.removeListener('error', onError);
+
     if (err.code !== 'EADDRINUSE') {
       console.error(`[Server] Gagal listen di port ${port}: ${err.message}`);
       process.exit(1);
@@ -681,11 +685,15 @@ function listenHttp(port, triesLeft) {
   };
 
   server.once('error', onError);
-  server.listen(port, '0.0.0.0', () => {
-    server.removeListener('error', onError);
-    onListening();
-  });
+  server.listen(port, '0.0.0.0');
 }
+
+// `onListening` didaftarkan SEKALI di luar retry loop, bukan sebagai callback
+// `server.listen()`. Callback listen terdaftar sebagai `once('listening')` dan
+// TIDAK dilepas saat listen gagal — jadi kalau 3000..3008 terpakai, sembilan
+// callback menumpuk dan semuanya menyala begitu port terakhir berhasil:
+// sembilan ikon tray, sembilan socket discovery, sembilan TCP server.
+server.once('listening', onListening);
 
 function onListening() {
   const ips = listLANIPv4();

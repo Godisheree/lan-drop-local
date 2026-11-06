@@ -108,6 +108,46 @@ check('systray2 tidak jadi dependency paket', () => {
   assert.ok(!all.systray2, 'systray2 harus di-install saat runtime, bukan dependency');
 });
 
+// ── Satu onListening, bukan N ──────────────────────────────────────────────
+// Bug yang pernah lolos: `server.listen(port, host, cb)` mendaftarkan cb sebagai
+// `once('listening')` yang TIDAK dilepas kalau listen gagal. Kalau 3000..3008
+// terpakai, sembilan callback menumpuk dan semuanya menyala bersamaan → sembilan
+// ikon tray, sembilan socket discovery, sembilan TCP server. Yang kelihatan di
+// user: "sekali jalan lan-drop, kok prosesnya banyak banget".
+
+check('onListening didaftarkan di luar retry loop', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8');
+  assert.ok(
+    /server\.once\(\s*['"]listening['"]\s*,\s*onListening\s*\)/.test(src),
+    'onListening harus dipasang sekali lewat server.once("listening", ...)'
+  );
+  assert.ok(
+    !/server\.listen\(\s*port\s*,\s*['"]0\.0\.0\.0['"]\s*,/.test(src),
+    'server.listen() tidak boleh menerima callback — callback-nya bocor antar retry'
+  );
+});
+
+check('listenHttp melepas handler error sebelum retry', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8');
+  const body = src.slice(src.indexOf('function listenHttp'), src.indexOf('server.once(\'listening\''));
+  assert.ok(/removeListener\(\s*['"]error['"]\s*,\s*onError\s*\)/.test(body), 'handler error tidak dilepas');
+});
+
+check('listenTransfer melepas handler sebelum retry', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'server', 'transfer.js'), 'utf8');
+  const start = src.indexOf('function listenTransfer');
+  const body = src.slice(start, src.indexOf('function startTransferServer'));
+  assert.ok(/removeListener\(\s*['"]error['"]\s*,\s*onError\s*\)/.test(body), 'handler error tidak dilepas');
+  assert.ok(/removeListener\(\s*['"]listening['"]\s*,\s*onListening\s*\)/.test(body), 'handler listening tidak dilepas');
+});
+
+check('startTransferServer idempoten', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'server', 'transfer.js'), 'utf8');
+  const start = src.indexOf('function startTransferServer');
+  const body = src.slice(start, start + 400);
+  assert.ok(/tcpServer\.listening\s*\)\s*return/.test(body), 'dipanggil dua kali akan membuat tcpServer baru dan membocorkan yang lama');
+});
+
 // ── hasil ──────────────────────────────────────────────────────────────────
 
 const failed = results.filter((r) => !r.ok);

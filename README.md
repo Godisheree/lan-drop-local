@@ -139,6 +139,9 @@ download required.
   There is no window to close, which is the whole point.
 - **No stray icon.** The tray process watches its parent and exits on its own if
   the server dies, so a crash does not leave a ghost in the notification area.
+- **One icon, one server.** Port retries used to leave a stale `listening`
+  listener behind, so a run that walked past several busy ports started the
+  discovery, the transfer server and the tray icon once per attempt. Fixed.
 - **Tray failures never stop the server.** PowerShell blocked by policy, or a
   Linux box without `libayatana-appindicator` — the log says why and the server
   keeps serving.
