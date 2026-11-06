@@ -5,6 +5,40 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.12] — 2026-11-06
+
+### Added — ikon tray tanpa Electron
+
+Sebelumnya mode "jalan di background + ikon tray" cuma ada kalau Electron
+terpasang, dan `npm i -g lan-drop-local` sengaja tidak memasangnya (240 MB).
+Akibatnya justru pengguna yang paling butuh — yang meng-install lewat npm —
+tidak pernah melihat tray-nya. Sekarang `electron` tidak lagi dibutuhkan sama
+sekali di jalur itu, dan pola yang dipakai mengikuti 9router:
+
+| Platform | Ikon tray | Catatan |
+|---|---|---|
+| Windows | PowerShell `NotifyIcon` (`System.Windows.Forms`) | Nol dependency; AV tidak protes |
+| Linux/macOS | `systray2` | Di-install sekali ke `<data dir>/runtime` (~3 MB) |
+| Termux/Android | — | Tidak ada notification area; baris menunya disembunyikan |
+
+- `server/tray.js` — `startTray()`/`stopTray()`, tidak pernah melempar: tray itu
+  pelengkap, server tetap jalan kalau ikon gagal dibuat.
+- `server/tray-win.ps1` — menu (buka dashboard, salin alamat, keluar), klik kiri
+  = buka dashboard, dan keluar sendiri kalau induknya mati (tidak ada ikon hantu).
+- `server/index.js` — `--tray` / `LANDROP_TRAY=1`: nyalakan tray setelah semua
+  listener siap, jangan buka browser otomatis, matikan tray saat shutdown.
+  Diabaikan kalau berjalan di dalam Electron (biar tidak muncul dua ikon).
+- `tui.js` — `runTray()` sekarang `spawn(process.execPath, [server/index.js,
+  '--tray'])`, bukan `require('electron')`. `trayAvailable()` tidak lagi mengecek
+  Electron; di Windows hanya mengecek `public/icons/icon.ico` ada.
+- `scripts/generate-icons.js` — encoder ICO (BMP DIB 32-bit, 16/32/48/64/256).
+  Windows menolak PNG untuk `NotifyIcon`, jadi `.ico` harus ada di paket.
+- `scripts/check-tray.js` — struktur `.ico`, ukuran tray kecil, dan penjaga
+  supaya Electron tidak diam-diam kembali ke jalur ini.
+
+Catatan rilis: `README.md` di tarball 1.2.10 masih versi 1.2.9 — entri changelog
+dan bagian tray yang sudah di-commit belum ikut terbit. Rilis ini membawanya.
+
 ## [1.2.10] — 2026-11-06
 
 ### Fixed — PIN dashboard balik ke bawaan sendiri

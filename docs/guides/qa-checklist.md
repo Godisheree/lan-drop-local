@@ -21,6 +21,7 @@ node scripts/verify-pwa.js --url http://localhost:3000 # manifest, ikon, service
 node scripts/e2e.js             # 2 instance, transfer nyata dua arah
 node scripts/check-transcode.js # video .mkv -> .mp4 (butuh ffmpeg)
 node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tailscale
+node scripts/check-tray.js      # icon.ico valid & tray tidak menarik Electron
 ```
 
 | Skrip | Menangkap |
@@ -39,6 +40,7 @@ node scripts/check-tailscale-ui.js --url http://localhost:3000  # QR alamat Tail
 | `e2e.js` | Alur transfer rusak, batch tidak terkelompok, cancel gagal, shortcut mati, thumbnail hilang, beforeunload salah |
 | `check-transcode.js` | Autotranscode video mati (ffmpeg tak jalan / path salah) |
 | `check-tailscale-ui.js` | Alamat Tailscale tak muncul, selector tak mengubah QR, hint dobel |
+| `check-tray.js` | `icon.ico` rusak/hilang, tray gagal di Windows, Electron diam-diam balik ke jalur `npm i -g` |
 
 **Prasyarat `verify-qr.js`:** `pip install opencv-python-headless pillow`
 
@@ -171,6 +173,22 @@ dipakai lewat pemeriksaan berikut. Lihat
 - [ ] HP di data seluler (Tailscale): peer tetap ditemukan, kiriman lewat 100.x
 - [ ] Kalau HP **tidak menemukan laptop** padahal dua-duanya di Wi-Fi yang sama: cek `http://<ip-laptop>:3000/status` dari HP. Bisa dibuka = jaringan nyambung, masalahnya broadcast (AP/client isolation di Wi-Fi kos/kantor). Transfer manual lewat pilih perangkat masih jalan.
 
+## Manual — ikon tray (`lan-drop` → "Jalan di background")
+
+Wajib di Windows, dan sekali di Linux kalau ada VM/distro.
+
+- [ ] `npm i -g .` lalu `lan-drop` → menu muncul, baris tray **ada** (bukan cuma dua baris)
+- [ ] Pilih baris tray → terminal cetak PID + alamat dashboard, lalu boleh ditutup
+- [ ] Ikon muncul di notification area (Windows: pojok kanan bawah, mungkin di balik panah `^`)
+- [ ] Klik **kiri** ikon → dashboard kebuka di browser default
+- [ ] Klik **kanan** → menu berisi alamat dashboard, "Buka dashboard di browser", "Salin alamat dashboard", "Keluar"
+- [ ] "Salin alamat dashboard" → tempel di browser, halaman terbuka
+- [ ] "Keluar" → ikon **hilang** dari notification area, `tasklist | findstr node` tidak menyisakan server LAN DROP
+- [ ] Tutup paksa terminal induk (kalau dijalankan lewat terminal) atau `taskkill` PID server → ikon ikut hilang ≤ 2 detik (bukan ikon hantu yang baru hilang saat mouse lewat)
+- [ ] Mode tray **tidak** membuka browser otomatis saat start
+- [ ] Linux tanpa `libayatana-appindicator`: log menyebut paketnya, server tetap melayani dashboard
+- [ ] Termux: baris tray tidak muncul di menu (memang tidak ada notification area)
+
 ## Sebelum commit
 
 - [ ] `node scripts/check-js.js` — 0 failure
@@ -179,6 +197,7 @@ dipakai lewat pemeriksaan berikut. Lihat
 - [ ] `node scripts/check-security.js` — semua pemeriksaan lolos
 - [ ] `node scripts/check-identity.js` — semua pemeriksaan lolos
 - [ ] `node scripts/check-routing.js` — routing konsisten
+- [ ] `node scripts/check-tray.js` — `icon.ico` valid, tray tidak menarik Electron
 - [ ] `node scripts/check-routes.js` — semua jalur lolos (loopback, WiFi, Tailscale)
 - [ ] `node scripts/smoke.js` — "SEMUA BERSIH"
 - [ ] `node scripts/verify-pwa.js` — semua PASS

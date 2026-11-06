@@ -41,11 +41,12 @@ npm run check:routing  # regression check routing peer (LAN vs Tailscale)
 npm run check:routes   # 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
 npm run check:autoapprove # terima otomatis: fail-closed saat ukuran mencurigakan
 npm run check:tui      # menu launcher tui.js (panah, Enter, escape terpotong) — tanpa tty
+npm run check:tray     # struktur icon.ico + tray tidak boleh menarik Electron lagi
 npm run smoke          # 3 viewport + cek error console (butuh server jalan)
 npm run verify:qr      # decode QR dengan OpenCV, cocokkan dengan URL di UI
 npm run verify:pwa     # manifest + ikon + service worker
 npm run e2e            # 2 instance, transfer file nyata dua arah
-npm run icons          # regenerate ikon PWA
+npm run icons          # regenerate ikon PWA + icon.ico untuk tray Windows
 ```
 
 Detail tiap skrip ada di [docs/guides/qa-checklist.md](docs/guides/qa-checklist.md).
@@ -195,10 +196,31 @@ merender QR di browser (tanpa CDN) supaya perangkat kedua tinggal scan.
 ### Electron Wrapper (`main.js` + `preload.js`)
 `main.js` requires Express server directly in the main process (not child process). Sets `LANDROP_UPLOAD_DIR` to `app.getPath('temp')/landrop-uploads/` before requiring server — critical for ASAR compatibility. `preload.js` is intentionally empty (UI communicates via HTTP fetch, same as browser). On close, `app.quit()` prevents orphan node.exe.
 
-**Mode tray** (`electron . --tray` atau `LANDROP_TRAY=1`, dijalankan launcher `tui.js`): tidak ada jendela sama sekali, cuma ikon di notification area. Menu ikon: buka jendela, buka dashboard di browser, salin alamat dashboard, keluar. `window-all-closed` di mode ini **tidak** mematikan proses — kalau mematikan, tray-nya ikut hilang begitu jendela pertama ditutup. Ikon memakai `public/icons/icon-192.png` (aset PWA yang sudah ada).
+**Mode tray versi Electron** (`electron . --tray`): tidak ada jendela sama sekali, cuma ikon di notification area. Menu ikon: buka jendela, buka dashboard di browser, salin alamat dashboard, keluar. `window-all-closed` di mode ini **tidak** mematikan proses — kalau mematikan, tray-nya ikut hilang begitu jendela pertama ditutup. Ikon memakai `public/icons/icon-192.png`. Jalur ini hanya dipakai installer `build-win`.
+
+### Tray tanpa Electron (`server/tray.js`) — jalur `npm i -g`
+
+Pengguna npm tidak memasang Electron (`devDependencies`), jadi tray di jalur itu **tidak** lewat `main.js`. `server/index.js --tray` menyalakan ikon sendiri setelah semua listener siap:
+
+| Platform | Mekanisme | Catatan |
+|---|---|---|
+| Windows | `server/tray-win.ps1` — PowerShell `NotifyIcon` + `ContextMenuStrip` | Nol dependency; `System.Windows.Forms` sudah ada di OS. Butuh `public/icons/icon.ico` |
+| Linux/macOS | `systray2` (ESM, lewat `import()`) | Di-install lazy ke `<data dir>/runtime` (~3 MB). Linux butuh `libayatana-appindicator` |
+| Termux/Android | — | Tidak ada notification area; baris menu disembunyikan |
+
+Kontrak PowerShell↔Node: **stdout satu JSON per baris** (`{"type":"quit"}` / `{"type":"orphan"}`), stdin tidak dipakai. Proses PowerShell memantau `-ParentPid` dan keluar sendiri kalau induknya mati — tanpa itu ikon jadi hantu di notification area.
+
+**Aturan yang mengikat:**
+- `startTray()` **tidak pernah melempar**. Tray itu pelengkap; PowerShell diblokir kebijakan atau `libappindicator` tidak ada = warning di log, server tetap melayani.
+- `TRAY_MODE` di `server/index.js` menyertakan `!process.versions.electron` — kalau tidak, di dalam Electron muncul **dua** ikon.
+- Mode tray **tidak** membuka browser otomatis (alamatnya ada di menu ikon).
+- `icon.ico` dihasilkan `npm run icons` (`encodeIco` di `scripts/generate-icons.js`, BMP DIB 32-bit — Windows menolak PNG-dalam-ICO untuk `NotifyIcon`).
+- `scripts/check-tray.js` menjaga: struktur `.ico`, ukuran 16/32 ada, dan `tui.js`/`server/tray.js` tidak menarik Electron lagi.
 
 ### Launcher (`tui.js`)
 `npm start` menampilkan menu `↑/↓` (tanpa dependency: `setRawMode` + ANSI), lalu memilih: server di terminal ini (`node server/index.js`, sama dengan `npm run server`) atau proses lepas **detached** (`spawn(..., {detached:true, stdio:'ignore'})` + `unref()`) yang hidup di ikon tray. stdin bukan TTY (dipipe, skrip, Termux tanpa tty) = menu dilewati, server langsung jalan. Logika tombol & menu dipisah sebagai fungsi murni supaya bisa diuji tanpa terminal (`npm run check:tui`).
+
+Baris tray disembunyikan lewat `trayAvailable()` kalau memang tidak mungkin jalan: Termux (tidak ada notification area) atau Windows tanpa `public/icons/icon.ico`. Di Linux/macOS selalu ditampilkan — `systray2` di-install saat dipakai, dan kalau gagal server tetap jalan.
 
 ### Routing
 

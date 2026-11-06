@@ -123,8 +123,30 @@ Reasoning lives in [`docs/adr/`](docs/adr) — start with
 
 ## Changelog
 
-Latest version: **1.2.10** — a dashboard PIN you already changed no longer
-reverts to the default by itself.
+Latest version: **1.2.12** — a real tray icon on a plain `npm i -g`, no Electron
+download required.
+
+### 1.2.12
+
+- **The tray icon no longer needs Electron.** `npm i -g lan-drop-local` used to
+  leave the background mode out entirely, because the tray was drawn by an
+  Electron window that is only a `devDependency`. Now `lan-drop` → *Jalan di
+  background* spawns a plain Node server with `--tray`: Windows draws the icon
+  with a PowerShell `NotifyIcon` (part of the OS), Linux/macOS use `systray2`,
+  fetched once into the data folder (~3 MB) the first time the tray starts.
+- **Menu is the tray menu, not an app window:** open the dashboard in your
+  browser, copy the address, or quit. Clicking the icon opens the dashboard too.
+  There is no window to close, which is the whole point.
+- **No stray icon.** The tray process watches its parent and exits on its own if
+  the server dies, so a crash does not leave a ghost in the notification area.
+- **Tray failures never stop the server.** PowerShell blocked by policy, or a
+  Linux box without `libayatana-appindicator` — the log says why and the server
+  keeps serving.
+- **`--tray` does not pop a browser.** In background mode the dashboard is not
+  opened automatically; the address is on the tray menu.
+- `scripts/check-tray.js` locks it: the `.ico` structure Windows needs, and the
+  fact that neither `tui.js` nor `server/tray.js` pulls Electron back in.
+- Electron stays a `devDependency`, used only by the `build-win` NSIS installer.
 
 ### 1.2.10
 
