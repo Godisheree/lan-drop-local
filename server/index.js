@@ -140,7 +140,7 @@ app.post('/dashboard/pin', pinLimiter, (req, res) => {
 
   const next = String((req.body && req.body.pin) || '').trim();
   if (!/^\d{4,8}$/.test(next)) {
-    return res.status(400).json({ error: 'PIN harus 4-8 angka' });
+    return res.status(400).json({ error: 'PIN must be 4-8 digits' });
   }
 
   settings.setDashboardPin(next);
@@ -303,11 +303,11 @@ app.post('/transfer/request', transferLimiter, (req, res) => {
   // jadi SSRF: server bisa dipaksa buka koneksi ke host mana saja
   // (mis. metadata cloud) atas nama device lain.
   if (!isAllowedTargetIp(targetIp)) {
-    return res.status(400).json({ error: 'Target IP ditolak: hanya alamat LAN/Tailscale yang diizinkan' });
+    return res.status(400).json({ error: 'Target IP rejected: only LAN/Tailscale addresses are allowed' });
   }
 
   if (isSelfTarget(targetIp)) {
-    return res.status(400).json({ error: 'Target menunjuk ke perangkat ini sendiri — peer tidak ditemukan?' });
+    return res.status(400).json({ error: 'Target points at this device itself — peer not found?' });
   }
 
   try {
@@ -366,11 +366,11 @@ app.post('/transfer/request-text', transferLimiter, (req, res) => {
   }
 
   if (!isAllowedTargetIp(targetIp)) {
-    return res.status(400).json({ error: 'Target IP ditolak: hanya alamat LAN/Tailscale yang diizinkan' });
+    return res.status(400).json({ error: 'Target IP rejected: only LAN/Tailscale addresses are allowed' });
   }
 
   if (isSelfTarget(targetIp)) {
-    return res.status(400).json({ error: 'Target menunjuk ke perangkat ini sendiri — peer tidak ditemukan?' });
+    return res.status(400).json({ error: 'Target points at this device itself — peer not found?' });
   }
 
   try {
@@ -556,10 +556,10 @@ app.post('/settings/auto-approve', transferLimiter, (req, res) => {
   const { enabled, peers } = req.body || {};
 
   if (enabled !== undefined && typeof enabled !== 'boolean') {
-    return res.status(400).json({ error: 'Field "enabled" harus boolean' });
+    return res.status(400).json({ error: 'Field "enabled" must be a boolean' });
   }
   if (peers !== undefined && !Array.isArray(peers)) {
-    return res.status(400).json({ error: 'Field "peers" harus array nama perangkat' });
+    return res.status(400).json({ error: 'Field "peers" must be an array of device names' });
   }
 
   res.json(settings.setAutoApprove({ enabled, peers }));
@@ -601,15 +601,15 @@ app.use((err, req, res, next) => {
 
   // Batas multer
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: `File melebihi batas ${MAX_UPLOAD_MB} MB` });
+    return res.status(413).json({ error: `File exceeds the ${MAX_UPLOAD_MB} MB limit` });
   }
   if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_PART_COUNT' || err.code === 'LIMIT_FIELD_COUNT') {
-    return res.status(413).json({ error: 'Jumlah file/part melebihi batas yang diizinkan' });
+    return res.status(413).json({ error: 'Too many files/parts' });
   }
 
   // Body JSON rusak / terlalu besar
   if (err.type === 'entity.parse.failed') {
-    return res.status(400).json({ error: 'Format JSON tidak valid' });
+    return res.status(400).json({ error: 'Invalid JSON' });
   }
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ error: 'Request terlalu besar' });

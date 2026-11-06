@@ -425,7 +425,7 @@ async function saveAuto() {
     autoDirty = false;
     toast(saved.enabled ? t('dashboard.autoOn') : t('dashboard.autoOffState'));
     $.autoInfo.textContent = saved.enabled
-      ? `Tersimpan ${formatTime(Date.now())} — aktif untuk ${saved.peers.length ? saved.peers.join(', ') : 'semua peer'}`
+      ? t('dashboard.autoSavedPeers', { time: formatTime(Date.now()), peers: saved.peers.length ? saved.peers.join(', ') : t('dashboard.allPeers') })
       : `Tersimpan ${formatTime(Date.now())} — terima otomatis mati`;
   } finally {
     $.autoSave.disabled = false;
@@ -588,7 +588,7 @@ async function cancelTransfer(requestId, role, button) {
   button.disabled = true;
   try {
     await postJson(`/transfer/cancel/${encodeURIComponent(requestId)}`, { role });
-    toast(role === 'receive' ? 'Transfer masuk dibatalkan' : 'Transfer dibatalkan');
+    toast(role === 'receive' ? t('dashboard.incomingCancelled') : t('dashboard.transferCancelled'));
     await refreshActive();
   } catch (err) {
     button.disabled = false;
@@ -653,9 +653,9 @@ function renderHistory() {
           el('dd', { class: 'dash-mono', text: dash(entry.fileName) }),
           el('dt', { text: 'Ukuran' }),
           el('dd', { text: entry.fileSize ? formatBytes(entry.fileSize) : '—' }),
-          el('dt', { text: 'Peer' }),
+          el('dt', { text: t('field.peer') }),
           el('dd', { text: dash(entry.peer) }),
-          el('dt', { text: 'Tersimpan di' }),
+          el('dt', { text: t('field.savedTo') }),
           el('dd', { class: 'dash-mono', text: dash(entry.savedTo) }),
         ]),
       ]),
@@ -829,8 +829,8 @@ async function copyLog() {
     selection.removeAllRanges();
   }
 
-  $.logCopy.textContent = 'Tersalin';
-  toast('Log disalin ke clipboard');
+  $.logCopy.textContent = t('dashboard.copied');
+  toast(t('dashboard.logCopied'));
   setTimeout(() => {
     $.logCopy.textContent = t('dashboard.copyLog');
   }, 1500);
@@ -891,7 +891,7 @@ byId('dashReload').addEventListener('click', () => {
   stopPolling(); // tanpa ini tiap klik menambah satu set interval baru
   startPolling();
   tick();
-  toast('Data dimuat ulang dari server');
+  toast(t('dashboard.reloaded'));
 });
 
 $.histFilter.addEventListener('change', renderHistory);

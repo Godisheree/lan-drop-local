@@ -163,7 +163,7 @@ function showNextRequest() {
     },
   });
 
-  notify(`${group.senderName || t('receive.someone')} ingin mengirim file`, {
+  notify(t('receive.notifyIncoming', { name: group.senderName || t('receive.someone') }), {
     type: 'info',
     sound: true,
     badge: true,

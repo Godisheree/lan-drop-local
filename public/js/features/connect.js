@@ -106,7 +106,7 @@ function renderNetStatus(status) {
       if (!iface.bound) {
         box.appendChild(statusRow(label, t('connect.inactive'), 'warn'));
       } else if (iface.lastError) {
-        box.appendChild(statusRow(label, `gagal (${iface.lastError})`, 'warn'));
+        box.appendChild(statusRow(label, t('connect.failedWith', { error: iface.lastError }), 'warn'));
       } else {
         box.appendChild(statusRow(label, 'ok', 'ok'));
       }
@@ -241,7 +241,7 @@ export function renderConnectPanel() {
         type: 'button',
         'aria-label': t('connect.copyAddress', { url: entry.url }),
         onclick: (event) => copyUrl(entry.url, event.currentTarget),
-      }, 'Salin'),
+      }, t('modal.copy')),
     ]);
     urlList.appendChild(item);
   }
@@ -292,10 +292,10 @@ function copyUrl(url, button) {
  * bukan harus menebak.
  */
 const SHORTCUTS = [
-  { keys: 'Enter', label: 'Terima permintaan masuk' },
-  { keys: 'Esc', label: 'Tolak / tutup jendela' },
-  { keys: 'Ctrl+Enter', label: 'Kirim teks' },
-  { keys: 'Ctrl+V', label: 'Tempel file/gambar/teks → kirim ke perangkat teratas' },
+  { keys: 'Enter', label: t('shortcut.acceptRequest') },
+  { keys: 'Esc', label: t('shortcut.rejectClose') },
+  { keys: 'Ctrl+Enter', label: t('shortcut.sendText') },
+  { keys: 'Ctrl+V', label: t('shortcut.paste') },
 ];
 
 /**

@@ -442,7 +442,7 @@ init().catch(async (err) => {
   // Elemen wajib hilang = gejala HTML dan JS beda versi (cache service worker
   // tertinggal). Buang cache lalu muat ulang sekali sebelum menyerah — biar
   // user tidak melihat pesan teknis untuk masalah cache.
-  const stale = /tidak ditemukan di DOM/.test(err.message || '');
+  const stale = /not found in the DOM/.test(err.message || '');
   if (stale && await healStaleShell()) return;
-  showToast('Gagal memuat aplikasi: ' + err.message, 'error');
+  showToast(t('app.loadFailed', { reason: err.message }), 'error');
 });

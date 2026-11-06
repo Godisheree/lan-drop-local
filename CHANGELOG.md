@@ -109,6 +109,79 @@ handler `close` mengira itu pembatalan → `.landrop-part` dihapus.
 - `scripts/check-autoapprove.js` — skenario 6c: 8 percobaan menempelkan payload
   ke paket `file-start`. Terbukti menangkap bug (0/8 tanpa fix, 8/8 dengan).
 
+### Fixed — kebocoran bahasa (audit menyeluruh)
+
+Audit menemukan **23 teks Indonesia** masih tampil di UI English. Pemeriksa
+otomatis sebelumnya meloloskan semuanya karena (a) hanya memeriksa pola properti
+tertentu, dan (b) daftar katanya sempit.
+
+Frontend (19):
+-  — 'Batal', 'Salin log', 'Tersalin', 'Log disalin ke clipboard',
+  'Data dimuat ulang dari server', 'Transfer dibatalkan', label 'Peer'/'Tersimpan di'
+-  — 'Belum ada transfer', 'Kirim...', 'Salin', 'Nama file disalin',
+  'Lokasi folder disalin', 'Kiriman', '✕ Batal', 'terkirim'/'diterima'
+-  — 'Gagal upload', 'Gagal kirim', 'Gagal kirim teks', 'Koneksi terputus',
+  'Mengirim teks...', 'Teks terkirim', 'Dibatalkan'
+-  — '... ingin mengirim file'
+-  — 'Salin', label pintasan keyboard, 'gagal (...)', 'Tempel file/...'
+- ,  — pesan galat internal
+
+Server (14): semua  di  &  — pesan ini
+dikirim ke klien dan tampil di UI, jadi termasuk teks user-facing.
+
+Pemeriksa (OK   en.json dan id.json punya key identik
+OK   setiap key yang dipakai ada di kedua kamus
+OK   tidak ada key yatim di kamus
+OK   kedua kamus tidak kosong dan tidak ada nilai kosong
+OK   placeholder {x} sama di kedua bahasa
+OK   setiap data-i18n punya key yang valid
+OK   index.html tidak lagi berbahasa Indonesia
+OK   dashboard.html tidak lagi berbahasa Indonesia
+OK   bendera SVG ada dan ikut paket public/
+OK   dashboard.js tidak lagi berbahasa Indonesia
+OK   features/transfers.js tidak lagi berbahasa Indonesia
+OK   features/devices.js tidak lagi berbahasa Indonesia
+OK   features/send.js tidak lagi berbahasa Indonesia
+OK   features/receive.js tidak lagi berbahasa Indonesia
+OK   features/connect.js tidak lagi berbahasa Indonesia
+OK   features/history.js tidak lagi berbahasa Indonesia
+OK   features/gallery.js tidak lagi berbahasa Indonesia
+OK   features/pwa.js tidak lagi berbahasa Indonesia
+OK   features/text.js tidak lagi berbahasa Indonesia
+OK   pesan error server berbahasa Inggris
+
+20/20 lulus, kini 20 pemeriksaan):
+- memindai **semua literal string** di JS (bukan pola properti), membuang komentar
+  dulu supaya komentar berbahasa Indonesia tetap boleh
+- memeriksa  untuk pesan error berbahasa Indonesia
+- diverifikasi menangkap: suntik 'Lokasi file disalin' & 'Format tidak valid' → FAIL
+
+### Fixed — kebocoran bahasa (audit menyeluruh)
+
+Audit menemukan **23 teks Indonesia** masih tampil di UI English. Pemeriksa
+otomatis sebelumnya meloloskan semuanya karena (a) hanya memeriksa pola properti
+tertentu, dan (b) daftar katanya sempit.
+
+Frontend (19):
+- `dashboard.js` — 'Batal', 'Salin log', 'Tersalin', 'Log disalin ke clipboard',
+  'Data dimuat ulang dari server', 'Transfer dibatalkan', label 'Peer'/'Tersimpan di'
+- `transfers.js` — 'Belum ada transfer', 'Salin', 'Nama file disalin',
+  'Lokasi folder disalin', 'Kiriman', '✕ Batal', 'terkirim'/'diterima'
+- `send.js` — 'Gagal upload', 'Gagal kirim', 'Gagal kirim teks', 'Koneksi terputus',
+  'Mengirim teks...', 'Teks terkirim', 'Dibatalkan'
+- `receive.js` — '... ingin mengirim file'
+- `connect.js` — 'Salin', label pintasan keyboard, 'gagal (...)', 'Tempel file/...'
+- `dom.js`, `main.js` — pesan galat internal
+
+Server (14): semua `{ error: '...' }` di `index.js` & `security.js` — pesan ini
+dikirim ke klien dan tampil di UI, jadi termasuk teks user-facing.
+
+Pemeriksa (`scripts/check-i18n.js`, kini 20 pemeriksaan):
+- memindai **semua literal string** di JS (bukan pola properti), membuang komentar
+  dulu supaya komentar berbahasa Indonesia tetap boleh
+- memeriksa `server/*.js` untuk pesan error berbahasa Indonesia
+- diverifikasi menangkap: suntik 'Lokasi file disalin' & 'Format tidak valid' → FAIL
+
 ### Fixed — jendela cmd berkedip di Windows
 
 Sejak mode background dipakai, jendela command prompt muncul lalu hilang

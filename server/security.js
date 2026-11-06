@@ -116,12 +116,12 @@ function sameOriginGuard(req, res, next) {
   try {
     originHost = new URL(origin).host;
   } catch (_) {
-    return res.status(403).json({ error: 'Forbidden: origin tidak valid' });
+    return res.status(403).json({ error: 'Forbidden: invalid origin' });
   }
 
   const host = req.get('host');
   if (originHost !== host) {
-    return res.status(403).json({ error: 'Forbidden: cross-origin request ditolak' });
+    return res.status(403).json({ error: 'Forbidden: cross-origin request rejected' });
   }
   next();
 }
@@ -336,7 +336,7 @@ function hostGuard(req, res, next) {
   host = host.toLowerCase().replace(/\.+$/, '');
 
   if (!host) {
-    return res.status(403).json({ error: 'Forbidden: header Host tidak ada' });
+    return res.status(403).json({ error: 'Forbidden: missing Host header' });
   }
   if (host === 'localhost' || host === 'localhost.localdomain') return next();
 
@@ -346,8 +346,8 @@ function hostGuard(req, res, next) {
   if (ownHostnames().has(host)) return next();
 
   return res.status(403).json({
-    error: 'Forbidden: Host tidak dikenal. Akses lewat alamat IP LAN/Tailscale, '
-      + 'atau daftarkan namanya di LANDROP_ALLOWED_HOSTS.',
+    error: 'Forbidden: unknown Host. Use the LAN/Tailscale IP address, '
+      + 'or register the name in LANDROP_ALLOWED_HOSTS.',
   });
 }
 

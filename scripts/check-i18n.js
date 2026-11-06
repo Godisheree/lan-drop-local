@@ -212,25 +212,48 @@ check('bendera SVG ada dan ikut paket public/', () => {
 
 const ID_WORDS = new RegExp("\\b(Perangkat|Riwayat|Kirim|Terima|Tolak|Batal|Salin|Tutup|Sambung|Memuat|Pastikan|Kedua|Kalau|Pilih|Belum|Hapus|Simpan|Keluar|Batalkan|Lokasi|disalin|tidak|sudah|gagal|Menunggu|mengirim|diterima|tersimpan|ditampilkan|dipakai|dibuka|diatur|terhubung|perangkat|lalu|kepada|dari|untuk|dengan|adalah|bisa|harus|hanya|masih|juga|agar|supaya|karena|tetapi|atau|dan)\\b");
 
+/**
+ * Cari baris yang memuat LITERAL STRING berbahasa Indonesia.
+ *
+ * Pendekatan lama hanya memeriksa pola tertentu (`text:`, `showToast(`, …),
+ * sehingga kebocoran nyata lolos: `copyText(x, 'Nama file disalin')`,
+ * `new Error('Koneksi terputus')`, `label: 'Terima permintaan masuk'`, dan
+ * `toast('Log disalin ke clipboard')`. Sekarang: ambil SEMUA literal string di
+ * baris itu, lalu periksa apakah salah satunya mengandung kata Indonesia.
+ *
+ * Komentar dibuang dulu (banyak komentar berbahasa Indonesia dan itu memang
+ * tidak apa-apa — kode & komentar boleh Indonesia, yang tidak boleh adalah
+ * teks yang tampil ke user).
+ */
 function jsLeftovers(rel) {
   const src = fs.readFileSync(path.join(PUBLIC, rel), 'utf8');
-  return src
-    .split(/\r?\n/)
-    .map((line, i) => ({ line, no: i + 1 }))
-    .filter(({ line }) => {
-      const t = line.trim();
-      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return false;
-      if (t.includes('i18n')) return false;
-      // Hanya nilai yang tampil ke user, bukan identifier kelas/atribut.
-      const uiLiteral =
-        /(?:text|title|'aria-label'|placeholder)\s*:\s*['"`][^'"`]*[A-Za-z]/.test(line)
-        || /(?:showToast|announce)\(\s*['"`][^'"`]*[A-Za-z]/.test(line)
-        || /textContent\s*=\s*['"`][^'"`]*[A-Za-z]/.test(line)
-        // setAttribute('aria-label', '...') / setAttribute('title', '...')
-        || /setAttribute\(\s*['"](?:aria-label|title|placeholder)['"]\s*,\s*['"`][^'"`]*[A-Za-z]/.test(line);
-      return uiLiteral && ID_WORDS.test(line);
-    })
-    .map(({ no, line }) => `${no}: ${line.trim().slice(0, 46)}`);
+  const out = [];
+
+  src.split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line) return;
+    if (line.startsWith('//') || line.startsWith('*') || line.startsWith('/*')) return;
+
+    // Buang komentar di ujung baris, lalu semua literal string.
+    const code = line.replace(/\/\*.*?\*\//g, '').replace(/(^|[^:])\/\/.*$/, '$1');
+    const literals = code.match(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g) || [];
+
+    for (const literal of literals) {
+      const inner = literal.slice(1, -1);
+      // Nama kelas/atribut/selector/URL bukan teks untuk user.
+      if (/^[\w-]+$/.test(inner)) continue;
+      if (/^(?:[\w-]+\s+)*[\w-]+$/.test(inner) && !ID_WORDS.test(inner)) continue;
+      if (/^(?:\.|#|\[|@|\/|https?:)/.test(inner)) continue;
+      // Markup SVG/XML bukan teks untuk user.
+      if (/^\s*</.test(inner)) continue;
+      if (ID_WORDS.test(inner)) {
+        out.push(`${i + 1}: ${literal.slice(0, 46)}`);
+        break;
+      }
+    }
+  });
+
+  return out;
 }
 
 check('dashboard.js tidak lagi berbahasa Indonesia', () => {
@@ -244,6 +267,28 @@ for (const name of ['transfers', 'devices', 'send', 'receive', 'connect', 'histo
     assert.strictEqual(left.length, 0, `baris: ${left.slice(0, 3).join(' | ')}`);
   });
 }
+
+// ── 7. Pesan error server tidak boleh berbahasa Indonesia ─────────────────
+// Pesan ini dikirim ke klien (`{ error: '...' }`) dan ditampilkan di UI, jadi
+// termasuk teks user-facing walau tinggal di server/.
+
+check('pesan error server berbahasa Inggris', () => {
+  const words = ['tidak', 'gagal', 'belum', 'sudah', 'harus', 'hanya', 'melebihi',
+    'ditolak', 'diizinkan', 'bukan', 'untuk', 'dengan', 'dari', 'tidak ada'];
+  const bad = [];
+
+  for (const file of fs.readdirSync(path.join(ROOT, 'server')).filter((f) => f.endsWith('.js'))) {
+    const lines = fs.readFileSync(path.join(ROOT, 'server', file), 'utf8').split(/\r?\n/);
+    lines.forEach((line, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+      if (!/error\s*:/.test(line)) return;
+      const low = line.toLowerCase();
+      if (words.some((w) => low.includes(` ${w}`))) bad.push(`${file}:${i + 1}`);
+    });
+  }
+
+  assert.strictEqual(bad.length, 0, `pesan error Indonesia: ${bad.slice(0, 5).join(', ')}`);
+});
 
 // ── hasil ──────────────────────────────────────────────────────────────────
 

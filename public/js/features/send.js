@@ -281,14 +281,14 @@ async function uploadThenStart(item, resumeOffset) {
       const aborted = err.name === 'AbortError';
       updateTransferItem(item.requestId, {
         status: aborted ? 'cancelled' : 'failed',
-        statusText: aborted ? 'Dibatalkan' : 'Gagal mengunggah: ' + err.message,
+        statusText: aborted ? t('send.cancelled') : t('send.uploadFailed', { reason: err.message }),
       });
       if (aborted) {
         // Permintaan sudah di-ACC dan penerima sedang menunggu byte. Beri tahu
         // dia supaya koneksinya ditutup, bukan menggantung sampai timeout.
         try { await postJson(`/transfer/cancel/${encodeURIComponent(item.requestId)}`, { role: 'send' }); } catch (_) {}
       } else {
-        showToast('Gagal upload: ' + err.message, 'error');
+        showToast(t('send.uploadFailed', { reason: err.message }), 'error');
       }
       return;
     }
@@ -338,7 +338,7 @@ async function uploadThenStart(item, resumeOffset) {
   } catch (err) {
     updateTransferItem(item.requestId, {
       status: 'failed',
-      statusText: 'Gagal kirim: ' + err.message,
+      statusText: t('send.failed', { reason: err.message }),
     });
     showToast(t('send.failedShort'), 'error');
   }
@@ -364,7 +364,7 @@ export function cancelUpload(requestId) {
 export async function sendText(target, text) {
   const { postJson, fetchRequestStatus } = await import('../core/api.js');
 
-  showToast('Mengirim teks...', 'info');
+  showToast(t('send.sendingText'), 'info');
 
   try {
     const reqRes = await postJson('/transfer/request-text', {
@@ -386,7 +386,7 @@ export async function sendText(target, text) {
             reject(new Error(t('send.rejected')));
           } else if (st.status === 'disconnected') {
             clearInterval(timer);
-            reject(new Error('Koneksi terputus'));
+            reject(new Error(t('send.disconnected')));
           }
         } catch (_) {
           // biarkan — cek lagi di tick berikutnya
@@ -401,9 +401,9 @@ export async function sendText(target, text) {
     });
 
     await postJson('/transfer/send-text', { requestId: reqRes.requestId, text });
-    showToast('Teks terkirim', 'success');
-    announce('Teks terkirim');
+    showToast(t('send.textSent'), 'success');
+    announce(t('send.textSent'));
   } catch (err) {
-    showToast('Gagal kirim teks: ' + err.message, 'error');
+    showToast(t('send.textFailed', { reason: err.message }), 'error');
   }
 }

@@ -149,7 +149,7 @@ export function replace(node, children) {
  */
 export function byId(id) {
   const node = document.getElementById(id);
-  if (!node) throw new Error(`Elemen #${id} tidak ditemukan di DOM`);
+  if (!node) throw new Error(`Element #${id} not found in the DOM`);
   return node;
 }
 

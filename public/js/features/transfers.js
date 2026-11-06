@@ -132,7 +132,7 @@ function buildItem(requestId, data) {
       type: 'button',
       title: t('toast.copyFileName'),
       'aria-label': t('toast.copyFileNameLabel', { name: data.fileName || 'transfer' }),
-      onclick: () => copyText(data.fileName || '', 'Nama file disalin'),
+      onclick: () => copyText(data.fileName || '', t('toast.fileNameCopied')),
     }, t('toast.copyName')),
   ]);
 
@@ -192,7 +192,7 @@ export function addTransferItem(requestId, data) {
   const isBatch = Boolean(batchId) && data.batchSize > 1;
 
   if (isBatch) {
-    const batch = ensureBatch(batchId, data.batchLabel || 'Kiriman');
+    const batch = ensureBatch(batchId, data.batchLabel || t('transfer.batchLabel'));
     const row = el('div', { dataset: { rid: requestId } });
     row.appendChild(item);
     batch.body.appendChild(row);
@@ -300,8 +300,8 @@ export function updateTransferItem(requestId, data) {
           class: 'tf-path-copy',
           type: 'button',
           'aria-label': t('toast.copyFolder'),
-          onclick: () => copyText(data.savedTo, 'Lokasi folder disalin'),
-        }, 'Salin'),
+          onclick: () => copyText(data.savedTo, t('toast.folderCopied')),
+        }, t('modal.copy')),
       ]);
       item.appendChild(pathRow);
     }
@@ -341,7 +341,7 @@ function updateActions(requestId, data) {
       class: 'btn-mini btn-cancel',
       type: 'button',
       dataset: { rid: requestId },
-    }, '✕ Batal');
+    }, t('modal.cancelWithIcon'));
     actions.appendChild(btn);
   } else if (!canCancel && existingCancel) {
     existingCancel.remove();
@@ -515,7 +515,7 @@ export function pollProgress(requestId, direction, onComplete) {
           thumbnailId: prog.thumbnailId || null,
         });
         showToast(
-          `${prog.fileName} — ${direction === 'send' ? 'terkirim' : 'diterima'}`,
+          t('transfer.directionSummary', { name: prog.fileName, direction: direction === 'send' ? t('field.sent') : t('field.received') }),
           'success'
         );
         if (onComplete) onComplete(prog);
