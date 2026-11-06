@@ -277,7 +277,7 @@ export async function copyText(text, button) {
     showToast(t('connect.copied'), 'success');
     return true;
   } catch (_) {
-    showToast('Gagal menyalin — salin manual dari layar', 'warning');
+    showToast(t('toast.copyFailedManual'), 'warning');
     return false;
   }
 }

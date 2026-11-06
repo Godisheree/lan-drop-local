@@ -277,5 +277,8 @@
   "unit.hourShort": " jam",
   "unit.dayShort": " hari",
   "dashboard.boundState": "terikat",
-  "dashboard.unboundState": "TIDAK terikat"
+  "dashboard.unboundState": "TIDAK terikat",
+  "transfer.cancelAction": "Batalkan transfer ini",
+  "toast.copyFailedManual": "Gagal menyalin — salin manual dari layar",
+  "receive.incomingFrom": "Permintaan masuk dari {name}"
 }

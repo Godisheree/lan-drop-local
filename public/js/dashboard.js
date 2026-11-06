@@ -566,8 +566,8 @@ async function refreshActive() {
     const cancel = el('button', {
       class: 'dash-btn dash-btn-danger',
       type: 'button',
-      text: 'Batal',
-      title: 'Batalkan transfer ini',
+      text: t('modal.cancel'),
+      title: t('transfer.cancelAction'),
       onclick: () => cancelTransfer(t.requestId, t.direction === 'receive' ? 'receive' : 'send', cancel),
     });
 
@@ -832,7 +832,7 @@ async function copyLog() {
   $.logCopy.textContent = 'Tersalin';
   toast('Log disalin ke clipboard');
   setTimeout(() => {
-    $.logCopy.textContent = 'Salin log';
+    $.logCopy.textContent = t('dashboard.copyLog');
   }, 1500);
 }
 

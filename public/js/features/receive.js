@@ -168,7 +168,7 @@ function showNextRequest() {
     sound: true,
     badge: true,
   });
-  announce(`Permintaan masuk dari ${group.senderName || t('receive.someoneLower')}`);
+  announce(t('receive.incomingFrom', { name: group.senderName || t('receive.someoneLower') }));
 }
 
 /**

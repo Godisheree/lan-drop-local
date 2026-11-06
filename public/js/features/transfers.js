@@ -39,10 +39,10 @@ function ensureEmptyState() {
   if (list.querySelector('.transfer-item, .transfer-batch')) return;
 
   list.appendChild(el('div', { class: 'empty-state' }, [
-    el('span', { class: 'empty-title', text: 'Belum ada transfer' }),
+    el('span', { class: 'empty-title', text: t('transfer.empty') }),
     el('span', {
       class: 'empty-hint',
-      text: 'Pilih perangkat di sebelah, lalu kirim file, foto, video, atau teks.',
+      text: t('transfer.emptyHint'),
     }),
   ]));
 }

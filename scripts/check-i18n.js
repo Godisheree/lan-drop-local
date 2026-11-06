@@ -205,6 +205,46 @@ check('bendera SVG ada dan ikut paket public/', () => {
   assert.ok(pkg.files.includes('public/'), 'public/ harus di whitelist npm');
 });
 
+
+// ── 6. Teks Indonesia tertinggal di JS frontend ────────────────────────────
+// Pemeriksaan HTML saja tidak cukup: string UI juga dibuat di JS (`text:`,
+// `title:`, `aria-label:`). Dua kebocoran nyata lolos dari sini sekali.
+
+const ID_WORDS = new RegExp("\\b(Perangkat|Riwayat|Kirim|Terima|Tolak|Batal|Salin|Tutup|Sambung|Memuat|Pastikan|Kedua|Kalau|Pilih|Belum|Hapus|Simpan|Keluar|Batalkan|Lokasi|disalin|tidak|sudah|gagal|Menunggu|mengirim|diterima|tersimpan|ditampilkan|dipakai|dibuka|diatur|terhubung|perangkat|lalu|kepada|dari|untuk|dengan|adalah|bisa|harus|hanya|masih|juga|agar|supaya|karena|tetapi|atau|dan)\\b");
+
+function jsLeftovers(rel) {
+  const src = fs.readFileSync(path.join(PUBLIC, rel), 'utf8');
+  return src
+    .split(/\r?\n/)
+    .map((line, i) => ({ line, no: i + 1 }))
+    .filter(({ line }) => {
+      const t = line.trim();
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return false;
+      if (t.includes('i18n')) return false;
+      // Hanya nilai yang tampil ke user, bukan identifier kelas/atribut.
+      const uiLiteral =
+        /(?:text|title|'aria-label'|placeholder)\s*:\s*['"`][^'"`]*[A-Za-z]/.test(line)
+        || /(?:showToast|announce)\(\s*['"`][^'"`]*[A-Za-z]/.test(line)
+        || /textContent\s*=\s*['"`][^'"`]*[A-Za-z]/.test(line)
+        // setAttribute('aria-label', '...') / setAttribute('title', '...')
+        || /setAttribute\(\s*['"](?:aria-label|title|placeholder)['"]\s*,\s*['"`][^'"`]*[A-Za-z]/.test(line);
+      return uiLiteral && ID_WORDS.test(line);
+    })
+    .map(({ no, line }) => `${no}: ${line.trim().slice(0, 46)}`);
+}
+
+check('dashboard.js tidak lagi berbahasa Indonesia', () => {
+  const left = jsLeftovers('js/dashboard.js');
+  assert.strictEqual(left.length, 0, `baris: ${left.slice(0, 4).join(' | ')}`);
+});
+
+for (const name of ['transfers', 'devices', 'send', 'receive', 'connect', 'history', 'gallery', 'pwa', 'text']) {
+  check(`features/${name}.js tidak lagi berbahasa Indonesia`, () => {
+    const left = jsLeftovers(`js/features/${name}.js`);
+    assert.strictEqual(left.length, 0, `baris: ${left.slice(0, 3).join(' | ')}`);
+  });
+}
+
 // ── hasil ──────────────────────────────────────────────────────────────────
 
 const failed = results.filter((r) => !r.ok);

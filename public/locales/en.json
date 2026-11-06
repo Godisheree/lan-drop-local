@@ -277,5 +277,8 @@
   "unit.hourShort": "h",
   "unit.dayShort": "d",
   "dashboard.boundState": "bound",
-  "dashboard.unboundState": "NOT bound"
+  "dashboard.unboundState": "NOT bound",
+  "transfer.cancelAction": "Cancel this transfer",
+  "toast.copyFailedManual": "Copy failed — copy it manually from the screen",
+  "receive.incomingFrom": "Incoming request from {name}"
 }
