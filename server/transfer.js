@@ -725,6 +725,8 @@ function startRawReceive(requestId, req) {
         // Tulis sisa buffer dari frame parser (kalau ada data file yg ikut)
         const remaining = buf.slice(expectedLen);
         if (remaining.length > 0) {
+          // Byte sisa di paket yang sama ikut ditulis — untuk file kecil,
+          // seluruh isinya bisa sudah lengkap di sini.
           writeStream.write(remaining);
           written += remaining.length;
           const p = transferProgress.get(requestId);
@@ -757,6 +759,22 @@ function startRawReceive(requestId, req) {
           }
         };
         socket.on('data', dataHandler);
+
+        // ===== File yang seluruh isinya ikut di paket yang sama =====
+        //
+        // File kecil (teks pendek, foto thumbnail, file konfigurasi) sering
+        // tiba lengkap dalam satu paket TCP bersama frame `file-start`. Sisa
+        // byte di atas sudah ditulis, jadi `written` bisa langsung mencapai
+        // `actualSize` dan `dataHandler` tidak akan pernah dipanggil lagi.
+        //
+        // Dulu tidak ada penutup di jalur ini: stream menggantung terbuka,
+        // socket pengirim kemudian ditutup, dan handler `close` menganggapnya
+        // pembatalan → `.landrop-part` dihapus. Hasilnya file kecil hilang
+        // tanpa pesan apa pun, sesekali (~1 dari 6 percobaan).
+        if (written >= actualSize) {
+          socket.removeListener('data', dataHandler);
+          writeStream.end();
+        }
 
         let peerEnded = false; // sender nutup bersih (FIN) = cancel eksplisit, bukan drop
         socket.on('end', () => { peerEnded = true; });
@@ -881,7 +899,21 @@ function startRawReceive(requestId, req) {
           socket.end();
         });
       }
-    } catch (_) {}
+    } catch (err) {
+      // Dulu `catch (_) {}`: kegagalan di jalur file-start hilang tanpa jejak.
+      // Pengirim melihat file "terkirim" lalu socket ditutup, dan penerima
+      // tidak punya satu baris pun untuk menjelaskan kenapa. Ini yang membuat
+      // kegagalan sesekali (~1 dari 6) cuma terlihat sebagai
+      // "Request … selesai tanpa transfer — entri dibuang (accepted)".
+      console.error(`[Transfer] ❌ ${requestId} — gagal menyiapkan penerimaan: ${err && err.message ? err.message : err}`);
+      try {
+        sendFramedMessage(socket, { type: 'transfer-save-failed', reason: 'Penerima gagal menyiapkan file' });
+      } catch (_) {}
+      transferProgress.delete(requestId);
+      req.status = 'failed';
+      socket.end();
+      pendingRequests.delete(requestId);
+    }
   };
 
   socket.on('data', metaHandler);

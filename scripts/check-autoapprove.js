@@ -292,6 +292,49 @@ async function main() {
       check('file dari kiriman berjeda mendarat utuh',
         fs.existsSync(landedSlow) &&
         fs.readFileSync(landedSlow, 'utf-8') === slowPayload.toString('utf-8'));
+
+      // --- 6c. Payload menempel di paket yang sama dengan file-start ------
+      // File kecil sering tiba UTUH dalam satu paket TCP bersama frame
+      // `file-start`. Dulu jalur ini tidak pernah memanggil writeStream.end(),
+      // jadi stream menggantung, socket ditutup pengirim, handler `close`
+      // mengira pembatalan, dan `.landrop-part` dihapus — file hilang tanpa
+      // pesan (~1 dari 6 percobaan). Diulang karena sifatnya balapan.
+      const gluedPayload = Buffer.from('payload menempel di paket file-start\n', 'utf-8');
+      const gluedName = 'tempel.txt';
+      const gluedPath = path.join(saveDir, gluedName);
+      let gluedOk = 0;
+      const gluedRuns = 8;
+
+      for (let i = 0; i < gluedRuns; i++) {
+        if (fs.existsSync(gluedPath)) fs.unlinkSync(gluedPath);
+        const target = await sendRequest(
+          TRANSFER_PORT,
+          { ...sender, fileName: gluedName, fileSize: gluedPayload.length, kind: 'file' },
+          { waitMs: 150 }
+        );
+        if (!target.response || target.response.accepted !== true) {
+          target.socket.destroy();
+          continue;
+        }
+
+        const done = new Promise((r) => target.socket.on('close', r));
+        // Satu write: frame file-start langsung diikuti payload, tanpa jeda.
+        target.socket.write(Buffer.concat([
+          frame({ type: 'file-start', fileName: gluedName, fileSize: gluedPayload.length }),
+          gluedPayload,
+        ]));
+        await Promise.race([done, sleep(3000)]);
+        target.socket.destroy();
+
+        for (let w = 0; w < 20 && !fs.existsSync(gluedPath); w += 1) await sleep(50);
+        if (fs.existsSync(gluedPath) && fs.readFileSync(gluedPath, 'utf-8') === gluedPayload.toString('utf-8')) {
+          gluedOk += 1;
+        }
+      }
+
+      check(`payload menempel di paket file-start mendarat utuh (${gluedRuns} percobaan)`,
+        gluedOk === gluedRuns,
+        `${gluedOk}/${gluedRuns} berhasil — sisanya file hilang tanpa pesan`);
     } else {
       slow.socket.destroy();
     }
