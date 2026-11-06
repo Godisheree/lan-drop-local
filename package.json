@@ -35,9 +35,10 @@
     "verify:pwa": "node scripts/verify-pwa.js --url http://localhost:3000",
     "icons": "node scripts/generate-icons.js",
     "e2e": "node scripts/e2e.js",
-    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js && node scripts/check-security.js && node scripts/check-identity.js && node scripts/check-routing.js && node scripts/check-autoapprove.js && node scripts/check-ack.js && node scripts/check-settings.js && node scripts/check-dashboard.js && node scripts/check-tui.js && node scripts/check-tray.js && node scripts/check-send-flow.js",
+    "test": "node scripts/check-js.js && node scripts/audit-charset.js && node scripts/check-unused-imports.js && node scripts/check-security.js && node scripts/check-identity.js && node scripts/check-routing.js && node scripts/check-autoapprove.js && node scripts/check-ack.js && node scripts/check-settings.js && node scripts/check-dashboard.js && node scripts/check-tui.js && node scripts/check-tray.js && node scripts/check-dashboard-ago.js && node scripts/check-send-flow.js",
     "check:tui": "node scripts/check-tui.js",
     "check:tray": "node scripts/check-tray.js",
+    "check:dashboard-ago": "node scripts/check-dashboard-ago.js",
     "check:send-flow": "node scripts/check-send-flow.js",
     "check:settings": "node scripts/check-settings.js",
     "check:dashboard": "node scripts/check-dashboard.js"

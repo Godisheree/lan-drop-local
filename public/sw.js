@@ -14,7 +14,7 @@
  *      user bisa melihat UI versi lama setelah update.
  */
 
-const CACHE_VERSION = 'landrop-shell-v22';
+const CACHE_VERSION = 'landrop-shell-v23';
 
 const SHELL_ASSETS = [
   '/',

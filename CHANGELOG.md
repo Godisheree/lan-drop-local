@@ -99,6 +99,27 @@ sisanya server dan ikon tray itu sendiri).
 - `scripts/check-tray.js` — pemeriksaan ke-16: setiap `spawn`/`execFile` wajib
   punya `windowsHide`, supaya kedipan ini tidak kembali diam-diam.
 
+### Fixed — label umur waktu di dashboard meloncat
+
+"Terakhir kirim" dan "sinyal terakhir" menghitung ulang tiap detik, tetapi
+anganya meloncat tidak konsisten — nyentuh 10 lalu jatuh ke 4–6. Ada dua sebab:
+
+1. `agoText()` memakai `Math.round`. Umur 9,5 dtk tampil "10 dtk lalu", lalu
+   poll berikutnya mereset data ke umur ~0 → "baru saja". Sekarang `Math.floor`:
+   umur hanya boleh naik sampai data baru tiba, tidak dibulatkan ke atas lalu
+   direset oleh dirinya sendiri.
+2. Poll `/discovery/status` tiap 5 dtk, sedangkan announce tiap 2 dtk, jadi
+   umurnya bisa menua sampai 6–7 dtk sebelum di-reset. Sekarang 2 dtk.
+3. "sinyal terakhir" memakai `agoText()` (string mati) sehingga tidak ikut
+   disegarkan tiap detik — beku di angka poll terakhir. Sekarang `ago()` (elemen
+   hidup), sama seperti kolom lain.
+
+- `public/js/dashboard.js` — `agoText` (`floor`), `POLL_MS.discovery: 2000`,
+  "Perangkat dikenal" memakai `ago()`
+- `public/sw.js` — `CACHE_VERSION` v23 (shell berubah)
+- `scripts/check-dashboard-ago.js` — 8 pemeriksaan dengan waktu dipatok: batas
+  pembulatan, monoton, dan penjaga agar `round`/`agoText` tidak kembali
+
 Catatan rilis: `README.md` di tarball 1.2.10 masih versi 1.2.9 — entri changelog
 dan bagian tray yang sudah di-commit belum ikut terbit. Rilis ini membawanya.
 

@@ -32,7 +32,10 @@ else healStaleShell();
 // cepat (itu yang bikin bingung kalau telat), disk & setting cukup jarang.
 const POLL_MS = {
   status: 10000,
-  discovery: 5000,
+  // Broadcast announce jalan tiap 2 dtk. Poll yang lebih lambat dari itu bikin
+  // "Terakhir kirim" menua sampai 6-7 dtk sebelum di-reset — terlihat seperti
+  // angka yang tidak konsisten. /discovery/status cuma baca state di memori.
+  discovery: 2000,
   disk: 15000,
   auto: 15000,
   peers: 2500,
@@ -142,10 +145,18 @@ const $ = {
 /** Nilai tampil untuk data yang belum ada. */
 const dash = (value) => (value === null || value === undefined || value === '' ? '—' : String(value));
 
-/** Umur waktu yang manusiawi: "3 dtk lalu", "2 mnt 5 dtk lalu". */
+/**
+ * Umur waktu yang manusiawi: "3 dtk lalu", "2 mnt 5 dtk lalu".
+ *
+ * `Math.floor`, bukan `Math.round`. Dengan round, umur 9,5 dtk tampil
+ * "10 dtk lalu" lalu meloncat ke "baru saja" begitu poll berikutnya masuk —
+ * user melihat angka bolak-balik 10 → 4 → 0 padahal tidak ada yang rusak.
+ * Umur hanya boleh NAIK sampai data baru tiba; membulatkan ke atas lalu
+ * direset oleh dirinya sendiri adalah sumber kedipan angka itu.
+ */
 function agoText(ts) {
   if (!ts) return '—';
-  const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (seconds < 5) return 'baru saja';
   if (seconds < 60) return `${seconds} dtk lalu`;
   return `${formatDuration(seconds)} lalu`;
@@ -324,9 +335,13 @@ async function refreshDiscovery() {
     ['Listener', `port ${dash(listener.port)} — ${listener.bound ? 'terikat' : 'TIDAK terikat'}`],
     ['Error listener', listener.error ? el('span', { class: 'dash-tag', dataset: { state: 'err' }, text: listener.error }) : '—'],
     // `ago()` mengembalikan ELEMEN (biar bisa dihitung ulang tiap detik).
-    // Di dalam template string dia jadi "[object HTMLSpanElement]" — yang
-    // dibutuhkan di sini teksnya saja.
-    ['Perangkat dikenal', `${dash(peers.count)} — sinyal terakhir ${peers.lastAnnounceAt ? agoText(peers.lastAnnounceAt) : 'belum ada'}`],
+    // Dulu di sini dipakai `agoText()` — string mati yang tidak ikut
+    // `tickAges()`, jadi "sinyal terakhir" beku di angka terakhir poll dan
+    // baru meloncat saat poll berikutnya. Sekarang elemennya hidup.
+    [
+      'Perangkat dikenal',
+      [el('span', { text: `${dash(peers.count)} — sinyal terakhir ` }), peers.lastAnnounceAt ? ago(peers.lastAnnounceAt) : el('span', { text: 'belum ada' })],
+    ],
     ['Tailscale', ts.selfIp ? el('span', {}, ['ip ', ipText(ts.selfIp)]) : 'tidak aktif'],
     ['Tailscale CLI', ts.cliFound ? 'ada' : 'tidak ada (normal di HP)'],
     ['Perangkat tailnet', dash(ts.peerCount)],
