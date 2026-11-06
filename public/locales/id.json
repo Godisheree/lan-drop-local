@@ -305,5 +305,18 @@
   "dashboard.allPeers": "semua peer",
   "modal.cancelWithIcon": "✕ Batal",
   "transfer.directionSummary": "{name} — {direction}",
-  "connect.failedWith": "gagal ({error})"
+  "connect.failedWith": "gagal ({error})",
+  "dashboard.logAllLines": "Log: semua baris",
+  "dashboard.logFollow": "Log: ikut otomatis",
+  "dashboard.logPaused": "Log: berhenti mengikuti",
+  "field.progress": "Progres",
+  "field.action": "Aksi",
+  "dashboard.logTitle": "Log server",
+  "status.version": "Versi",
+  "status.commit": "Commit",
+  "status.process": "Proses",
+  "status.node": "Node",
+  "status.platform": "Platform",
+  "status.uptime": "Lama aktif",
+  "status.httpPort": "Port HTTP"
 }

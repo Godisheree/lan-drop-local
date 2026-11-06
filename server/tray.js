@@ -43,7 +43,7 @@ function runtimeDir() {
  */
 function startWindowsTray({ url, onQuit }) {
   if (!fs.existsSync(ICON_ICO)) {
-    console.warn(`[Tray] ${ICON_ICO} tidak ada — jalankan "npm run icons". Tray tidak dinyalakan.`);
+    console.warn(`[Tray] ${ICON_ICO} is missing — run "npm run icons". Tray not started.`);
     return false;
   }
 
@@ -64,7 +64,7 @@ function startWindowsTray({ url, onQuit }) {
       windowsHide: true,
     });
   } catch (err) {
-    console.warn(`[Tray] PowerShell tidak bisa dijalankan: ${err.message}`);
+    console.warn(`[Tray] PowerShell could not be started: ${err.message}`);
     return false;
   }
 
@@ -98,7 +98,7 @@ function startWindowsTray({ url, onQuit }) {
   });
 
   winChild.on('error', (err) => {
-    console.warn(`[Tray] Gagal start: ${err.message}`);
+    console.warn(`[Tray] Failed to start: ${err.message}`);
     winChild = null;
   });
 
@@ -129,11 +129,11 @@ function ensureSystray() {
       fs.writeFileSync(pkg, JSON.stringify({ name: 'lan-drop-runtime', private: true }, null, 2));
     }
   } catch (err) {
-    console.warn(`[Tray] Folder runtime tidak bisa dibuat (${dir}): ${err.message}`);
+    console.warn(`[Tray] Runtime folder could not be created (${dir}): ${err.message}`);
     return Promise.resolve(null);
   }
 
-  console.log('[Tray] Menyiapkan modul tray (sekali saja, butuh internet)...');
+  console.log('[Tray] Preparing the tray module (one time, needs internet)…');
 
   return new Promise((resolve) => {
     const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -158,7 +158,7 @@ function ensureSystray() {
 async function startUnixTray({ url, onQuit }) {
   const modPath = await ensureSystray();
   if (!modPath) {
-    console.warn('[Tray] Modul tray tidak tersedia — server tetap jalan, kontrol lewat terminal.');
+    console.warn('[Tray] Tray module unavailable — the server keeps running, control it from the terminal.');
     return false;
   }
 
@@ -177,7 +177,7 @@ async function startUnixTray({ url, onQuit }) {
   try {
     icon = 'data:image/png;base64,' + fs.readFileSync(ICON_PNG).toString('base64');
   } catch (_) {
-    console.warn('[Tray] Ikon PNG tidak ada — jalankan "npm run icons". Tray tidak dinyalakan.');
+    console.warn('[Tray] Ikon PNG is missing — run "npm run icons". Tray not started.');
     return false;
   }
 
@@ -198,8 +198,8 @@ async function startUnixTray({ url, onQuit }) {
     });
   } catch (err) {
     // Paling sering: libappindicator tidak terpasang di distro user.
-    console.warn(`[Tray] Ikon tray gagal dibuat: ${err.message}`);
-    console.warn('[Tray] Linux butuh paket libayatana-appindicator (atau libappindicator3). Server tetap jalan.');
+    console.warn(`[Tray] Could not create the tray icon: ${err.message}`);
+    console.warn('[Tray] Linux needs libayatana-appindicator (or libappindicator3). The server keeps running.');
     return false;
   }
 
@@ -212,7 +212,7 @@ async function startUnixTray({ url, onQuit }) {
   try {
     await unixTray.ready();
   } catch (err) {
-    console.warn(`[Tray] Ikon tray gagal siap: ${err.message}`);
+    console.warn(`[Tray] Tray icon failed to become ready: ${err.message}`);
     unixTray = null;
     return false;
   }

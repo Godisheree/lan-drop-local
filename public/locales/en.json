@@ -305,5 +305,18 @@
   "dashboard.allPeers": "all peers",
   "modal.cancelWithIcon": "✕ Cancel",
   "transfer.directionSummary": "{name} — {direction}",
-  "connect.failedWith": "failed ({error})"
+  "connect.failedWith": "failed ({error})",
+  "dashboard.logAllLines": "Log: all lines",
+  "dashboard.logFollow": "Log: auto-follow",
+  "dashboard.logPaused": "Log: follow paused",
+  "field.progress": "Progress",
+  "field.action": "Action",
+  "dashboard.logTitle": "Server log",
+  "status.version": "Version",
+  "status.commit": "Commit",
+  "status.process": "Process",
+  "status.node": "Node",
+  "status.platform": "Platform",
+  "status.uptime": "Uptime",
+  "status.httpPort": "HTTP port"
 }

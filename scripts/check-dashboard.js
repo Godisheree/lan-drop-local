@@ -466,7 +466,7 @@ async function main() {
     const newTexts = logAfter.lines.map((l) => l.text);
     check(
       'logs: kejadian tadi tercatat (transfer masuk + dibatalkan)',
-      newTexts.some((t) => t.includes('uji-dashboard.txt')) && newTexts.some((t) => /dibatalkan/i.test(t)),
+      newTexts.some((t) => t.includes('uji-dashboard.txt')) && newTexts.some((t) => /cancelled/i.test(t)),
       newTexts.join(' | ').slice(0, 200)
     );
 
@@ -497,27 +497,27 @@ async function main() {
     const plain = logs.join('');
     check(
       'terminal: default cuma mencetak tanda "aktif" + alamat dashboard',
-      /✅ LAN DROP aktif — dashboard: http:\/\/(localhost|127\.0\.0\.1):\d+\/dashboard/.test(plain) &&
+      /✅ LAN DROP is running — dashboard: http:\/\/(localhost|127\.0\.0\.1):\d+\/dashboard/.test(plain) &&
         !/\[Server\] Port|📡|🔒/.test(plain),
       plain.split('\n').filter(Boolean).join(' | ') || '(kosong)'
     );
     check(
       'terminal: log tetap masuk dashboard walau terminal nyaris diam',
-      first.lines.length > 0 && first.lines.some((l) => /LAN DROP aktif/.test(l.text)),
+      first.lines.length > 0 && first.lines.some((l) => /LAN DROP is running/.test(l.text)),
       `${first.lines.length} baris`
     );
 
     const dbgOut = await spawnProbe(['--debug']);
     check(
       'terminal: --debug mencetak banner lengkap (alamat, port, tailscale)',
-      /\[Server\] Port .*listen di 0\.0\.0\.0/.test(dbgOut) && /LAN DROP aktif/.test(dbgOut),
+      /\[Server\] Port .*listening on 0\.0\.0\.0/.test(dbgOut) && /LAN DROP is running/.test(dbgOut),
       dbgOut.split('\n').filter(Boolean).length + ' baris'
     );
 
     const envOut = await spawnProbe([], { LANDROP_DEBUG: '1' });
     check(
       'terminal: LANDROP_DEBUG=1 sama seperti --debug',
-      /\[Server\] Port .*listen di 0\.0\.0\.0/.test(envOut),
+      /\[Server\] Port .*listening on 0\.0\.0\.0/.test(envOut),
       envOut.split('\n').filter(Boolean).length + ' baris'
     );
 
@@ -528,8 +528,8 @@ async function main() {
     const clashOut = await spawnProbe([], { PORT: String(PORT) });
     check(
       'terminal: port terpakai → pindah port otomatis & tetap tercetak tanpa flag',
-      /sudah dipakai aplikasi lain/.test(clashOut) && /LAN DROP aktif/.test(clashOut),
-      (clashOut.split('\n').find((l) => /sudah dipakai aplikasi lain/.test(l)) || '(tidak ada)').trim()
+      /is already taken by another app/.test(clashOut) && /LAN DROP is running/.test(clashOut),
+      (clashOut.split('\n').find((l) => /is already taken by another app/.test(l)) || '(tidak ada)').trim()
     );
   } finally {
     cleanup();

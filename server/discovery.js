@@ -67,7 +67,7 @@ function startBroadcaster() {
     // Tidak ada interface LAN → tidak ada jalur LAN yang bisa disiarkan.
     // Bundle lama menyiarkan ip:'localhost' di sini, dan peer lalu menganggap
     // itu alamat yang bisa dihubungi — padahal itu mesinnya sendiri.
-    console.warn('[Discovery] Tidak ada interface LAN — peer hanya bisa dijangkau lewat Tailscale');
+    console.warn('[Discovery] No LAN interface — peers are only reachable through Tailscale');
     return;
   }
 
@@ -151,7 +151,7 @@ function logBroadcastError(state, err) {
   };
   const hint = hints[state.lastError] || 'broadcast gagal';
 
-  console.warn(`[Discovery] Broadcast ke ${state.broadcast} gagal: ${state.lastError} — ${hint}`);
+  console.warn(`[Discovery] Broadcast to ${state.broadcast} failed: ${state.lastError} — ${hint}`);
 }
 
 // ===================== Tailscale Unicast Announce =====================
@@ -171,7 +171,7 @@ function sendTailscaleAnnounceTo(ip) {
     // Tidak tahu alamat tailnet sendiri → tidak ada yang bisa disiarkan
     // sebagai "alamatku" (menyiarkan alamat lain = bohong).
     if (!selfIpMissingWarned) {
-      console.warn('[Discovery] Alamat Tailscale sendiri belum terdeteksi — belum bisa membalas peer via tailnet (HP: pastikan aplikasi Tailscale benar-benar connected)');
+      console.warn('[Discovery] Own Tailscale address not detected yet — cannot reply to peers via tailnet (HP: pastikan aplikasi Tailscale benar-benar connected)');
       selfIpMissingWarned = true;
     }
     return;
@@ -261,7 +261,7 @@ function startListener() {
   sock.on('error', (err) => {
     listenerState.error = err.code || err.message;
     if (err.code === 'EADDRINUSE') {
-      console.warn(`[Discovery] Port ${DISCOVERY_PORT} sudah dipakai instance lain — listener discovery DILEWATI. Peer hanya ketemu lewat LANDROP_PEERS atau unicast Tailscale.`);
+      console.warn(`[Discovery] Port ${DISCOVERY_PORT} is already used by another instance — discovery listener SKIPPED. Peers are only found through LANDROP_PEERS or Tailscale unicast.`);
     } else {
       console.error('[Discovery] Listener error:', err.message);
     }

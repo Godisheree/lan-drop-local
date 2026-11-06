@@ -158,7 +158,7 @@ async function renderWithFfmpeg(inputPath, outputPath) {
       return fs.statSync(outputPath).size > 0;
     }
   } catch (err) {
-    console.warn('[thumbnail] ffmpeg gagal:', err.message);
+    console.warn('[thumbnail] ffmpeg failed:', err.message);
   }
   return false;
 }

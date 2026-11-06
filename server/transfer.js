@@ -83,7 +83,7 @@ const pendingRequests = new Map(); // requestId -> { socket, parser, fileName, f
 const outgoingRequests = new Map(); // requestId -> { socket, parserHandler, status, targetIp, targetPort, fileName, fileSize, text?, createdAt }
 const transferProgress = new Map(); // requestId -> { fileName, fileSize, bytesTransferred, status, savePath? }
 let receivedTexts = []; // { id, senderName, text, timestamp } — teks masuk, diambil frontend via polling
-const TEXT_TTL = 10 * 60 * 1000; // teks diterima dibersihkan setelah 10 menit
+const TEXT_TTL = 10 * 60 * 1000; // text received dibersihkan setelah 10 menit
 let tcpServer = null;
 
 // ===================== Frame Parser =====================
@@ -195,7 +195,7 @@ function getTermuxStorageDir(category) {
   if (fs.existsSync(dir)) {
     return dir;
   }
-  console.warn(`[Transfer] ~/storage/${category} tidak ditemukan (mungkin termux-setup-storage belum dijalankan). Fallback ke folder internal.`);
+  console.warn(`[Transfer] ~/storage/${category} not found (termux-setup-storage may not have been run). Falling back to the internal folder.`);
   return null;
 }
 
@@ -290,9 +290,9 @@ function ensureSaveDirExists() {
     // Override eksplisit → flat, gak bikin subfolder kategori
     try {
       fs.mkdirSync(process.env.LANDROP_SAVE_DIR, { recursive: true });
-      console.log(`[Transfer] Folder simpan siap: ${process.env.LANDROP_SAVE_DIR}`);
+      console.log(`[Transfer] Save folder ready: ${process.env.LANDROP_SAVE_DIR}`);
     } catch (err) {
-      console.warn(`[Transfer] Gagal bikin folder simpan: ${err.message}`);
+      console.warn(`[Transfer] Could not create the save folder: ${err.message}`);
     }
     return;
   }
@@ -302,9 +302,9 @@ function ensureSaveDirExists() {
     for (const sub of Object.values(WINDOWS_SAVE_CATEGORIES)) {
       fs.mkdirSync(path.join(WINDOWS_SAVE_DIR, sub), { recursive: true });
     }
-    console.log(`[Transfer] Folder simpan siap: ${WINDOWS_SAVE_DIR} (${Object.values(WINDOWS_SAVE_CATEGORIES).join(', ')})`);
+    console.log(`[Transfer] Save folder ready: ${WINDOWS_SAVE_DIR} (${Object.values(WINDOWS_SAVE_CATEGORIES).join(', ')})`);
   } catch (err) {
-    console.warn(`[Transfer] Gagal bikin folder simpan ${WINDOWS_SAVE_DIR}: ${err.message} — fallback ke ${path.join(getDataDir(), 'downloads')}`);
+    console.warn(`[Transfer] Could not create the save folder ${WINDOWS_SAVE_DIR}: ${err.message} — falling back to ${path.join(getDataDir(), 'downloads')}`);
   }
 }
 
@@ -419,7 +419,7 @@ async function transcodeIfNeeded(filePath, fileName) {
   const ext = path.extname(fileName).toLowerCase();
   console.log(`[TRANSCODE] transcodeIfNeeded: file="${fileName}", ext="${ext}"`);
   if (!NEEDS_TRANSCODE.includes(ext)) {
-    console.log(`[TRANSCODE] ext "${ext}" TIDAK ada di NEEDS_TRANSCODE — skip transcode, kirim original`);
+    console.log(`[TRANSCODE] ext "${ext}" is NOT in NEEDS_TRANSCODE — skipping transcode, sending the original`);
     return { filePath, fileName, fileSize: null, wasProcessed: false };
   }
   console.log(`[TRANSCODE] ext "${ext}" TERMASUK NEEDS_TRANSCODE — lanjut cek ffmpeg`);
@@ -427,7 +427,7 @@ async function transcodeIfNeeded(filePath, fileName) {
   // Cek ffmpeg availability sekali aja (di-cache di server/ffmpeg.js).
   const ffmpegPath = await getFfmpegPath();
   if (!ffmpegPath) {
-    console.log('[TRANSCODE] ffmpeg TIDAK tersedia — skip konversi video, kirim original');
+    console.log('[TRANSCODE] ffmpeg is NOT available — skipping video conversion, sending the original');
     return { filePath, fileName, fileSize: null, wasProcessed: false };
   }
   console.log(`[TRANSCODE] ffmpeg tersedia di "${ffmpegPath}" — lanjut konversi`);
@@ -437,7 +437,7 @@ async function transcodeIfNeeded(filePath, fileName) {
   const inputExt = path.extname(filePath).toLowerCase();
   let tempLinkedPath = null;
   if (inputExt !== ext) {
-    console.log(`[TRANSCODE] Input file gak punya ekstensi "${ext}" — bikin temp file dengan ekstensi`);
+    console.log(`[TRANSCODE] Input file has no extension "${ext}" — creating a temp file with extension`);
     tempLinkedPath = filePath + ext;
     try {
       fs.linkSync(filePath, tempLinkedPath);
@@ -465,7 +465,7 @@ async function transcodeIfNeeded(filePath, fileName) {
   let hasRealVideo, hasAttachedPic, hasAudio;
 
   if (ffprobeFailed) {
-    console.log('[TRANSCODE] ffprobe gagal — fallback ke transcode .mp4 (tidak punya info stream)');
+    console.log('[TRANSCODE] ffprobe failed — falling back to .mp4 transcode (no stream info)');
     hasRealVideo = false; hasAttachedPic = false; hasAudio = false;
   } else {
     hasRealVideo = probe?.streams?.some(s => s.codec_type === 'video' && s.disposition?.attached_pic !== 1) || false;
@@ -478,7 +478,7 @@ async function transcodeIfNeeded(filePath, fileName) {
     // Audio-only (atau cuma ada album art): remux ke MP3
     const audioOutName = path.basename(fileName, ext) + '.mp3';
     const audioOutPath = path.join(outDir, audioOutName);
-    console.log(`[Transfer] Audio-only file (album art ${hasAttachedPic ? 'ditemukan' : 'tidak ada'}) — remux ${fileName} → ${audioOutName}...`);
+    console.log(`[Transfer] Audio-only file (album art ${hasAttachedPic ? 'found' : 'none'}) — remux ${fileName} → ${audioOutName}...`);
     try {
       const start = Date.now();
       await remuxToM4a(inputPath, audioOutPath);
@@ -487,7 +487,7 @@ async function transcodeIfNeeded(filePath, fileName) {
       console.log(`[Transfer] ✅ Remux selesai (${elapsed}s): ${audioOutName} (${stat.size} bytes)`);
       return { filePath: audioOutPath, fileName: audioOutName, fileSize: stat.size, wasProcessed: true };
     } catch (err) {
-      console.warn(`[Transfer] Remux gagal: ${err.message} — kirim original`);
+      console.warn(`[Transfer] Remux failed: ${err.message} — sending the original`);
       try { fs.unlinkSync(audioOutPath); } catch (_) {}
       return { filePath, fileName, fileSize: null, wasProcessed: false };
     }
@@ -502,7 +502,7 @@ async function transcodeIfNeeded(filePath, fileName) {
     console.log(`[Transfer] ✅ Konversi selesai (${elapsed}s): ${outName} (${stat.size} bytes)`);
     return { filePath: outPath, fileName: outName, fileSize: stat.size, wasProcessed: true };
   } catch (err) {
-    console.warn(`[Transfer] Konversi video gagal: ${err.message} — kirim original`);
+    console.warn(`[Transfer] Video conversion failed: ${err.message} — sending the original`);
     // Hapus file output kalau ada
     try { fs.unlinkSync(outPath); } catch (_) {}
     return { filePath, fileName, fileSize: null, wasProcessed: false };
@@ -575,7 +575,7 @@ function startRawReceive(requestId, req) {
           if (p) { p.status = 'completed'; p.bytesTransferred = text.length; }
           req.status = 'completed';
           history.add({ direction: 'receive', fileName: 'Teks', fileSize: 0, peer: req.senderName });
-          console.log(`[Transfer] ✅ ${requestId} — teks diterima (${text.length} chars) dari ${req.senderName}`);
+          console.log(`[Transfer] ✅ ${requestId} — text received (${text.length} chars) from ${req.senderName}`);
           socket.end();
         }
 
@@ -602,7 +602,7 @@ function startRawReceive(requestId, req) {
         // transcoding ffmpeg di sisi pengirim yang membesarkan file).
         // Tanpa cek ulang, "fail-closed" cuma berlaku untuk pengirim jujur.
         if (!Number.isFinite(Number(actualSize)) || Number(actualSize) <= 0) {
-          console.warn(`[Transfer] ⏸️ ${requestId} — ukuran file tidak masuk akal (${actualSize}), transfer dibatalkan`);
+          console.warn(`[Transfer] ⏸️ ${requestId} — implausible file size (${actualSize}), transfer dibatalkan`);
           socket.end();
           pendingRequests.delete(requestId);
           return;
@@ -619,12 +619,12 @@ function startRawReceive(requestId, req) {
         try {
           fs.mkdirSync(saveDir, { recursive: true });
         } catch (mkdirErr) {
-          console.warn(`[Transfer] Folder tujuan ${saveDir} gagal dibuat (${mkdirErr.message}) — fallback ke folder internal`);
+          console.warn(`[Transfer] Destination folder ${saveDir} could not be created (${mkdirErr.message}) — falling back to the internal folder`);
           saveDir = path.join(getDataDir(), 'downloads');
           fs.mkdirSync(saveDir, { recursive: true });
         }
 
-        // Fallback ke folder internal = file TIDAK muncul di Galeri perangkat.
+        // Falling back to the internal folder = file TIDAK muncul di Galeri perangkat.
         // Diteruskan ke pengirim lewat ACK supaya user tahu kenapa di Pictures
         // tidak ada apa-apa.
         const saveFallback = path.resolve(saveDir) === path.resolve(path.join(getDataDir(), 'downloads'));
@@ -646,7 +646,7 @@ function startRawReceive(requestId, req) {
               displayName = partMeta.actualFileName || displayName;
               // Pastikan isi part pas sebanyak offset yang dijanjikan pengirim
               if (partSize !== startBytes) fs.truncateSync(partPath, startBytes);
-              console.log(`[Transfer] ${requestId} — RESUME dari byte ${startBytes}/${actualSize} (${Math.round((startBytes / actualSize) * 100)}%)`);
+              console.log(`[Transfer] ${requestId} — RESUMING from byte ${startBytes}/${actualSize} (${Math.round((startBytes / actualSize) * 100)}%)`);
             }
           } catch (_) {}
         }
@@ -689,7 +689,7 @@ function startRawReceive(requestId, req) {
           const free = getSaveDirFreeSpace();
           const remaining = actualSize - startBytes;
           if (free === null || remaining > free) {
-            console.warn(`[Transfer] ⏸️ ${requestId} — ruang disk tidak cukup untuk sisa ${remaining} byte, transfer dibatalkan`);
+            console.warn(`[Transfer] ⏸️ ${requestId} — not enough disk space for the remaining ${remaining} byte, transfer dibatalkan`);
             transferProgress.delete(requestId);
             socket.end();
             pendingRequests.delete(requestId);
@@ -794,7 +794,7 @@ function startRawReceive(requestId, req) {
               // Koneksi mati mendadak → SIMPAN partial buat resume nanti
               p.status = 'failed';
               persistPart(true);
-              console.log(`[Transfer] ⚠️ ${requestId} — putus di ${written}/${actualSize}, partial disimpan untuk resume`);
+              console.log(`[Transfer] ⚠️ ${requestId} — putus di ${written}/${actualSize}, partial kept for resume`);
             }
           }
           req.status = p ? p.status : 'disconnected';
@@ -827,7 +827,7 @@ function startRawReceive(requestId, req) {
               execFile('termux-media-scan', [finalPath], { windowsHide: true }, (err) => {
                 if (err) {
                   // Fallback: am broadcast bawaan Android, gak butuh termux-api
-                  console.warn(`[Transfer] termux-media-scan gagal (termux-api belum terinstall?), coba am broadcast: ${err.message}`);
+                  console.warn(`[Transfer] termux-media-scan failed (termux-api not installed?), trying am broadcast: ${err.message}`);
                   const target = finalPath.replace(/^~\//, `${os.homedir()}/`).replace(/\\/g, '/');
                   execFile('am', [
                     'broadcast',
@@ -835,7 +835,7 @@ function startRawReceive(requestId, req) {
                     '-d', `file://${encodeURI(target)}`
                   ], { windowsHide: true }, (err2) => {
                     if (err2) {
-                      console.warn(`[Transfer] am broadcast scan gagal: ${err2.message}`);
+                      console.warn(`[Transfer] am broadcast scan failed: ${err2.message}`);
                     } else {
                       console.log(`[Transfer] Media scan via am broadcast: ${target}`);
                     }
@@ -869,7 +869,7 @@ function startRawReceive(requestId, req) {
             console.log(`[Transfer] ✅ ${requestId} — ${displayName} diterima (${actualSize} bytes) → ${finalPath}`);
           } catch (renameErr) {
             saveFailReason = renameErr.message;
-            console.error(`[Transfer] Gagal finalisasi ${displayName}: ${renameErr.message} — partial tetap di ${partPath}`);
+            console.error(`[Transfer] Failed to finalise ${displayName}: ${renameErr.message} — partial remains at ${partPath}`);
           }
           // ACK eksplisit ke pengirim: satu-satunya bukti file ada di disk.
           if (p && p.savedTo === finalPath) {
@@ -905,7 +905,7 @@ function startRawReceive(requestId, req) {
       // tidak punya satu baris pun untuk menjelaskan kenapa. Ini yang membuat
       // kegagalan sesekali (~1 dari 6) cuma terlihat sebagai
       // "Request … selesai tanpa transfer — entri dibuang (accepted)".
-      console.error(`[Transfer] ❌ ${requestId} — gagal menyiapkan penerimaan: ${err && err.message ? err.message : err}`);
+      console.error(`[Transfer] ❌ ${requestId} — failed to prepare the receive: ${err && err.message ? err.message : err}`);
       try {
         sendFramedMessage(socket, { type: 'transfer-save-failed', reason: 'Penerima gagal menyiapkan file' });
       } catch (_) {}
@@ -981,12 +981,12 @@ function listenTransfer(port, triesLeft) {
     tcpServer.removeListener('listening', onListening);
 
     if (err.code !== 'EADDRINUSE' || triesLeft <= 0) {
-      console.error(`[Transfer] TCP server gagal di port ${port}: ${err.message}`);
+      console.error(`[Transfer] TCP server failed on port ${port}: ${err.message}`);
       return;
     }
     // notice: terminal default menekan log biasa — kalau jalur transfer pindah
     // port, user harus tetap lihat alasannya.
-    logbus.notice(`⚠️ Port transfer ${port} sudah dipakai — LAN DROP pindah ke ${port + 1}`);
+    logbus.notice(`⚠️ Transfer port ${port} is taken — LAN DROP moved to ${port + 1}`);
     ports.transfer = port + 1;
     listenTransfer(port + 1, triesLeft - 1);
   };
@@ -1044,7 +1044,7 @@ function startTransferServer() {
           if (partMeta && partMeta.bytesWritten > 0 && partMeta.partPath) {
             try {
               entry.resumeOffset = Math.min(partMeta.bytesWritten, fs.statSync(partMeta.partPath).size);
-              console.log(`[Transfer] Partial ditemukan untuk ${msg.fileName} — tawarkan resume dari byte ${entry.resumeOffset}`);
+              console.log(`[Transfer] Partial found for ${msg.fileName} — offering resume from byte ${entry.resumeOffset}`);
             } catch (_) {}
           }
         }
@@ -1062,17 +1062,17 @@ function startTransferServer() {
         const decision = decideAutoAccept(msg, entry.resumeOffset);
         if (decision.accept) {
           entry.auto = true;
-          console.log(`[Transfer] ⚡ ${requestId} diterima otomatis dari ${msg.senderName}`);
+          console.log(`[Transfer] ⚡ ${requestId} accepted automatically from ${msg.senderName}`);
           respondToRequest(requestId, true);
         } else if (decision.reason) {
-          console.log(`[Transfer] ⏸️ ${requestId} tidak diterima otomatis: ${decision.reason}`);
+          console.log(`[Transfer] ⏸️ ${requestId} not auto-accepted: ${decision.reason}`);
           respondToRequest(requestId, false, decision.reason);
         }
       }
     }, (err) => {
       // Frame cacat dari peer (mis. panjang mengklaim 4 GB). Socket-nya sudah
       // tidak bisa dipercaya — tutup, jangan coba lanjut baca.
-      console.warn(`[Transfer] ⚠️ Frame dari ${socket.remoteAddress} ditolak: ${err.message} — socket ditutup`);
+      console.warn(`[Transfer] ⚠️ Frame from ${socket.remoteAddress} rejected: ${err.message} — socket ditutup`);
       socket.destroy();
     });
 
@@ -1108,7 +1108,7 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
   const route = isTailscaleIPv4(targetIp) ? 'tailscale' : 'lan';
   console.log(`[Transfer] 🔌 → ${metadata.fileName} ke ${metadata.peerName || targetIp} (${targetIp}:${targetPort}) via ${route} [requestId=${requestId}]`);
   const connectTimer = setTimeout(() => {
-    console.error(`[Transfer] ⏰ TIMEOUT connecting to ${targetIp}:${targetPort} (requestId=${requestId}) — port unreachable? Peer mungkin mati, atau firewall memblokir jalur ${route}.`);
+    console.error(`[Transfer] ⏰ TIMEOUT connecting to ${targetIp}:${targetPort} (requestId=${requestId}) — port unreachable? The peer may be down, or a firewall is blocking the ${route}.`);
     socket.destroy();
   }, 5000);
   const socket = net.createConnection({ host: targetIp, port: targetPort }, () => {
@@ -1213,7 +1213,7 @@ async function startFileSend(requestId, filePath) {
   }, (err) => {
     // Ack dari penerima selalu frame JSON kecil; yang lebih besar dari batas
     // berarti peer-nya bermasalah (atau bukan penerima yang kita harapkan).
-    console.warn(`[Transfer] ⚠️ Frame ack dari ${req.targetIp}:${req.targetPort} ditolak: ${err.message} — koneksi diputus`);
+    console.warn(`[Transfer] ⚠️ Ack frame from ${req.targetIp}:${req.targetPort} ditolak: ${err.message} — connection closed`);
     req.saveFailed = req.saveFailed || 'peer mengirim frame tidak valid';
     socket.destroy();
   });
@@ -1233,13 +1233,13 @@ async function startFileSend(requestId, filePath) {
     sendFileName = transResult.fileName;
     sendFileSize = transResult.fileSize;
   } else {
-    console.log(`[SEND_FILE] transResult.fileSize === null — TIDAK update sendFileName, tetap "${sendFileName}"`);
+    console.log(`[SEND_FILE] transResult.fileSize === null — NOT updating sendFileName, keeping "${sendFileName}"`);
   }
 
   // ===== Resume: kalau penerima masih punya partial, lanjut dari offset =====
   const resumeOffset = req.resumeOffset || 0;
   if (resumeOffset > 0) {
-    console.log(`[SEND_FILE] Resume — mulai kirim dari byte ${resumeOffset}`);
+    console.log(`[SEND_FILE] Resume — sending from byte ${resumeOffset}`);
   }
 
   const stat = fs.statSync(sendFilePath);
@@ -1352,12 +1352,12 @@ async function startFileSend(requestId, filePath) {
         if (!f) continue;
         fs.unlink(f, (err) => {
           if (err && err.code !== 'ENOENT') {
-            console.warn(`[Transfer] Gagal hapus file upload ${f}: ${err.message}`);
+            console.warn(`[Transfer] Failed to delete upload file ${f}: ${err.message}`);
           }
         });
       }
     } else {
-      console.log(`[Transfer] Upload dipertahankan untuk resume: ${sendFilePath}`);
+      console.log(`[Transfer] Upload kept for resume: ${sendFilePath}`);
     }
   });
 
@@ -1637,7 +1637,7 @@ function cancelIncomingTransfer(requestId) {
   pendingRequests.delete(requestId);
   // Perlu di-log: yang muncul di layar cuma "transfernya hilang". Tanpa baris
   // ini, "kenapa berhenti" tidak bisa dijawab dari dashboard.
-  console.log(`[Transfer] 🚫 Transfer masuk ${requestId} dibatalkan user (${req.fileName} dari ${req.senderName || '?'})`);
+  console.log(`[Transfer] 🚫 Incoming transfer ${requestId} cancelled by user (${req.fileName} from ${req.senderName || '?'})`);
 }
 
 function stopTransferServer() {

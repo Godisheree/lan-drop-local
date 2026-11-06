@@ -30,20 +30,20 @@ let _ffmpegPath = undefined; // undefined=belum cek, false=cek&gakada, string=pa
  */
 function checkFfmpeg() {
   return new Promise((resolve) => {
-    console.log('[FFMPEG] checkFfmpeg: mulai scan ffmpeg...');
+    console.log('[FFMPEG] checkFfmpeg: scanning for ffmpeg...');
     (function tryNext(i) {
       if (i >= FFMPEG_CANDIDATES.length) {
-        console.log('[FFMPEG] checkFfmpeg: SEMUA kandidat habis — ffmpeg TIDAK ditemukan');
+        console.log('[FFMPEG] checkFfmpeg: all candidates exhausted — ffmpeg NOT found');
         return resolve(false);
       }
       const candidate = FFMPEG_CANDIDATES[i];
-      console.log(`[FFMPEG] checkFfmpeg: coba kandidat [${i}]: "${candidate}"`);
+      console.log(`[FFMPEG] checkFfmpeg: trying candidate [${i}]: "${candidate}"`);
       // windowsHide: tanpa ini Windows memunculkan jendela console sekejap
       // tiap kali ffmpeg dijalankan — di mata user terlihat seperti cmd
       // berkedip, padahal tidak ada yang berbahaya.
       const proc = spawn(candidate, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, windowsHide: true });
       let settled = false;
-      const done = (result) => { if (!settled) { settled = true; if (result) { console.log(`[FFMPEG] checkFfmpeg: ✅ DITEMUKAN di "${candidate}"`); _ffmpegPath = candidate; resolve(true); } else { console.log(`[FFMPEG] checkFfmpeg: ❌ "${candidate}" gagal, lanjut next...`); tryNext(i + 1); } } };
+      const done = (result) => { if (!settled) { settled = true; if (result) { console.log(`[FFMPEG] checkFfmpeg: ✅ FOUND at "${candidate}"`); _ffmpegPath = candidate; resolve(true); } else { console.log(`[FFMPEG] checkFfmpeg: ❌ "${candidate}" failed, trying next...`); tryNext(i + 1); } } };
       proc.on('error', () => done(false));
       proc.on('exit', (code) => { console.log(`[FFMPEG] checkFfmpeg: "${candidate}" exit code=${code}`); done(code === 0); });
     })(0);

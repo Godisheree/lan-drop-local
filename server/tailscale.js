@@ -44,9 +44,9 @@ function watchSelfTailscaleIP() {
   if (ip === selfIp) return ip;
 
   if (ip) {
-    console.log(`[Tailscale] Alamat Tailscale terdeteksi: ${ip} — device ini bisa dijangkau lewat tailnet (HP/Termux juga, tanpa CLI)`);
+    console.log(`[Tailscale] Tailscale address detected: ${ip} — this device is reachable over the tailnet (phones/Termux too, no CLI needed)`);
   } else if (selfIp) {
-    console.log('[Tailscale] Alamat Tailscale hilang — Tailscale dimatikan atau belum terhubung');
+    console.log('[Tailscale] Tailscale address disappeared — Tailscale is off or not connected');
   }
   selfIp = ip;
   return ip;
@@ -137,7 +137,7 @@ async function refreshTailscaleState() {
   const status = await runTailscaleStatus();
   if (!status) {
     if (!cliMissingWarned) {
-      console.log('[Tailscale] CLI `tailscale` tidak ada di device ini (normal di Android/Termux) — tidak bisa proaktif mencari peer tailnet, tapi alamat sendiri tetap terdeteksi dan peer yang punya CLI tetap bisa menemukan kita lewat reply-back');
+      console.log('[Tailscale] the `tailscale` CLI is not on this device (normal on Android/Termux) — cannot proactively look for tailnet peers, but its own address is still detected and peers with the CLI can still find us via reply-back');
       cliMissingWarned = true;
     }
     cachedPeers = [];

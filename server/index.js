@@ -28,7 +28,7 @@ const uploadsDir = getUploadDir();
 try {
   fs.mkdirSync(uploadsDir, { recursive: true });
 } catch (err) {
-  console.warn(`[Server] Folder upload tidak bisa dibuat (${uploadsDir}): ${err.message} — upload dari browser akan gagal.`);
+  console.warn(`[Server] Upload folder could not be created (${uploadsDir}): ${err.message} — uploads from the browser will fail.`);
 }
 
 // Batas ukuran upload default 2 GB (file video besar masih muat).
@@ -670,16 +670,16 @@ function listenHttp(port, triesLeft) {
     server.removeListener('error', onError);
 
     if (err.code !== 'EADDRINUSE') {
-      console.error(`[Server] Gagal listen di port ${port}: ${err.message}`);
+      console.error(`[Server] Failed to listen on port ${port}: ${err.message}`);
       process.exit(1);
     }
     if (triesLeft <= 0) {
-      console.error(`[Server] Port ${port} sampai +${MAX_PORT_TRIES} semuanya terpakai — jalankan dengan PORT=<angka lain>.`);
+      console.error(`[Server] Port ${port} sampai +${MAX_PORT_TRIES} are all taken — run with PORT=<another number>.`);
       process.exit(1);
     }
     // notice, bukan console.warn: terminal default menekan log biasa, sedangkan
     // pindah port itu hal yang user harus tahu (alamat dashboard-nya berubah).
-    logbus.notice(`⚠️ Port ${port} sudah dipakai aplikasi lain — LAN DROP pindah ke ${port + 1}`);
+    logbus.notice(`⚠️ Port ${port} is already taken by another app — LAN DROP moved to ${port + 1}`);
     ports.http = port + 1;
     listenHttp(port + 1, triesLeft - 1);
   };
@@ -698,8 +698,8 @@ server.once('listening', onListening);
 function onListening() {
   const ips = listLANIPv4();
   console.log(`LAN DROP server — Express on http://localhost:${ports.http}`);
-  console.log(`[Server] Nama perangkat: ${DEVICE_NAME}` + (
-    process.env.DEVICE_NAME ? '' : '  (ubah dengan DEVICE_NAME="nama kamu" untuk menamain sendiri)'
+  console.log(`[Server] Device name: ${DEVICE_NAME}` + (
+    process.env.DEVICE_NAME ? '' : '  (override with DEVICE_NAME="your name")'
   ));
   if (ips.length === 0) {
     console.log('⚠️  No LAN IP found — check your WiFi connection');
@@ -716,30 +716,30 @@ function onListening() {
   if (tsIP) {
     console.log(`🔒 Tailscale → http://${tsIP}:${ports.http}`);
   } else {
-    console.log('🔒 Tailscale belum terdeteksi — nyalakan Tailscale dulu (HP: aplikasi Play Store juga bisa). Kalau aktif belakangan, alamatnya muncul otomatis di log ini.');
+    console.log('🔒 Tailscale not detected yet — turn Tailscale on (on a phone the Play Store app works too). If it starts later the address appears here automatically.');
   }
 
   if (pin.isDefaultPin()) {
-    logbus.notice(`🔑 PIN dashboard masih bawaan: ${pin.getPin()} — ganti di dashboard supaya tetangga Wi-Fi tidak bisa buka riwayat transfer.`);
+    logbus.notice(`🔑 Dashboard PIN is still the default: ${pin.getPin()} — change it in the dashboard so Wi-Fi neighbours cannot open your transfer history.`);
   }
 
-  console.log(`[Server] Port ${ports.http} (HTTP) & ${ports.transfer} (transfer) listen di 0.0.0.0 — device lain di jaringan yang sama bisa menghubungi`);
-  console.log('[Server] Device kedua harus menjalankan LAN DROP-nya sendiri supaya dua arah (kirim & terima)');
+  console.log(`[Server] Port ${ports.http} (HTTP) & ${ports.transfer} (transfer) listening on 0.0.0.0 — other devices on the same network can reach it`);
+  console.log('[Server] The second device must run its own LAN DROP for two-way transfer (send & receive)');
 
   // Satu-satunya baris yang tetap tercetak saat log sedang diam: tanda "sudah
   // aktif" + alamat dashboard-nya. Ditaruh paling akhir supaya artinya benar —
   // semua listener sudah jalan saat baris ini keluar.
   const otherAddr = (ips[0] && ips[0].address) || tsIP;
   logbus.notice(
-    `✅ LAN DROP aktif — dashboard: http://localhost:${ports.http}/dashboard` +
-      (otherAddr ? `  •  dari perangkat lain: http://${otherAddr}:${ports.http}/dashboard` : '')
+    `✅ LAN DROP is running — dashboard: http://localhost:${ports.http}/dashboard` +
+      (otherAddr ? `  •  from another device: http://${otherAddr}:${ports.http}/dashboard` : '')
   );
 
   // Paling akhir, setelah semua listener jalan: halaman yang dibuka langsung
   // bisa dipakai (bukan "connection refused" sesaat).
   if (TRAY_MODE) {
     // Ikon tray bukan syarat server hidup — kalau gagal (PowerShell diblokir,
-    // libappindicator tidak ada), server tetap melayani seperti biasa.
+    // libappindicator none), server tetap melayani seperti biasa.
     tray.startTray({
       url: `http://localhost:${ports.http}/dashboard`,
       onQuit: shutdown,

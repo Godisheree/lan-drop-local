@@ -38,6 +38,8 @@
     return text;
   }
 
+  let defaultHint = null;
+
   /**
    * Terapkan terjemahan ke seluruh DOM bertanda, sama seperti core/i18n.js.
    * Duplikasi kecil ini disengaja: halaman login tidak boleh bergantung pada
@@ -74,7 +76,6 @@
     })
     .catch(() => {});
 
-  let defaultHint = null;
 
   const form = document.getElementById('pinForm');
   const input = document.getElementById('pinInput');

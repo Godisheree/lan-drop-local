@@ -17,7 +17,7 @@ import { api, postJson } from './core/api.js';
 import { el, clear, byId, ipText } from './core/dom.js';
 import { formatBytes, formatDuration, formatDateTime, formatTime, formatSpeed } from './core/format.js';
 import { healStaleShell, markShellHealthy } from './features/pwa.js';
-import { t } from './core/i18n.js';
+import { t, initI18n, onLocaleChange } from './core/i18n.js';
 
 // Shell service worker yang tertinggal (HTML dan JS beda versi) bikin elemen di
 // bawah hilang. Module ini membacanya di scope atas, jadi gagalnya senyap tanpa
@@ -281,13 +281,13 @@ async function refreshStatus() {
 
   fillKv($.statusKv, [
     [t('field.device'), dash(s.deviceName)],
-    ['Versi', dash(s.version)],
-    ['Commit', el('span', { class: 'dash-mono', text: dash(s.commit) })],
-    ['Proses', `pid ${dash(s.pid)}`],
-    ['Node', el('span', { class: 'dash-mono', text: dash(s.node) })],
-    ['Platform', dash(s.platform)],
-    ['Uptime', uptimeDd],
-    ['Port HTTP', dash(s.port)],
+    [t('status.version'), dash(s.version)],
+    [t('status.commit'), el('span', { class: 'dash-mono', text: dash(s.commit) })],
+    [t('status.process'), `pid ${dash(s.pid)}`],
+    [t('status.node'), el('span', { class: 'dash-mono', text: dash(s.node) })],
+    [t('status.platform'), dash(s.platform)],
+    [t('status.uptime'), uptimeDd],
+    [t('status.httpPort'), dash(s.port)],
     [t('dashboard.portTransfer'), dash(s.transferPort)],
     [t('dashboard.portDiscovery'), dash(s.discoveryPort)],
     [t('dashboard.saveFolder'), el('span', { class: 'dash-mono', text: dash(s.saveDir) })],
@@ -974,22 +974,33 @@ document.addEventListener('keydown', (event) => {
     $.logErrorsOnly.checked = !$.logErrorsOnly.checked;
     if ($.logErrorsOnly.checked) markErrorsRead();
     renderLog();
-    toast($.logErrorsOnly.checked ? 'Log: error saja' : 'Log: semua baris');
+    toast($.logErrorsOnly.checked ? t('dashboard.logErrorsOnly') : t('dashboard.logAllLines'));
   } else if (key === 'f') {
     $.logFollow.checked = !$.logFollow.checked;
     renderLog();
-    toast($.logFollow.checked ? 'Log: ikut otomatis' : 'Log: berhenti mengikuti');
+    toast($.logFollow.checked ? t('dashboard.logFollow') : t('dashboard.logPaused'));
   } else if (key === 'c') {
     copyLog().catch(() => {});
   }
 });
 
-startPolling();
-// Status PIN diambil sekali saja (bukan lewat schedule): nilainya cuma berubah
-// kalau user di halaman ini sendiri yang menggantinya.
-guard('pin', refreshPin);
-syncPinButton();
-tick();
-setInterval(tick, 1000);
+// Kamus dimuat LEBIH DULU. Tanpa ini `t()` mengembalikan key mentah —
+// gejalanya "2unit.minuteShort 57unit.secondShort" di kartu uptime, karena
+// /dashboard punya entry point sendiri dan tidak lewat main.js.
+initI18n().finally(() => {
+  startPolling();
+  // Status PIN diambil sekali saja (bukan lewat schedule): nilainya cuma
+  // berubah kalau user di halaman ini sendiri yang menggantinya.
+  guard('pin', refreshPin);
+  syncPinButton();
+  tick();
+  paintErrorBadge();
+});
 
-paintErrorBadge();
+// Ganti bahasa = render ulang label yang sudah tampil.
+onLocaleChange(() => {
+  tick();
+  guard('status', refreshStatus);
+  guard('discovery', refreshDiscovery);
+});
+setInterval(tick, 1000);

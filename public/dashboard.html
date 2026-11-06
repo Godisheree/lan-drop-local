@@ -42,8 +42,7 @@
 
     <!-- 2. Penemuan perangkat -->
     <section class="dash-card" aria-labelledby="hDiscovery">
-      <h2 class="dash-card-title" id="hDiscovery" data-i18n="dashboard.discovery">
-        Penemuan perangkat
+      <h2 class="dash-card-title" id="hDiscovery" data-i18n="dashboard.discovery">Device discovery
         <span class="dash-badge" id="discReady" role="status">—</span>
       </h2>
 
@@ -140,8 +139,8 @@
 
     <!-- 6. Transfer berjalan -->
     <section class="dash-card dash-span" aria-labelledby="hActive">
-      <h2 class="dash-card-title" id="hActive" data-i18n="dashboard.activeTransfers">
-        Transfer berjalan
+      <h2 class="dash-card-title" id="hActive">
+        <span data-i18n="dashboard.activeTransfers">Running transfers</span>
         <span class="dash-badge" id="activeCount">0</span>
       </h2>
       <div class="dash-scroll">
@@ -153,8 +152,8 @@
               <th scope="col" data-i18n="field.size">Size</th>
               <th scope="col" data-i18n="field.peer">Peer</th>
               <th scope="col" data-i18n="field.status">Status</th>
-              <th scope="col">Progres</th>
-              <th scope="col">Aksi</th>
+              <th scope="col" data-i18n="field.progress">Progress</th>
+              <th scope="col" data-i18n="field.action">Action</th>
             </tr>
           </thead>
           <tbody id="activeBody"></tbody>
@@ -185,11 +184,11 @@
           <thead>
             <tr>
               <th scope="col" data-i18n="field.time">Time</th>
-              <th scope="col">Arah</th>
-              <th scope="col">Status</th>
-              <th scope="col">File</th>
-              <th scope="col">Ukuran</th>
-              <th scope="col">Peer</th>
+              <th scope="col" data-i18n="field.direction">Direction</th>
+              <th scope="col" data-i18n="field.status">Status</th>
+              <th scope="col" data-i18n="field.file">File</th>
+              <th scope="col" data-i18n="field.size">Size</th>
+              <th scope="col" data-i18n="field.peer">Peer</th>
               <th scope="col" data-i18n="field.savedTo">Saved to</th>
             </tr>
           </thead>
@@ -208,7 +207,7 @@
     <!-- 9. Log server -->
     <section class="dash-card dash-span" aria-labelledby="hLog">
       <h2 class="dash-card-title" id="hLog">
-        Log server
+        <span data-i18n="dashboard.logTitle">Server log</span>
         <span class="dash-badge" id="logCount">0</span>
       </h2>
       <div class="dash-toolbar">
