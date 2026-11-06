@@ -60,6 +60,25 @@ dan ikon tray sendiri. Yang tersisa di log cuma satu baris
   callback `listen()`, kedua handler harus dilepas saat retry, dan
   `startTransferServer` harus idempoten.
 
+### Fixed — file kecil hilang tanpa pesan
+
+File yang seluruh isinya tiba dalam **satu paket TCP** bersama frame
+`file-start` (teks pendek, thumbnail, file config) hilang tanpa jejak, kira-kira
+1 dari 6 percobaan. Pengirim melihat "terkirim", penerima tidak punya file, dan
+log server cuma bilang `Request … selesai tanpa transfer — entri dibuang`.
+
+Rantainya: sisa payload di paket yang sama ditulis ke stream dan `written`
+langsung mencapai `actualSize`, tetapi cek "sudah selesai?" hanya ada di dalam
+handler data berikutnya — yang tidak akan pernah dipanggil lagi karena tidak ada
+data tersisa. Stream tidak pernah di-`end()`, pengirim menutup socket, dan
+handler `close` mengira itu pembatalan → `.landrop-part` dihapus.
+
+- `server/transfer.js` — tutup stream di jalur "payload menempel"; `catch`
+  kosong di jalur `file-start` diganti logging + `transfer-save-failed`, karena
+  itulah yang selama ini menyembunyikan penyebabnya.
+- `scripts/check-autoapprove.js` — skenario 6c: 8 percobaan menempelkan payload
+  ke paket `file-start`. Terbukti menangkap bug (0/8 tanpa fix, 8/8 dengan).
+
 Catatan rilis: `README.md` di tarball 1.2.10 masih versi 1.2.9 — entri changelog
 dan bagian tray yang sudah di-commit belum ikut terbit. Rilis ini membawanya.
 
