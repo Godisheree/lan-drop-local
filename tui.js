@@ -45,21 +45,19 @@ const MENU = [
 ];
 
 /**
- * Ikon tray butuh Electron. Di HP/Termux (atau kalau node_modules belum diisi)
- * pilihannya disembunyikan, bukan ditampilkan lalu gagal saat dipilih.
+ * Ikon tray tersedia? Sejak versi npm tidak lagi butuh Electron: Windows pakai
+ * PowerShell NotifyIcon, Linux/macOS pakai systray2 yang di-install santai saat
+ * pertama dipakai. Yang tidak punya notification area cuma Android/Termux.
  *
- * Sengaja TIDAK pakai `require('electron')`: index.js paket itu menjalankan
- * unduhan binary ~240 MB kalau `dist/` belum ada. Cek file-nya langsung.
+ * Ikon `.ico` dicek di Windows karena tanpa file itu NotifyIcon langsung gagal;
+ * lebih baik barisnya disembunyikan daripada dipilih lalu diam-diam mati.
  * @returns {boolean}
  */
 function trayAvailable() {
-  const exe =
-    process.platform === 'win32'
-      ? 'electron.exe'
-      : process.platform === 'darwin'
-        ? path.join('Electron.app', 'Contents', 'MacOS', 'Electron')
-        : 'electron';
-  return fs.existsSync(path.join(ROOT, 'node_modules', 'electron', 'dist', exe));
+  const { isTermux, isWindows } = require('./server/platform');
+  if (isTermux()) return false;
+  if (!isWindows()) return true; // Linux/macOS: systray2 di-install saat dipakai
+  return fs.existsSync(path.join(ROOT, 'public', 'icons', 'icon.ico'));
 }
 
 /** @returns {Array<{id:string,label:string,hint:string}>} */
@@ -214,10 +212,15 @@ function runForeground() {
   child.on('exit', (code) => process.exit(code === null ? 1 : code));
 }
 
-/** Server + ikon tray, lepas dari terminal ini (detached). */
+/**
+ * Server + ikon tray, lepas dari terminal ini (detached).
+ *
+ * Sejak versi npm tidak ada Electron yang di-spawn: prosesnya tetap Node yang
+ * sama, cuma tanpa tty dan dengan `--tray` (server/tray.js yang mengurus ikon).
+ * Jadi `npm i -g` tidak perlu menarik binary 240 MB cuma untuk satu ikon.
+ */
 function runTray() {
-  const electronExe = require('electron');
-  const child = spawn(electronExe, ['.', '--tray'], {
+  const child = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js'), '--tray'], {
     cwd: ROOT,
     detached: true,
     stdio: 'ignore', // tanpa tty sendiri: proses selamat walau terminal ditutup
@@ -231,6 +234,7 @@ function runTray() {
   console.log(`  \u2705 LAN DROP jalan di background (PID ${child.pid}) \u2014 terminal ini boleh ditutup`);
   console.log(`  \u{1F4CA} Dashboard: http://localhost:${ports.http}/dashboard` + (other ? `  \u00b7  dari perangkat lain: ${other}` : ''));
   console.log('  \u274C Matiin: klik ikon LAN DROP di pojok kanan bawah \u2192 Keluar');
+  console.log('     (kalau ikon tray tidak muncul, server tetap jalan \u2014 port di atas masih bisa dibuka)');
   console.log('');
 }
 

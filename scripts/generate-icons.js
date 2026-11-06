@@ -291,6 +291,155 @@ function renderIcon(size, opts = {}) {
   return rgba;
 }
 
+// ── ICO encoding ───────────────────────────────────────────────────────────
+// Ikon tray Windows butuh .ico (NotifyIcon menolak PNG). Ditulis sebagai BMP
+// DIB 32-bit, bukan PNG-dalam-ICO: `System.Drawing.Icon` di .NET Framework
+// tidak selalu bisa membaca frame PNG.
+
+/**
+ * Satu frame ICO: BITMAPINFOHEADER + piksel BGRA bottom-up + AND mask 1bpp.
+ * @param {number} size
+ * @param {Buffer} rgba hasil renderIcon
+ * @returns {Buffer}
+ */
+function icoFrame(size, rgba) {
+  const header = Buffer.alloc(40);
+  header.writeUInt32LE(40, 0); // biSize
+  header.writeInt32LE(size, 4); // biWidth
+  header.writeInt32LE(size * 2, 8); // biHeight = XOR + AND mask (konvensi ICO)
+  header.writeUInt16LE(1, 12); // biPlanes
+  header.writeUInt16LE(32, 14); // biBitCount
+  header.writeUInt32LE(0, 16); // BI_RGB
+  header.writeUInt32LE(size * size * 4, 20); // biSizeImage
+
+  const pixels = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    const srcRow = (size - 1 - y) * size * 4; // bottom-up
+    const dstRow = y * size * 4;
+    for (let x = 0; x < size; x++) {
+      const s = srcRow + x * 4;
+      const d = dstRow + x * 4;
+      pixels[d] = rgba[s + 2]; // B
+      pixels[d + 1] = rgba[s + 1]; // G
+      pixels[d + 2] = rgba[s]; // R
+      pixels[d + 3] = rgba[s + 3]; // A
+    }
+  }
+
+  // AND mask: 1 bit per piksel, tiap baris dipad ke kelipatan 4 byte. Nol =
+  // "pakai alpha kanal", jadi cukup kosong.
+  const maskRow = Math.ceil(size / 32) * 4;
+  const mask = Buffer.alloc(maskRow * size);
+
+  return Buffer.concat([header, pixels, mask]);
+}
+
+/**
+ * @param {Array<{size:number, rgba:Buffer}>} frames
+ * @returns {Buffer}
+ */
+function encodeIco(frames) {
+  const dir = Buffer.alloc(6);
+  dir.writeUInt16LE(0, 0); // reserved
+  dir.writeUInt16LE(1, 2); // type = icon
+  dir.writeUInt16LE(frames.length, 4);
+
+  const entries = [];
+  let offset = 6 + frames.length * 16;
+
+  for (const frame of frames) {
+    const data = icoFrame(frame.size, frame.rgba);
+    const entry = Buffer.alloc(16);
+    entry.writeUInt8(frame.size >= 256 ? 0 : frame.size, 0); // 0 = 256
+    entry.writeUInt8(frame.size >= 256 ? 0 : frame.size, 1);
+    entry.writeUInt8(0, 2); // warna palet
+    entry.writeUInt8(0, 3); // reserved
+    entry.writeUInt16LE(1, 4); // planes
+    entry.writeUInt16LE(32, 6); // bit count
+    entry.writeUInt32LE(data.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    entries.push(entry);
+    frame.data = data;
+    offset += data.length;
+  }
+
+  return Buffer.concat([dir, ...entries, ...frames.map((f) => f.data)]);
+}
+
+// ── ICO encoding ───────────────────────────────────────────────────────────
+// Ikon tray Windows butuh .ico (NotifyIcon menolak PNG). Ditulis sebagai BMP
+// DIB 32-bit, bukan PNG-dalam-ICO: `System.Drawing.Icon` di .NET Framework
+// tidak selalu bisa membaca frame PNG.
+
+/**
+ * Satu frame ICO: BITMAPINFOHEADER + piksel BGRA bottom-up + AND mask 1bpp.
+ * @param {number} size
+ * @param {Buffer} rgba hasil renderIcon
+ * @returns {Buffer}
+ */
+function icoFrame(size, rgba) {
+  const header = Buffer.alloc(40);
+  header.writeUInt32LE(40, 0); // biSize
+  header.writeInt32LE(size, 4); // biWidth
+  header.writeInt32LE(size * 2, 8); // biHeight = XOR + AND mask (konvensi ICO)
+  header.writeUInt16LE(1, 12); // biPlanes
+  header.writeUInt16LE(32, 14); // biBitCount
+  header.writeUInt32LE(0, 16); // BI_RGB
+  header.writeUInt32LE(size * size * 4, 20); // biSizeImage
+
+  const pixels = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    const srcRow = (size - 1 - y) * size * 4; // bottom-up
+    const dstRow = y * size * 4;
+    for (let x = 0; x < size; x++) {
+      const s = srcRow + x * 4;
+      const d = dstRow + x * 4;
+      pixels[d] = rgba[s + 2]; // B
+      pixels[d + 1] = rgba[s + 1]; // G
+      pixels[d + 2] = rgba[s]; // R
+      pixels[d + 3] = rgba[s + 3]; // A
+    }
+  }
+
+  // AND mask: 1 bit per piksel, tiap baris dipad ke kelipatan 4 byte. Nol =
+  // "pakai alpha kanal", jadi cukup kosong.
+  const maskRow = Math.ceil(size / 32) * 4;
+  const mask = Buffer.alloc(maskRow * size);
+
+  return Buffer.concat([header, pixels, mask]);
+}
+
+/**
+ * @param {Array<{size:number, rgba:Buffer}>} frames
+ * @returns {Buffer}
+ */
+function encodeIco(frames) {
+  const dir = Buffer.alloc(6);
+  dir.writeUInt16LE(0, 0); // reserved
+  dir.writeUInt16LE(1, 2); // type = icon
+  dir.writeUInt16LE(frames.length, 4);
+
+  const entries = frames.map(() => Buffer.alloc(16));
+  let offset = 6 + frames.length * 16;
+  let payload = [];
+
+  frames.forEach((frame, i) => {
+    const data = icoFrame(frame.size, frame.rgba);
+    entries[i].writeUInt8(frame.size >= 256 ? 0 : frame.size, 0); // 0 = 256
+    entries[i].writeUInt8(frame.size >= 256 ? 0 : frame.size, 1);
+    entries[i].writeUInt8(0, 2); // warna palet
+    entries[i].writeUInt8(0, 3); // reserved
+    entries[i].writeUInt16LE(1, 4); // planes
+    entries[i].writeUInt16LE(32, 6); // bit count
+    entries[i].writeUInt32LE(data.length, 8);
+    entries[i].writeUInt32LE(offset, 12);
+    offset += data.length;
+    payload.push(data);
+  });
+
+  return Buffer.concat([dir, ...entries, ...payload]);
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 function main() {
@@ -314,8 +463,18 @@ function main() {
   }
 
   console.log(`\nIkon dibuat di ${outDir}`);
+
+  // Ikon tray Windows. Ukuran kecil 16/32 dipakai di notification area, 256
+  // untuk display scaling 200% — Windows memilih frame yang cocok sendiri.
+  const icoSizes = [16, 32, 48, 64, 256];
+  const ico = encodeIco(
+    icoSizes.map((size) => ({ size, rgba: renderIcon(size, {}) }))
+  );
+  const icoPath = path.join(outDir, 'icon.ico');
+  fs.writeFileSync(icoPath, ico);
+  console.log(`icon.ico                 ${icoSizes.join('/')}  ${ico.length} byte`);
 }
 
 if (require.main === module) main();
 
-module.exports = { encodePng, renderIcon };
+module.exports = { encodePng, renderIcon, icoFrame, encodeIco };

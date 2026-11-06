@@ -44,19 +44,16 @@ straight in the save folder on your PC (or the other way around).
 
 Requires Node.js 18+.
 
-**Run it from the repo** — gives you the arrow-key menu and the tray icon:
-
-```bash
-npm install
-npm start
-```
-
 **As the `lan-drop` command** — callable from any folder, no `cd` into the repo:
 
 ```bash
 npm i -g lan-drop-local
 lan-drop
 ```
+
+The menu offers two ways to run: keep the server in this terminal, or detach it
+into the background behind a **tray icon** in the notification area. No Electron
+download — see [Notes](#notes).
 
 Install straight from GitHub instead — no git, no login, works on both PC and
 Termux:
@@ -102,10 +99,13 @@ port on its own and prints the new address — no manual hunting.
 
 ## Notes
 
-- **The tray icon only exists if Electron is installed** — that means running it
-  from the repo (`npm install` then `npm start`). The global install deliberately
-  leaves Electron out (240 MB), because global mode is meant to be a plain CLI
-  server.
+- **The tray icon does not need Electron.** On Windows it is a PowerShell
+  `NotifyIcon` (already part of the OS); on Linux and macOS it is `systray2`,
+  downloaded once into the data folder the first time the tray is used — that
+  install is ~3 MB, not 240 MB, and failing it leaves the server running anyway.
+  Linux needs `libayatana-appindicator` (or `libappindicator3`) from the distro.
+  Android/Termux has no notification area, so the tray row is hidden there.
+  Electron is still used for the `build-win` installer only (`devDependencies`).
 - **History and settings live outside the install folder**, so they survive
   package updates: `%APPDATA%\lan-drop` (Windows) or `~/.lan-drop` (Termux/Linux).
 
@@ -123,9 +123,20 @@ Reasoning lives in [`docs/adr/`](docs/adr) — start with
 
 ## Changelog
 
-Latest version: **1.2.9** — streaming only starts after the receiver says yes,
-IP addresses are blurred until you click them, and the phone header no longer
-clips its own logo.
+Latest version: **1.2.10** — a dashboard PIN you already changed no longer
+reverts to the default by itself.
+
+### 1.2.10
+
+- **The dashboard PIN stays put.** `settings.json` used to be written from the
+  whole in-memory cache, so an instance that had been running longer (its cache
+  still holding the old PIN) deleted a freshly changed PIN the next time it
+  saved anything — typically the auto-approve toggle. Now only the keys a
+  process actually changed are written, merged with the latest file on disk.
+- A process that is already running keeps its own PIN in memory until it is
+  restarted; the value on disk is correct either way.
+- `scripts/check-settings.js` locks it: two instances sharing one data dir,
+  one changes the PIN, the other saves a setting, the PIN must survive.
 
 ### 1.2.9
 

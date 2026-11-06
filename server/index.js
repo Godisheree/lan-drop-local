@@ -13,6 +13,7 @@ const history = require('./history');
 const settings = require('./settings');
 const pin = require('./pin');
 const thumbnail = require('./thumbnail');
+const tray = require('./tray');
 const { securityHeaders, rateLimit, sameOriginGuard, hostGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
 const { listLANIPv4, getDeviceName, getDataDir, getUploadDir, getSaveDirRoot, openBrowser } = require('./platform');
 
@@ -621,10 +622,20 @@ app.use((err, req, res, next) => {
 
 // ===================== Server Startup =====================
 
+// Mode tray (`--tray`, dipakai launcher `tui.js` untuk jalan di background):
+// proses ini hidup tanpa terminal, jadi semua kontrol ada di menu ikon.
+//
+// `!process.versions.electron`: di dalam Electron, `main.js` punya tray-nya
+// sendiri. Kalau ini ikut menyala, user dapat DUA ikon di notification area.
+const TRAY_MODE =
+  !process.versions.electron &&
+  (process.argv.includes('--tray') || process.env.LANDROP_TRAY === '1');
+
 /**
  * Dashboard-nya dibuka otomatis di browser? Cuma untuk yang menjalankan manual
- * di terminal — di situ browser memang yang dicari. Tiga pengecualian:
+ * di terminal — di situ browser memang yang dicari. Empat pengecualian:
  *  - Electron: app-nya punya jendela sendiri, browser tambahan cuma bikin bingung.
+ *  - Mode tray: jendela browser mendadak muncul padahal user minta jalan diam-diam.
  *  - Bukan TTY (service, cron, skrip, dipipe): browser mendadak muncul = gangguan.
  *  - `LANDROP_NO_BROWSER=1` untuk yang tidak mau sama sekali.
  * @returns {boolean}
@@ -632,6 +643,7 @@ app.use((err, req, res, next) => {
 function shouldOpenBrowser() {
   return (
     !process.versions.electron &&
+    !TRAY_MODE &&
     process.env.LANDROP_NO_BROWSER !== '1' &&
     !!process.stdout.isTTY
   );
@@ -717,7 +729,16 @@ function onListening() {
 
   // Paling akhir, setelah semua listener jalan: halaman yang dibuka langsung
   // bisa dipakai (bukan "connection refused" sesaat).
-  if (shouldOpenBrowser()) openBrowser(`http://localhost:${ports.http}/dashboard`);
+  if (TRAY_MODE) {
+    // Ikon tray bukan syarat server hidup — kalau gagal (PowerShell diblokir,
+    // libappindicator tidak ada), server tetap melayani seperti biasa.
+    tray.startTray({
+      url: `http://localhost:${ports.http}/dashboard`,
+      onQuit: shutdown,
+    }).catch((err) => console.warn(`[Tray] ${err && err.message ? err.message : err}`));
+  } else if (shouldOpenBrowser()) {
+    openBrowser(`http://localhost:${ports.http}/dashboard`);
+  }
 }
 
 listenHttp(ports.http, MAX_PORT_TRIES);
@@ -725,6 +746,7 @@ listenHttp(ports.http, MAX_PORT_TRIES);
 // ===================== Graceful Shutdown =====================
 function shutdown() {
   console.log('\n[Server] Shutting down...');
+  tray.stopTray();
   discovery.stopDiscovery();
   transfer.stopTransferServer();
   // Tulis apa pun yang masih menunggu di timer debounce (riwayat). Setting
