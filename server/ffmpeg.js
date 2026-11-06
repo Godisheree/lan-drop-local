@@ -38,7 +38,10 @@ function checkFfmpeg() {
       }
       const candidate = FFMPEG_CANDIDATES[i];
       console.log(`[FFMPEG] checkFfmpeg: coba kandidat [${i}]: "${candidate}"`);
-      const proc = spawn(candidate, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 });
+      // windowsHide: tanpa ini Windows memunculkan jendela console sekejap
+      // tiap kali ffmpeg dijalankan — di mata user terlihat seperti cmd
+      // berkedip, padahal tidak ada yang berbahaya.
+      const proc = spawn(candidate, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, windowsHide: true });
       let settled = false;
       const done = (result) => { if (!settled) { settled = true; if (result) { console.log(`[FFMPEG] checkFfmpeg: ✅ DITEMUKAN di "${candidate}"`); _ffmpegPath = candidate; resolve(true); } else { console.log(`[FFMPEG] checkFfmpeg: ❌ "${candidate}" gagal, lanjut next...`); tryNext(i + 1); } } };
       proc.on('error', () => done(false));
@@ -84,7 +87,7 @@ function runFfmpeg(args, opts = {}) {
   const { timeout = 20000 } = opts;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(_ffmpegPath || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn(_ffmpegPath || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let stderr = '';
 
     proc.stderr.on('data', (d) => { stderr += d.toString(); });

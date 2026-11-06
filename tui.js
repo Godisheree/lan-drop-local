@@ -208,6 +208,7 @@ function portFree(port) {
 function runForeground() {
   const child = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js'), ...process.argv.slice(2)], {
     stdio: 'inherit',
+    windowsHide: true,
   });
   child.on('exit', (code) => process.exit(code === null ? 1 : code));
 }
@@ -224,6 +225,7 @@ function runTray() {
     cwd: ROOT,
     detached: true,
     stdio: 'ignore', // tanpa tty sendiri: proses selamat walau terminal ditutup
+    windowsHide: true, // jangan kedipkan jendela console saat launcher jalan
   });
   child.unref();
 

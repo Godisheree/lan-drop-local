@@ -399,7 +399,7 @@ function getStreamInfo(filePath) {
         '-show_streams',
         '-protocol_whitelist', 'file',
         filePath
-      ], { timeout: 10000 });
+      ], { timeout: 10000, windowsHide: true });
 
       let stdout = '';
       proc.stdout.on('data', (d) => { stdout += d.toString(); });
@@ -824,7 +824,7 @@ function startRawReceive(requestId, req) {
             // execFile mem Passing argumen apa adanya, tanpa shell.
             const fileType = classifyFileType(safeName);
             if (isTermux() && (fileType === 'photo' || fileType === 'video')) {
-              execFile('termux-media-scan', [finalPath], (err) => {
+              execFile('termux-media-scan', [finalPath], { windowsHide: true }, (err) => {
                 if (err) {
                   // Fallback: am broadcast bawaan Android, gak butuh termux-api
                   console.warn(`[Transfer] termux-media-scan gagal (termux-api belum terinstall?), coba am broadcast: ${err.message}`);
@@ -833,7 +833,7 @@ function startRawReceive(requestId, req) {
                     'broadcast',
                     '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
                     '-d', `file://${encodeURI(target)}`
-                  ], (err2) => {
+                  ], { windowsHide: true }, (err2) => {
                     if (err2) {
                       console.warn(`[Transfer] am broadcast scan gagal: ${err2.message}`);
                     } else {

@@ -89,7 +89,7 @@ function findTailscaleCli() {
         return resolve(null);
       }
       const candidate = TAILSCALE_CLI_CANDIDATES[index++];
-      execFile(candidate, ['version'], { timeout: 4000 }, (err) => {
+      execFile(candidate, ['version'], { timeout: 4000, windowsHide: true }, (err) => {
         if (!err) {
           cachedCliPath = candidate;
           return resolve(candidate);
@@ -105,7 +105,7 @@ async function runTailscaleStatus() {
   if (!cli) return null;
 
   return new Promise((resolve) => {
-    execFile(cli, ['status', '--json'], { timeout: 5000 }, (err, stdout) => {
+    execFile(cli, ['status', '--json'], { timeout: 5000, windowsHide: true }, (err, stdout) => {
       if (err) return resolve(null);
       try {
         resolve(JSON.parse(stdout));

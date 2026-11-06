@@ -79,6 +79,26 @@ handler `close` mengira itu pembatalan → `.landrop-part` dihapus.
 - `scripts/check-autoapprove.js` — skenario 6c: 8 percobaan menempelkan payload
   ke paket `file-start`. Terbukti menangkap bug (0/8 tanpa fix, 8/8 dengan).
 
+### Fixed — jendela cmd berkedip di Windows
+
+Sejak mode background dipakai, jendela command prompt muncul lalu hilang
+berulang-ulang — terlihat seperti sesuatu yang mencurigakan sedang berjalan.
+Tidak ada yang berbahaya: di Windows, setiap proses console yang di-spawn tanpa
+`windowsHide: true` memunculkan jendela cmd sekejap.
+
+Yang paling sering terlihat adalah `tailscale status --json`, dipanggil
+`discovery.js` tiap ~10 detik lewat cache (announce tiap 3 detik). Terukur di
+mesin uji: **7 jendela console per 30 detik tanpa fix, 2 dengan fix** (dua
+sisanya server dan ikon tray itu sendiri).
+
+- `server/tailscale.js` — `version` dan `status --json`
+- `server/ffmpeg.js` — deteksi `-version` dan setiap pemanggilan transcode
+- `server/transfer.js` — `ffprobe`, `termux-media-scan`, `am broadcast`
+- `server/platform.js` — `openBrowser` (`cmd /c start`)
+- `tui.js` — server foreground dan proses tray detached
+- `scripts/check-tray.js` — pemeriksaan ke-16: setiap `spawn`/`execFile` wajib
+  punya `windowsHide`, supaya kedipan ini tidak kembali diam-diam.
+
 Catatan rilis: `README.md` di tarball 1.2.10 masih versi 1.2.9 — entri changelog
 dan bagian tray yang sudah di-commit belum ikut terbit. Rilis ini membawanya.
 

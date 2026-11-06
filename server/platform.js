@@ -343,7 +343,9 @@ function openBrowser(url) {
         : ['xdg-open', [url]];
 
   try {
-    const child = spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore' });
+    // windowsHide: `cmd /c start` memunculkan jendela console sekejap kalau
+    // tidak disembunyikan. Browser tetap terbuka; yang hilang cuma kedipannya.
+    const child = spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore', windowsHide: true });
     child.on('error', () => {});
     child.unref();
     return true;

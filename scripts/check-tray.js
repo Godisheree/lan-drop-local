@@ -148,6 +148,38 @@ check('startTransferServer idempoten', () => {
   assert.ok(/tcpServer\.listening\s*\)\s*return/.test(body), 'dipanggil dua kali akan membuat tcpServer baru dan membocorkan yang lama');
 });
 
+// ── Tidak ada jendela console berkedip ─────────────────────────────────────
+// Di Windows, spawn proses console tanpa `windowsHide: true` memunculkan jendela
+// cmd sekejap. `tailscale status` dipanggil tiap ~10 detik oleh discovery, jadi
+// user melihat "cmd ngeblink terus" dan wajar curiga itu injection. Ini bukan
+// soal keamanan — murni kosmetik — tapi sangat menakutkan kalau dibiarkan.
+
+check('setiap spawn/execFile punya windowsHide', () => {
+  const files = ['server/tailscale.js', 'server/ffmpeg.js', 'server/transfer.js', 'server/platform.js', 'server/tray.js', 'tui.js'];
+  const offenders = [];
+
+  for (const rel of files) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    // Cari pemanggilan spawn(/execFile( yang TIDAK memakai windowsHide.
+    const re = /\b(spawn|execFile)\(/g;
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      // Ambil sampai tanda kurung tutup berimbang (perkiraan cukup: 400 char).
+      const slice = src.slice(m.index, m.index + 400);
+      if (!/windowsHide/.test(slice)) {
+        const line = src.slice(0, m.index).split('\n').length;
+        offenders.push(`${rel}:${line} ${m[1]}(...)`);
+      }
+    }
+  }
+
+  assert.strictEqual(
+    offenders.length,
+    0,
+    `tanpa windowsHide (jendela cmd berkedip di Windows): ${offenders.join(', ')}`
+  );
+});
+
 // ── hasil ──────────────────────────────────────────────────────────────────
 
 const failed = results.filter((r) => !r.ok);
