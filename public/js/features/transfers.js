@@ -281,7 +281,7 @@ export function updateTransferItem(requestId, data) {
     if (data.status === 'transferring' && data.speed > 0) {
       const remaining = Math.max(0, (data.total || 0) - (data.transferred || 0));
       const eta = data.speed > 0 ? remaining / data.speed : 0;
-      speedEl.textContent = `${formatSpeed(data.speed)} · sisa ${formatDuration(eta)}`;
+      speedEl.textContent = t('transfer.speedEta', { speed: formatSpeed(data.speed), remaining: formatDuration(eta) });
     } else {
       speedEl.textContent = '';
     }
@@ -557,8 +557,8 @@ export function pollProgress(requestId, direction, onComplete) {
       }
 
       const statusText = direction === 'send'
-        ? `Mengirim ${formatBytes(transferred)} / ${formatBytes(total)}`
-        : `Menerima ${formatBytes(transferred)} / ${formatBytes(total)}`;
+        ? t('transfer.sendingOf', { done: formatBytes(transferred), total: formatBytes(total) })
+        : t('transfer.receivingOf', { done: formatBytes(transferred), total: formatBytes(total) });
 
       updateTransferItem(requestId, {
         status: 'transferring',

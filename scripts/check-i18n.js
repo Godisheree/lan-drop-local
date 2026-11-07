@@ -63,7 +63,13 @@ const files = walk(PUBLIC);
 // (file, transfer, status, error, server, dashboard, peer, LAN, Tailscale)
 // sengaja tidak dimasukkan.
 const ID_WORDS = new RegExp(
-  '\\b(Perangkat|Riwayat|Kirim|Terima|Tolak|Batal|Salin|Tutup|Sambung|Memuat|Pastikan|Kedua|Kalau|Pilih|Belum|Hapus|Simpan|Keluar|Batalkan|Lokasi|disalin|tidak|sudah|gagal|Menunggu|mengirim|diterima|tersimpan|ditampilkan|dipakai|dibuka|diatur|terhubung|perangkat|lalu|kepada|dari|untuk|dengan|adalah|bisa|harus|hanya|masih|juga|agar|supaya|karena|tetapi|atau|dan|lain|sini|atas|bawah|mau|ingin|dapat|sedang|akan|telah|kami|kamu|anda|saya|dia|ini|itu)\\b'
+  '\\b(Perangkat|Riwayat|Kirim|Terima|Tolak|Batal|Salin|Tutup|Sambung|Memuat|Pastikan|Kedua|Kalau|Pilih|Belum|Hapus|Simpan|Keluar|Batalkan|Lokasi|disalin|tidak|sudah|gagal|Menunggu|mengirim|diterima|tersimpan|ditampilkan|dipakai|dibuka|diatur|terhubung|perangkat|lalu|kepada|dari|untuk|dengan|adalah|bisa|harus|hanya|masih|juga|agar|supaya|karena|tetapi|atau|dan|lain|sini|atas|bawah|mau|ingin|dapat|sedang|akan|telah|kami|kamu|anda|saya|dia|ini|itu' +
+    // Kata yang pernah bocor tanpa terdeteksi: uptime "sejak", progres "sisa",
+    // auto-accept "Tersimpan ... mati", title log "belum dibaca". Daftar ini
+    // menangkap kalimat utuh, bukan identifier, karena `jsLeftovers` melewati
+    // literal yang mirip identifier lebih dulu.
+    '|sejak|sisa|tersimpan|dibaca|mati|berjalan|diperiksa|tersedia)\\b',
+  'i'
 );
 
 // ── 1. Referensi key dari kode ─────────────────────────────────────────────

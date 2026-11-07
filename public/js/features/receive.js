@@ -221,7 +221,7 @@ export async function acceptCurrent() {
         statusText: t('receive.waitingSender'),
         batchId: group.requests.length > 1 ? group.batchId : undefined,
         batchSize: group.requests.length,
-        batchLabel: `Dari ${group.senderName}`,
+        batchLabel: t('receive.batchFrom', { name: group.senderName }),
       });
 
       pollProgress(request.requestId, 'receive');

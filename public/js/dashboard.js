@@ -301,10 +301,10 @@ function paintUptime() {
   if (seconds === null) return;
 
   const text = formatDuration(seconds);
-  const pill = `up ${text}`;
+  const pill = t('dashboard.uptimePill', { duration: text });
   if ($.uptime.textContent !== pill) $.uptime.textContent = pill;
 
-  const detail = `${text} (sejak ${formatDateTime(serverStatus.startedAt)})`;
+  const detail = t('dashboard.uptimeSince', { duration: text, time: formatDateTime(serverStatus.startedAt) });
   if (uptimeDd.textContent !== detail) uptimeDd.textContent = detail;
 }
 
@@ -426,7 +426,7 @@ async function saveAuto() {
     toast(saved.enabled ? t('dashboard.autoOn') : t('dashboard.autoOffState'));
     $.autoInfo.textContent = saved.enabled
       ? t('dashboard.autoSavedPeers', { time: formatTime(Date.now()), peers: saved.peers.length ? saved.peers.join(', ') : t('dashboard.allPeers') })
-      : `Tersimpan ${formatTime(Date.now())} — terima otomatis mati`;
+      : t('dashboard.autoSavedOff', { time: formatTime(Date.now()) });
   } finally {
     $.autoSave.disabled = false;
   }
@@ -559,7 +559,7 @@ async function refreshActive() {
 
     if (speed > 0) {
       progress.appendChild(
-        el('span', { class: 'dash-mono dash-speed', text: `${formatSpeed(speed)} • sisa ${formatDuration(eta)}` })
+        el('span', { class: 'dash-mono dash-speed', text: t('transfer.speedEta', { speed: formatSpeed(speed), remaining: formatDuration(eta) }) })
       );
     }
 
@@ -801,7 +801,7 @@ function paintErrorBadge() {
   if (document.title !== title) document.title = title;
 
   $.logCount.dataset.state = unseenErrors ? 'err' : '';
-  $.logCount.title = unseenErrors ? `${unseenErrors} error belum dibaca` : '';
+  $.logCount.title = unseenErrors ? t('dashboard.errorsUnread', { count: unseenErrors }) : '';
 }
 
 /** User sudah lihat lognya — angka di judul tab tidak perlu lagi. */

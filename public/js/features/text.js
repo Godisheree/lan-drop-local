@@ -199,7 +199,7 @@ export async function copyCurrentText() {
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
-      setLabel('Disalin!', 1500);
+      setLabel(t('text.copied'), 1500);
       return;
     }
   } catch (_) {
@@ -215,7 +215,7 @@ export async function copyCurrentText() {
   ta.select();
   try {
     document.execCommand('copy');
-    setLabel('Disalin!', 1500);
+    setLabel(t('text.copied'), 1500);
   } catch (_) {
     setLabel(t('modal.copyFailed'), 3000);
   }
