@@ -5,6 +5,20 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.16] — 2026-11-07
+
+### Fixed — README yang terbit masih menyebut versi lama
+
+Tarball 1.2.15 diterbitkan dengan `README.md` yang masih berhenti di 1.2.12,
+sehingga halaman npm menampilkan "Latest version: 1.2.12" untuk paket 1.2.15.
+Rilis ini **hanya** memperbaiki dokumentasi: tidak ada satu pun berkas kode
+yang berubah (dibuktikan dengan membandingkan isi tarball 1.2.15 terhadap
+repo — satu-satunya perbedaan memang `README.md`).
+
+README kini memuat riwayat 1.2.15 (sembilan teks Indonesia yang masih bocor ke
+UI English, plus perbaikan pemeriksa i18n) dan menyebut pemegang hak ISC.
+
+
 ## [1.2.15] — 2026-11-07
 
 ### Fixed — teks Indonesia yang masih bocor ke UI English

@@ -123,8 +123,33 @@ Reasoning lives in [`docs/adr/`](docs/adr) — start with
 
 ## Changelog
 
-Latest version: **1.2.12** — a real tray icon on a plain `npm i -g`, no Electron
-download required.
+Latest version: **1.2.16** — a documentation-only release: the README that shipped with 1.2.15 still said 1.2.12.
+
+### 1.2.16
+
+- **Documentation only, no code changes.** The tarball published as 1.2.15
+  shipped a `README.md` that still read "Latest version: 1.2.12", so the npm
+  page showed the wrong version for the new release.
+- The version is now checked in every document before a release, not just
+  `CHANGELOG.md`, and the packed tarball itself is inspected rather than the
+  working tree.
+
+### 1.2.15
+
+- **Nine strings that were still in Indonesian** no longer leak into the English
+  UI: the dashboard uptime detail `(sejak ...)` and the `up ...` pill,
+  `Tersimpan ... mati`, the transfer speed line `sisa ...`, the unread-error
+  count, the `Mengirim/Menerima ... / ...` status, the batch label
+  `Dari <name>`, and `Disalin!`. All of them now go through the dictionary.
+- **The i18n checker was the bigger bug.** Its Indonesian word list was missing
+  `sejak`, `sisa`, `tersimpan`, `dibaca` and `mati`, and `htmlLeftovers()` threw
+  away a whole line whenever any `data-i18n` appeared on it — so
+  `<span>Ikuti otomatis</span>` next to a translated checkbox was never checked.
+  Both are fixed; the dashboard log switch label, its `Tombol F`/`Tombol E`
+  tooltips and the log pane `aria-label` are translated too.
+- Verified in both directions: the old strings were temporarily put back to make
+  sure the checker fails, rather than passing because it never looked.
+- `public/sw.js`: `CACHE_VERSION` v26.
 
 ### 1.2.12
 
