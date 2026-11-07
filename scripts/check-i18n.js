@@ -68,7 +68,10 @@ const ID_WORDS = new RegExp(
     // auto-accept "Tersimpan ... mati", title log "belum dibaca". Daftar ini
     // menangkap kalimat utuh, bukan identifier, karena `jsLeftovers` melewati
     // literal yang mirip identifier lebih dulu.
-    '|sejak|sisa|tersimpan|dibaca|mati|berjalan|diperiksa|tersedia)\\b',
+    '|sejak|sisa|tersimpan|dibaca|mati|berjalan|diperiksa|tersedia' +
+    // Kata yang dipakai di sekitar kontrol (label switch, judul tombol).
+    // "Ikuti otomatis" di dashboard lolos karena tidak ada satu pun di sini.
+    '|ikuti|otomatis|tombol|tekan|pintasan|sandi|kunci)\\b',
   'i'
 );
 
@@ -172,17 +175,38 @@ check('setiap data-i18n punya key yang valid', () => {
 
 // ── 4. Teks Indonesia tertinggal di HTML ───────────────────────────────────
 
+/**
+ * Teks Indonesia yang tertinggal di HTML.
+ *
+ * Dulu baris yang mengandung `data-i18n` dibuang BULAT, jadi teks yang
+ * menumpang di baris yang sama lolos — `<span>Ikuti otomatis</span>` di
+ * samping checkbox ber-`data-i18n` tidak pernah diperiksa. Sekarang yang
+ * dibuang hanya elemen yang memang diterjemahkan (dan komentar), sisanya
+ * diperiksa baris per baris.
+ */
 function htmlLeftovers(rel) {
   const src = fs.readFileSync(path.join(PUBLIC, rel), 'utf8');
-  return src
-    .split(/\r?\n/)
-    .map((line, i) => ({ line, no: i + 1 }))
-    .filter(({ line }) => {
-      if (line.includes('data-i18n')) return false;
-      if (line.trim().startsWith('<!--')) return false;
-      return /\b(Perangkat|Riwayat|Kirim|Terima|Tolak|Batal|Salin|Tutup|Sambung|Memuat|Pastikan|Kedua|Kalau|Pilih|Belum|Hapus|Simpan|Keluar)\b/.test(line);
-    })
-    .map(({ no, line }) => `${no}: ${line.trim().slice(0, 50)}`);
+  const out = [];
+
+  // Komentar HTML bisa lebih dari satu baris — buang dulu di seluruh sumber,
+  // kalau tidak baris lanjutannya terbaca sebagai teks UI.
+  const noComments = src.replace(/<!--[\s\S]*?-->/g, '');
+
+  noComments.split(/\r?\n/).forEach((raw, i) => {
+    let line = raw;
+    if (!line.trim()) return;
+
+    // Elemen yang teksnya dikelola `data-i18n` (termasuk isinya).
+    line = line.replace(/<([a-zA-Z][\w-]*)\b[^>]*\sdata-i18n="[^"]*"[^>]*>[^<]*<\/\1>/g, '');
+    // Atribut terjemahan itu sendiri tidak boleh ikut diperiksa.
+    line = line.replace(/data-i18n(?:-attr)?="[^"]*"/g, '');
+    // Nilai atribut non-teks: id, class, name, type, href, src, dsb.
+    line = line.replace(/\b(?:id|class|name|type|href|src|for|role|tabindex|lang|charset|rel|content|width|height|viewBox|xmlns|d|fill|stroke|aria-labelledby|aria-describedby|inputmode|autocomplete|maxlength|minlength|pattern|step|min|max|enterkeyhint)="[^"]*"/g, '');
+
+    if (ID_WORDS.test(line)) out.push(`${i + 1}: ${line.trim().slice(0, 50)}`);
+  });
+
+  return out;
 }
 
 for (const page of ['index.html', 'dashboard.html', 'dashboard-login.html']) {
