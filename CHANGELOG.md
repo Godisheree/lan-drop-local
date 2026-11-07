@@ -5,6 +5,33 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [1.2.15] — 2026-11-07
+
+### Fixed — teks Indonesia yang masih bocor ke UI English
+
+Dua commit perbaikan (`36a28fc`, `22f54ed`) menyapu kebocoran yang tersisa
+setelah rilis i18n. Akarnya ada di pemeriksa, bukan cuma di kode UI:
+
+- `scripts/check-i18n.js` — daftar kata Indonesia diperluas (`sejak`, `sisa`,
+  `tersimpan`, `dibaca`, `mati`, `ikuti`, `otomatis`, `tombol`, …) karena
+  sembilan kebocoran nyata lolos hanya karena kata-katanya tidak terdaftar.
+- `scripts/check-i18n.js` — `htmlLeftovers()` tidak lagi membuang **seluruh
+  baris** yang mengandung `data-i18n`. Dulu satu `data-i18n` di dalam baris
+  membebaskan semua teks lain di baris itu, sehingga `<span>Ikuti otomatis</span>`
+  di samping checkbox ber-`data-i18n` tidak pernah diperiksa. Kini hanya elemen
+  yang benar-benar diterjemahkan yang dibuang; komentar HTML multi-baris
+  dibersihkan lebih dulu, dan nilai atribut non-teks (`id`, `class`, `type`, …)
+  diabaikan.
+- Kebocoran yang diperbaiki: uptime dashboard `(sejak …)`, pil `up …`,
+  `Tersimpan … mati`, `• sisa …`, `error belum dibaca`, status
+  `Mengirim/Menerima … / …`, label batch `Dari <nama>`, `Disalin!`, serta
+  label switch `Ikuti otomatis` + tooltip `Tombol F`/`Tombol E` dan
+  `aria-label` panel log.
+- `public/sw.js` — `CACHE_VERSION` v26.
+
+Verifikasi dilakukan dua arah: teks lama dikembalikan sementara untuk
+memastikan pemeriksa benar-benar gagal, bukan hijau karena tidak memeriksa.
+
 ## [1.2.13] — 2026-11-07
 
 ### Added — UI dua bahasa (English default) + pemilih bahasa

@@ -230,4 +230,4 @@ Full release notes for every version:
 
 ## License
 
-ISC.
+ISC © Ahmad Zakariyah.
