@@ -23,7 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const net = require('net');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 const KEEP = process.argv.includes('--keep');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -147,8 +147,21 @@ function findBrowser() {
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ].filter(Boolean);
   for (const c of candidates) if (fs.existsSync(c)) return c;
+  // ponytail: PATH lookup covers the usual names only; add a candidate above when a distro ships another.
+  for (const name of ['google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge']) {
+    try {
+      const p = execFileSync('which', [name], { encoding: 'utf8' }).trim();
+      if (p && fs.existsSync(p)) return p;
+    } catch { /* not installed */ }
+  }
   return null;
 }
 
