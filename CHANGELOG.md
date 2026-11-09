@@ -5,6 +5,33 @@ Semua perubahan penting pada LAN DROP didokumentasikan di file ini.
 Format berdasarkan [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [Belum dirilis]
+
+### Fixed — penerima melihat "Gagal menerima <file>: t is not defined"
+
+`public/js/features/transfers.js` memanggil `t()` (25 tempat) tanpa
+meng-import-nya, dan `public/js/main.js` memakainya sekali di jalur gagal init.
+Selama transfer berjalan, `addTransferItem()` melempar `ReferenceError: t is not
+defined`; pemanggilnya di `features/receive.js` menangkapnya dan menampilkan
+toast "Failed to receive <nama file>: t is not defined" — jadi penerima melihat
+kegagalan padahal byte-nya sampai di folder simpan (riwayat penerima tetap
+`completed`). Paling kelihatan saat menerima video besar, karena toast-nya
+bertahan lebih lama.
+
+Perbaikan: tambah `import { t } from '../core/i18n.js'` di kedua berkas, plus
+pemeriksaan baru di `scripts/check-i18n.js` — setiap berkas `public/js` yang
+memakai `t()` wajib meng-import-nya (dibuktikan menangkap bug ini: tanpa import
+→ FAIL, dengan import → 26/26 lulus). `CACHE_VERSION` naik ke `v27` supaya
+shell yang sudah terpasang di HP mengambil JS yang benar.
+
+### Fixed — `check-security.js` merah kalau host dapat DHCP 192.168.1.5
+
+Pemeriksaan "peer LAN lain bukan self-target" memakai alamat tetap
+`192.168.1.5`; begitu mesin ini sendiri di-assign `192.168.1.5` oleh router,
+`isSelfTarget()` benar-benar menolaknya dan seluruh `npm test` gagal karena
+lingkungan, bukan karena kode. Sekarang alamat peer dipilih dari kandidat yang
+tidak ada di `os.networkInterfaces()`.
+
 ## [1.2.16] — 2026-11-07
 
 ### Fixed — README yang terbit masih menyebut versi lama

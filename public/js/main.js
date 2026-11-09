@@ -24,7 +24,7 @@ import { setupAutoApprove, renderAutoApprove } from './features/autoapprove.js';
 import { setupHistory, fetchAndRenderHistory } from './features/history.js';
 import { setupThemeToggle } from './features/theme.js';
 import { initLocale } from './features/locale.js';
-import { initI18n } from './core/i18n.js';
+import { initI18n, t } from './core/i18n.js';
 import { initPwa, applyUpdate, healStaleShell, markShellHealthy } from './features/pwa.js';
 import { initLiveRegion, showToast, clearBadge } from './features/notify.js';
 import { initMobileHardening } from './features/mobile.js';

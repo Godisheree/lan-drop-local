@@ -334,6 +334,27 @@ check('bendera SVG ada dan ikut paket public/', () => {
   assert.ok(pkg.files.includes('public/'), 'public/ harus di whitelist npm');
 });
 
+// ── 9. File yang memanggil t() wajib meng-import t ─────────────────────────
+//
+// Bug nyata 1.2.16: features/transfers.js memanggil t() tanpa import, jadi
+// setiap transfer yang lewat file itu melempar "t is not defined" — penerima
+// melihat "Gagal menerima <file>: t is not defined" padahal bytes-nya sampai.
+
+check('setiap file public/js yang memakai t() meng-import t', () => {
+  const bad = [];
+  for (const file of files) {
+    if (!file.endsWith('.js')) continue;
+    if (file.endsWith(path.join('core', 'i18n.js'))) continue;
+    const src = fs.readFileSync(file, 'utf8');
+    if (!/(^|[^\w.$])t\(/.test(src)) continue;
+    const imports = /import\s*\{([^}]*)\}\s*from\s*['"][^'"]*i18n\.js['"]/.exec(src);
+    const names = imports ? imports[1].split(',').map((x) => x.trim().split(/\s+as\s+/).pop()) : [];
+    const defines = /(?:const|let|var|function)\s+t/.test(src);
+    if (!names.includes('t') && !defines) bad.push(path.relative(ROOT, file));
+  }
+  assert.deepStrictEqual(bad, [], `t() tanpa import: ${bad.join(', ')}`);
+});
+
 // ── hasil ──────────────────────────────────────────────────────────────────
 
 const failed = results.filter((r) => !r.ok);

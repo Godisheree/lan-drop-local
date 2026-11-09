@@ -200,7 +200,12 @@ const { isSelfTarget } = require(path.join(ROOT, 'server', 'security.js'));
 expectTrue(isSelfTarget('localhost'), 'target localhost ditolak sebagai self-target');
 expectTrue(isSelfTarget('127.0.0.1'), 'target 127.0.0.1 ditolak sebagai self-target');
 expectTrue(isSelfTarget('127.0.0.5'), 'target 127.x ditolak sebagai self-target');
-expectTrue(!isSelfTarget('192.168.1.5'), 'peer LAN lain bukan self-target');
+// IP peer jangan hardcode: mesin ini bisa saja dapat DHCP 192.168.1.5, dan
+// pemeriksaan jadi merah padahal kodenya benar. Pilih alamat LAN yang bukan milik host.
+const os = require('os');
+const ownIps = new Set(Object.values(os.networkInterfaces()).flat().filter(Boolean).map((i) => i.address));
+const peerLan = ['192.168.254.254', '10.255.255.254', '172.31.255.254'].find((ip) => !ownIps.has(ip));
+expectTrue(!isSelfTarget(peerLan), `peer LAN lain bukan self-target (${peerLan})`);
 expectTrue(!isSelfTarget('100.100.131.65'), 'peer Tailscale bukan self-target');
 process.env.LANDROP_ALLOW_SELF_TARGET = '1';
 expectTrue(!isSelfTarget('127.0.0.1'), 'escape hatch LANDROP_ALLOW_SELF_TARGET bekerja');

@@ -10,6 +10,7 @@ import { formatBytes, formatSpeed, formatDuration, formatPath } from '../core/fo
 import { getState, updateSpeed } from '../core/state.js';
 import { showToast, announce } from './notify.js';
 import { attachThumbnail } from './thumbnail.js';
+import { t } from '../core/i18n.js';
 
 /** @type {Map<string, HTMLElement>} batchId -> elemen batch */
 const batchElements = new Map();
