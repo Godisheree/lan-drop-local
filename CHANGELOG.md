@@ -7,6 +7,26 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [Belum dirilis]
 
+### Fixed — perangkat tak terdeteksi setelah pindah data seluler → WiFi
+
+Broadcaster discovery hanya membaca daftar interface sekali saat server
+start, lalu socket-nya menempel di alamat itu selamanya. HP yang menjalankan
+LAN DROP di data seluler (mis. `10.14.19.195`, broadcast `10.255.255.255`)
+lalu masuk WiFi tetap menyiarkan ke alamat seluler yang sudah mati: HTTP-nya
+hidup di `wlan0` dan `/me` sudah menampilkan alamat WiFi yang benar, tapi
+peer di jaringan yang sama tidak pernah menerima `announce` — jadi perangkat
+tidak muncul otomatis dan kiriman hanya bisa lewat alamat manual.
+
+Broadcaster sekarang memeriksa daftar interface tiap 5 detik dan memulai
+ulang socket-nya saat daftar berubah (termasuk saat interface LAN hilang
+sama sekali). Announce pertama juga langsung dikirim, tidak menunggu satu
+interval penuh.
+
+Terukur: `node scripts/check-discovery-rebind.js` — broadcaster pindah dari
+`10.14.19.195` ke `192.168.1.4` tanpa restart dan tanpa socket zombie,
+`npm test` tetap 401 pemeriksaan lolos.
+
+
 ### Fixed — penerima melihat "Gagal menerima <file>: t is not defined"
 
 `public/js/features/transfers.js` memanggil `t()` (25 tempat) tanpa

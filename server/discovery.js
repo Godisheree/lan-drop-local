@@ -10,6 +10,10 @@ const { getLANIP, listLANInterfaces, getDeviceName, isUsablePeerAddress } = requ
 // di satu host (mis. untuk pengujian) tanpa saling berebut listener.
 const DISCOVERY_PORT = parseInt(process.env.DISCOVERY_PORT) || 41234;
 const BROADCAST_INTERVAL = 2000;
+// Interface LAN bisa berubah saat aplikasi jalan (HP pindah data seluler ↔ WiFi).
+// Diperiksa sesering itu saja — cukup cepat, murah, dan tidak menyentuh socket
+// yang sehat.
+const RECONCILE_INTERVAL = 5000;
 const TAILSCALE_ANNOUNCE_INTERVAL = 3000;
 const REPLY_DEDUPE_TTL = 5000; // jangan reply ke IP yang sama dalam 5 detik terakhir
 const DEVICE_TIMEOUT = 10000;
@@ -29,6 +33,7 @@ const deviceName = DEVICE_NAME;
 const knownDevices = new Map();
 const recentReplies = new Map(); // ip -> timestamp terakhir kita reply-back
 let broadcastIntervals = []; // satu interval per interface LAN
+let reconcileInterval = null; // pemeriksa berkala: interface LAN berubah?
 let tailscaleInterval = null;
 let cleanupInterval = null;
 let sockets = [];
@@ -55,25 +60,65 @@ const lastErrorLogAt = new Map(); // dedupe log error: "iface|kode" -> timestamp
 // peer di WiFi yang sama jadi tidak pernah ditemukan. Socket per
 // interface (bind ke IP interface itu) memastikan paket keluar lewat
 // interface yang benar.
-function startBroadcaster() {
-  const ip = getLANIP();
+function announceBuffer() {
   const message = JSON.stringify({
-    type: 'announce', deviceId, deviceName, ip, port: ports.http, transferPort: ports.transfer
+    type: 'announce', deviceId, deviceName, ip: getLANIP(), port: ports.http, transferPort: ports.transfer
   });
-  const buffer = Buffer.from(message);
+  return Buffer.from(message);
+}
 
+function startBroadcaster() {
   const interfaces = listLANInterfaces();
   if (interfaces.length === 0) {
     // Tidak ada interface LAN → tidak ada jalur LAN yang bisa disiarkan.
     // Bundle lama menyiarkan ip:'localhost' di sini, dan peer lalu menganggap
     // itu alamat yang bisa dihubungi — padahal itu mesinnya sendiri.
     console.warn('[Discovery] No LAN interface — peers are only reachable through Tailscale');
-    return;
+  } else {
+    const buffer = announceBuffer();
+    for (const iface of interfaces) {
+      startBroadcastSocket(iface.address, iface.broadcast, buffer);
+    }
   }
 
-  for (const iface of interfaces) {
-    startBroadcastSocket(iface.address, iface.broadcast, buffer);
+  // Pemeriksa ini WAJIB dipasang walau belum ada interface sama sekali: HP yang
+  // start di data seluler lalu masuk WiFi tidak akan pernah punya broadcaster
+  // kalau penjadwalannya ikut diloncati.
+  if (!reconcileInterval) {
+    reconcileInterval = setInterval(syncBroadcastInterfaces, RECONCILE_INTERVAL);
   }
+}
+
+function stopBroadcastSockets() {
+  broadcastIntervals.forEach((i) => clearInterval(i));
+  broadcastIntervals = [];
+  sockets.forEach((s) => { try { s.close(); } catch (_) {} });
+  sockets = [];
+  broadcasterState.length = 0;
+}
+
+/**
+ * Samakan broadcaster dengan interface yang benar-benar ada SEKARANG.
+ *
+ * Tanpa ini, socket tetap nempel di alamat lama: HP yang pindah dari data
+ * seluler (10.x) ke WiFi (192.168.x) terus menyiarkan ke 10.255.255.255 yang
+ * sudah mati, sementara socket HTTP-nya hidup di wlan0 — peer tidak pernah
+ * melihatnya walau `/me` di HP sudah menampilkan alamat WiFi yang benar.
+ */
+function syncBroadcastInterfaces() {
+  const want = listLANInterfaces();
+  const have = broadcasterState.map((s) => s.address).sort().join('|');
+  const target = want.map((i) => i.address).sort().join('|');
+  if (have === target) return;
+
+  stopBroadcastSockets();
+  if (want.length === 0) {
+    console.warn('[Discovery] No LAN interface — peers are only reachable through Tailscale');
+    return;
+  }
+  console.log(`[Discovery] Interface LAN berubah (${have || '-'} → ${target}) — broadcaster dimulai ulang`);
+  const buffer = announceBuffer();
+  for (const iface of want) startBroadcastSocket(iface.address, iface.broadcast, buffer);
 }
 
 function startBroadcastSocket(bindAddress, broadcastAddress, buffer) {
@@ -94,24 +139,29 @@ function startBroadcastSocket(bindAddress, broadcastAddress, buffer) {
     }
   });
 
+  const announce = () => {
+    state.lastSentAt = Date.now();
+    sock.send(buffer, 0, buffer.length, DISCOVERY_PORT, broadcastAddress, (err) => {
+      if (err) {
+        state.lastError = err.code || err.message;
+        // Log error broadcast DENGAN PENJELASAN — dulu diemkan, jadi user
+        // cuma lihat "device gak muncul" tanpa tahu kenapa.
+        logBroadcastError(state, err);
+        return;
+      }
+      state.lastError = null;
+    });
+  };
+
   const start = () => {
     state.bound = true;
     sock.setBroadcast(true);
     sock.unref();
 
-    const interval = setInterval(() => {
-      state.lastSentAt = Date.now();
-      sock.send(buffer, 0, buffer.length, DISCOVERY_PORT, broadcastAddress, (err) => {
-        if (err) {
-          state.lastError = err.code || err.message;
-          // Log error broadcast DENGAN PENJELASAN — dulu diemkan, jadi user
-          // cuma lihat "device gak muncul" tanpa tahu kenapa.
-          logBroadcastError(state, err);
-          return;
-        }
-        state.lastError = null;
-      });
-    }, BROADCAST_INTERVAL);
+    // Kirim sekali di awal: menunggu interval pertama bikin kartu peer muncul
+    // satu siklus lebih lambat dari yang perlu.
+    announce();
+    const interval = setInterval(announce, BROADCAST_INTERVAL);
     broadcastIntervals.push(interval);
   };
 
@@ -359,6 +409,8 @@ function stopDiscovery() {
   broadcastIntervals.forEach(i => clearInterval(i));
   broadcastIntervals = [];
   if (tailscaleInterval) clearInterval(tailscaleInterval);
+  if (reconcileInterval) clearInterval(reconcileInterval);
+  reconcileInterval = null;
   if (cleanupInterval) clearInterval(cleanupInterval);
   sockets.forEach(s => s.close());
   sockets = [];
