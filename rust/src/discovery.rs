@@ -30,6 +30,21 @@ const DEVICE_TIMEOUT_MS: u128 = 10_000;
 const CLEANUP_INTERVAL: Duration = Duration::from_secs(3);
 const REJECT_LOG_TTL_MS: u128 = 60_000;
 
+
+/// Bind UDP dengan SO_REUSEADDR, seperti `reuseAddr: true` di Node.
+///
+/// Paket broadcast dikirim ke semua socket yang memegang port itu, jadi dua
+/// instance di satu mesin sama-sama mendengar announce. Tanpa ini instance
+/// kedua gagal bind dan kehilangan discovery seluruhnya.
+fn bind_shared(addr: SocketAddr) -> std::io::Result<UdpSocket> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    sock.set_reuse_address(true)?;
+    sock.set_nonblocking(true)?;
+    sock.bind(&addr.into())?;
+    UdpSocket::from_std(sock.into())
+}
+
 #[derive(Clone, Debug)]
 pub struct Address {
     pub ip: String,
@@ -204,7 +219,11 @@ impl Discovery {
         let port = self.discovery_port;
         tokio::spawn(async move {
             let bind = SocketAddr::from(([0, 0, 0, 0], port));
-            let socket = match UdpSocket::bind(bind).await {
+            // SO_REUSEADDR seperti `server/discovery.js` (reuseAddr: true).
+            // Tanpa ini instance kedua di mesin yang sama gagal bind dan
+            // kehilangan discovery sama sekali — padahal dua instance di satu
+            // mesin justru kasus paling sering saat mengembangkan.
+            let socket = match bind_shared(bind) {
                 Ok(s) => s,
                 Err(err) => {
                     if let Ok(mut guard) = this.listener_error.lock() {

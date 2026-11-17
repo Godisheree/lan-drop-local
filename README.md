@@ -131,9 +131,11 @@ talk to each other — a Rust sender to a Node receiver and back are both tested
 ```bash
 npm run core:build                   # cargo build --release
 npm run core                         # run the Rust core on its own
+npm run core:test                    # Rust unit tests
+npm run check:rust-core              # end-to-end: two cores, text/file/resume/cancel
+npm run check:rust-hardening         # abuse: bad frames, floods, traversal, restarts
+npm run test:core                    # all of the above in one go
 LANDROP_CORE=rust npm run electron-dev   # Electron shell, Rust server
-node scripts/check-parity.js         # Node vs Rust, per endpoint
-node scripts/check-rust-core.js      # two Rust instances + one Node, end to end
 ```
 
 Reasoning and the phase plan: [`docs/adr/0013`](docs/adr/0013-port-inti-ke-rust.md),

@@ -84,7 +84,16 @@ fn router(state: Arc<AppState>) -> Router {
         .route("/transfer/text", get(httpapi::transfer_text_list))
         .route("/transfer/text/{id}/ack", post(httpapi::transfer_text_ack))
         .route("/transfer/progress/{request_id}", get(httpapi::transfer_progress))
-        .route("/transfer/upload", post(httpapi::transfer_upload))
+        // Batas body axum default 2 MB — cukup untuk semua rute lain, tapi
+        // mematikan upload video. Batas sebenarnya dicek per berkas di handler
+        // (LANDROP_MAX_UPLOAD_MB); di sini hanya longgarkan pintunya.
+        .route(
+            "/transfer/upload",
+            post(httpapi::transfer_upload)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    platform::max_upload_mb() as usize * 1024 * 1024 + 16 * 1024 * 1024,
+                )),
+        )
         .route("/thumbnail/{id}", get(httpapi::thumbnail))
         .route("/system/disk", get(httpapi::system_disk))
         .route("/settings/auto-approve", get(httpapi::auto_approve_get).post(httpapi::auto_approve_set))

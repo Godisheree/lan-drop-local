@@ -375,7 +375,25 @@ $ node scripts/check-rust-core.js
                                  # 1 MB, resume setelah putus, batal, riwayat,
                                  # thumbnail, konversi video, interop dua arah,
                                  # log dashboard, penolakan target, rute data
+
+$ node scripts/check-rust-hardening.js
+57 lulus, 0 gagal                # Host/Origin palsu, traversal statis, frame
+                                 # 8 MB, JSON rusak, 80 koneksi menganggur,
+                                 # penolakan beralasan, nama file traversal,
+                                 # file kembar, batal, upload 3 MB / 64 MB,
+                                 # 6 transfer paralel, resume lintas restart,
+                                 # settings.json rusak, anti-hijack announce,
+                                 # rate limit PIN + Retry-After
+
+$ (cd rust && cargo test --release)
+16 passed                        # nama file, kunci resume, frame, host guard,
+                                 # target IP privat/link-local, self target
 ```
+
+Yang ditemukan uji ini dan sudah diperbaiki (semua sempat lolos secara manual):
+upload > 2 MB ditolak batas body axum (aplikasi transfer file yang tidak bisa
+mengirim video), alasan penolakan tidak diteruskan ke pengirim, dan instance
+kedua di satu mesin kehilangan discovery karena UDP bind tanpa `SO_REUSEADDR`.
 
 Yang **sudah** ada di Rust: 25 rute HTTP + statis, gerbang akses (cookie,
 header, `?k=`, sesi PIN, loopback), discovery UDP (broadcast per interface
@@ -389,6 +407,12 @@ Frontend `public/` yang tidak diubah juga sudah dijalankan langsung di browser
 terhadap inti Rust: dashboard login PIN, daftar perangkat, kirim teks, dan
 kirim file 40 KB lewat file picker — berkas mendarat identik di folder simpan
 instance tujuan (diverifikasi `ls` + byte).
+
+Shell Electron dengan `LANDROP_CORE=rust` juga sudah dijalankan (headless, di
+mesin tanpa display): proses Electron menyalakan binary Rust, `/status` di port
+yang sama melaporkan `runtime: "rust"` dan pid binary — jadi jalur cutover
+benar-benar menyala, bukan hanya terbaca di kode. Tray dan jendela tidak bisa
+dinilai tanpa display; itu tetap daftar periksa manual Lampiran B.
 
 Yang **belum**:
 

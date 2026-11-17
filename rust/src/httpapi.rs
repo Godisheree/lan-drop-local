@@ -688,9 +688,14 @@ pub async fn transfer_respond(
     let Some(accept) = body.get("accept").and_then(|v| v.as_bool()) else {
         return bad_request("Missing fields: requestId, accept");
     };
+    // Alasan penolakan harus ikut: penerima bisa menolak karena ruang disk
+    // habis, dan pengirim perlu tahu itu, bukan "Ditolak oleh penerima".
+    let message = field_str(&body, "message")
+        .or_else(|| field_str(&body, "reason"))
+        .map(str::to_string);
     match state
         .transfers
-        .respond(&state, &request_id, accept, None)
+        .respond(&state, &request_id, accept, message)
     {
         Ok(result) => axum::Json(result).into_response(),
         Err(err) => not_found(&err),
@@ -928,7 +933,6 @@ pub async fn transfer_upload(
 
     let max_bytes = platform::max_upload_mb() * 1024 * 1024;
     let mut files: Vec<Value> = Vec::new();
-    let mut total_bytes: u64 = 0;
 
     loop {
         let field = match multipart.next_field().await {
@@ -956,8 +960,10 @@ pub async fn transfer_upload(
             match stream.chunk().await {
                 Ok(Some(chunk)) => {
                     size += chunk.len() as u64;
-                    total_bytes += chunk.len() as u64;
-                    if size > max_bytes || total_bytes > max_bytes {
+                    // Batas per berkas, seperti `limits.fileSize` di multer.
+                    // Satu batch 50 foto kecil tidak boleh ditolak karena
+                    // jumlahnya — yang dibatasi adalah tiap berkas.
+                    if size > max_bytes {
                         let _ = tokio::fs::remove_file(&stored).await;
                         return (
                             StatusCode::PAYLOAD_TOO_LARGE,

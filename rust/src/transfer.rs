@@ -2107,3 +2107,52 @@ pub fn start_server(state: Arc<AppState>) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn traversal_name_never_keeps_directories() {
+        assert_eq!(sanitize_file_name("../../etc/passwd"), "passwd");
+        assert_eq!(sanitize_file_name("/etc/shadow"), "shadow");
+        // Backslash hanya pemisah path di Windows. Di Linux nama itu utuh
+        // (dengan `\\` jadi `_`), dan tetap tidak bisa keluar folder karena
+        // tidak ada `/` yang tersisa.
+        let windows_style = sanitize_file_name("..\\..\\windows\\system32\\evil.dll");
+        assert!(!windows_style.contains('/'));
+        assert!(!windows_style.is_empty() && windows_style != "..");
+        #[cfg(windows)]
+        assert_eq!(windows_style, "evil.dll");
+    }
+
+    #[test]
+    fn forbidden_characters_replaced() {
+        assert_eq!(sanitize_file_name("a:b*c?d|e\"f<g>h.txt"), "a_b_c_d_e_f_g_h.txt");
+        assert_eq!(sanitize_file_name("baris\nbaru.txt"), "baris_baru.txt");
+    }
+
+    #[test]
+    fn empty_and_dot_names_fall_back() {
+        assert_eq!(sanitize_file_name(""), "file");
+        assert_eq!(sanitize_file_name(".."), "file");
+        assert_eq!(sanitize_file_name("   "), "file");
+    }
+
+    #[test]
+    fn trailing_dots_and_spaces_trimmed() {
+        assert_eq!(sanitize_file_name("laporan.txt..."), "laporan.txt");
+        assert_eq!(sanitize_file_name("nama   "), "nama");
+    }
+
+    #[test]
+    fn name_length_capped() {
+        let long = "a".repeat(500);
+        assert_eq!(sanitize_file_name(&long).chars().count(), 200);
+    }
+
+    #[test]
+    fn unicode_names_survive() {
+        assert_eq!(sanitize_file_name("foto-日本語-🎉.png"), "foto-日本語-🎉.png");
+    }
+}

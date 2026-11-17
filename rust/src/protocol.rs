@@ -34,3 +34,40 @@ pub fn make_transfer_key(sender_id: &str, resume_id: &str, file_name: &str, file
     let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     hex[..16].to_string()
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_prefix_is_big_endian_length() {
+        let bytes = framed(&serde_json::json!({"type": "halo"}));
+        let len = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+        assert_eq!(len, bytes.len() - 4);
+        let parsed: Value = serde_json::from_slice(&bytes[4..]).unwrap();
+        assert_eq!(parsed["type"], "halo");
+    }
+
+    #[test]
+    fn frame_stays_under_wire_limit_for_small_payload() {
+        let bytes = framed(&serde_json::json!({"type": "text", "text": "x".repeat(1024)}));
+        assert!(bytes.len() <= MAX_FRAME_BYTES);
+    }
+
+    #[test]
+    fn transfer_key_is_stable_and_sixteen_hex() {
+        let a = make_transfer_key("sender1", "resume1", "film.mp4", 1024);
+        let b = make_transfer_key("sender1", "resume1", "film.mp4", 1024);
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 16);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn transfer_key_changes_with_identity_name_and_size() {
+        let base = make_transfer_key("sender1", "resume1", "film.mp4", 1024);
+        assert_ne!(base, make_transfer_key("sender2", "resume1", "film.mp4", 1024));
+        assert_ne!(base, make_transfer_key("sender1", "resume2", "film.mp4", 1024));
+        assert_ne!(base, make_transfer_key("sender1", "resume1", "film2.mp4", 1024));
+        assert_ne!(base, make_transfer_key("sender1", "resume1", "film.mp4", 2048));
+    }
+}

@@ -48,6 +48,9 @@ npm run check:resume   # transport wajib kunci, FIN tidak hapus partial, resume 
 npm run check:transfer-integrity # kunci resume, klaim nama atomik, batas frame/teks, sweeper
 npm run check:parity   # Node vs Rust: bentuk respons 24 endpoint (SAMA/BEDA/BELUM)
 npm run check:rust-core # dua instance Rust: teks, file, resume, batal, riwayat
+npm run check:rust-hardening # input cacat, banjir koneksi, traversal, restart, rate limit
+npm run core:test      # unit test Rust (nama file, kunci resume, host/target guard)
+npm run test:core      # build + seluruh pemeriksaan inti Rust
                          # (bangun dulu: cd rust && cargo build --release)
 npm run check:tui      # menu launcher tui.js (panah, Enter, escape terpotong) — tanpa tty
 npm run check:tray     # struktur icon.ico + tray tidak boleh menarik Electron lagi

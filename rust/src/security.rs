@@ -260,3 +260,62 @@ impl RateLimiter {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::{HeaderMap, HeaderValue};
+
+    fn headers(host: &str) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        map.insert("host", HeaderValue::from_str(host).unwrap());
+        map
+    }
+
+    #[test]
+    fn private_and_tailscale_targets_allowed() {
+        assert!(is_allowed_target_ip("192.168.1.10"));
+        assert!(is_allowed_target_ip("10.0.0.5"));
+        assert!(is_allowed_target_ip("172.16.4.4"));
+        assert!(is_allowed_target_ip("100.101.102.103")); // CGNAT Tailscale
+    }
+
+    #[test]
+    fn public_and_link_local_targets_rejected() {
+        assert!(!is_allowed_target_ip("8.8.8.8"));
+        assert!(!is_allowed_target_ip("169.254.169.254")); // metadata cloud
+        assert!(!is_allowed_target_ip("1.1.1.1"));
+        assert!(!is_allowed_target_ip(""));
+    }
+
+    #[test]
+    fn hostname_needs_registration() {
+        assert!(!is_allowed_target_ip("contoh.example"));
+        assert!(!is_allowed_target_ip("evil.example.com"));
+    }
+
+    #[test]
+    fn own_address_is_rejected_as_self_target() {
+        let own = crate::platform::own_addresses();
+        if let Some(ip) = own.first() {
+            assert!(is_self_target(ip));
+        }
+        assert!(is_self_target("localhost") || env_is_one("LANDROP_ALLOW_SELF_TARGET"));
+    }
+
+    #[test]
+    fn host_guard_blocks_foreign_domains() {
+        assert!(host_guard(&headers("evil.example.com:3000")).is_some());
+        assert!(host_guard(&headers("")).is_some());
+    }
+
+    #[test]
+    fn host_guard_allows_localhost_and_ip() {
+        assert!(host_guard(&headers("localhost:3000")).is_none());
+        assert!(host_guard(&headers("127.0.0.1:3000")).is_none());
+        let own = crate::platform::own_addresses();
+        if let Some(ip) = own.first() {
+            assert!(host_guard(&headers(&format!("{ip}:3000"))).is_none());
+        }
+    }
+}
