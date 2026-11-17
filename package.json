@@ -47,7 +47,8 @@
     "check-discovery-rebind": "node scripts/check-discovery-rebind.js",
     "check:access": "node scripts/check-access.js",
     "check:transfer-integrity": "node scripts/check-transfer-integrity.js",
-    "check:resume": "node scripts/check-resume.js"
+    "check:resume": "node scripts/check-resume.js",
+    "check:parity": "node scripts/check-parity.js"
   },
   "keywords": [
     "lan",
