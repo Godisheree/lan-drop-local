@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, clipboard, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, clipboard, shell, nativeImage, dialog } = require('electron');
 const path = require('path');
 
 // ===================== State =====================
@@ -39,9 +39,81 @@ function startServer() {
   // karena folder instalasi (Program Files) read-only untuk user biasa.
   process.env.LANDROP_UPLOAD_DIR = path.join(app.getPath('temp'), 'landrop-uploads');
 
+  // LANDROP_CORE=rust menjalankan inti Rust sebagai proses terpisah. Tray,
+  // menu, dan jendela tetap di sini; yang pindah hanya servernya. Ini jalur
+  // cutover bertahap: kalau binary tidak ada, jangan diam-diam jatuh ke Node —
+  // lebih baik gagal dengan pesan yang bisa dibaca.
+  if (process.env.LANDROP_CORE === 'rust') {
+    startRustCore();
+    mark('inti Rust dijalankan');
+    return;
+  }
+
   // require langsung di main process — lifecycle otomatis ikut app
   require('./server/index.js');
   mark('server di-require');
+}
+
+// ===================== Inti Rust (opsional) =====================
+let rustProc = null;
+
+function rustBinaryPath() {
+  const name = process.platform === 'win32' ? 'lan-drop-core.exe' : 'lan-drop-core';
+  const candidates = [
+    process.env.LANDROP_CORE_BIN,
+    path.join(process.resourcesPath || '', 'core', name),
+    path.join(__dirname, 'rust', 'target', 'release', name),
+  ].filter(Boolean);
+  return candidates.find((candidate) => {
+    try { return require('fs').existsSync(candidate); } catch (_) { return false; }
+  }) || null;
+}
+
+function startRustCore() {
+  const bin = rustBinaryPath();
+  if (!bin) {
+    dialog.showErrorBox(
+      'LAN DROP',
+      'Inti Rust tidak ditemukan. Bangun dulu: cd rust && cargo build --release',
+    );
+    app.quit();
+    return;
+  }
+
+  // Port hasil retry dibaca dari stdout binary: dia yang tahu port mana yang
+  // benar-benar listen, dan jendela harus memuat angka itu.
+  rustProc = require('child_process').spawn(bin, [], {
+    env: {
+      ...process.env,
+      LANDROP_NO_BROWSER: '1',
+      LANDROP_DATA_DIR: process.env.LANDROP_DATA_DIR || app.getPath('userData'),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  const adopt = (chunk) => {
+    const text = chunk.toString();
+    const match = text.match(/localhost:(\d+)/);
+    if (match) ports.http = parseInt(match[1], 10);
+    const portsSeen = text.match(/Port (\d+) \(HTTP\) & (\d+) \(transfer\)/);
+    if (portsSeen) {
+      ports.http = parseInt(portsSeen[1], 10);
+      ports.transfer = parseInt(portsSeen[2], 10);
+    }
+  };
+  rustProc.stdout.on('data', adopt);
+  rustProc.stderr.on('data', (chunk) => process.stderr.write(chunk));
+  rustProc.on('error', (err) => {
+    dialog.showErrorBox('LAN DROP', `Inti Rust gagal dijalankan: ${err.message}`);
+    app.quit();
+  });
+  rustProc.on('exit', (code) => {
+    if (code !== 0 && code !== null) console.error(`[core] berhenti dengan kode ${code}`);
+  });
+  app.on('will-quit', () => {
+    if (rustProc && !rustProc.killed) rustProc.kill();
+  });
 }
 
 // Tunggu port benar-benar listen. Sebelumnya ada jeda tetap 800 ms di depan

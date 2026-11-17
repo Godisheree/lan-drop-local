@@ -21,6 +21,7 @@ Format: [MADR](https://adr.github.io/madr/) — konteks → keputusan → konsek
 | [0010](0010-brand-color-dan-logo.md) | Warna aksen oren + mark logo baru | Diterima | 2026-11-01 |
 | [0011](0011-batas-frame-tcp-dan-host-guard.md) | Batas frame TCP + host guard (anti DNS rebinding) | Diterima | 2026-11-02 |
 | [0012](0012-kunci-akses-per-perangkat.md) | Kunci akses per perangkat (pairing lewat QR yang sama) | Diterima | 2026-11-17 |
+| [0013](0013-port-inti-ke-rust.md) | Inti server diport ke Rust, frontend tetap tanpa build step | Diterima | 2026-11-18 |
 
 ## Template
 

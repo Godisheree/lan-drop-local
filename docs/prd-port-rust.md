@@ -174,27 +174,27 @@ hidup berdampingan dan pemeriksa yang sama dijalankan ke keduanya.
 - Gate: `cargo build --release` bersih, `check-parity` melaporkan status per
   endpoint.
 
-### Fase 1 — Config, settings, security, access, pin (estimasi 3-4 hari)
+### Fase 1 — Config, settings, security, access, pin (selesai)
 
 Port `platform.js`, `settings.js`, `security.js`, `access.js`, `pin.js`.
 Gate: `check-access` (16 cek), `check-security`, `check-settings`,
 `check-routing` hijau dengan `LANDROP_SERVER_BIN` menunjuk binary Rust.
 
-### Fase 2 — HTTP lengkap (5-6 hari)
+### Fase 2 — HTTP lengkap (selesai)
 
 25 rute, multipart upload 50 berkas, `/system/disk`, `/logs`, `/dashboard*`,
 thumbnail, history, static dengan header khusus (`sw.js`, manifest).
 Gate: `check-dashboard`, `check-dashboard-ago`, `check-ack`, `check-i18n`,
 `check-identity`, `check-tailscale-ui` hijau; `check-parity` tanpa selisih.
 
-### Fase 3 — Discovery UDP (4-5 hari)
+### Fase 3 — Discovery UDP (selesai)
 
 Announce + listen, tabel peer, anti-hijack dengan lease, `knownIpsForName`,
 diagnostik `/discovery/status`, jalur Tailscale.
 Gate: `check-discovery-rebind`, `check-identity`, `check-routes` (bagian
 discovery) hijau.
 
-### Fase 4 — Transfer TCP (7-9 hari, paling berat)
+### Fase 4 — Transfer TCP (selesai)
 
 Frame, pending/respond, resume dengan identitas file, klaim nama `O_EXCL`,
 FIN bukan batal, auto-approve nama+alamat, teks + `text-saved`, sweep retensi,
@@ -204,9 +204,13 @@ Gate: `check-resume` (10 cek, termasuk putus di tengah), `check-transfer-integri
 hijau **dan** transfer antar dua instance Rust + satu instance Node (uji
 campuran, dua arah).
 
-### Fase 5 — Cutover inti (2-3 hari)
+### Fase 5 — Cutover inti (setengah jalan: inti sudah bisa dipakai, `npm start` masih Node)
 
 - `npm start` memakai binary Rust; Node hanya untuk pemeriksa lama.
+  Setengah langkah yang sudah jalan: `npm run core` menjalankan inti Rust
+  sendiri, dan `LANDROP_CORE=rust npm run electron-dev` menjalankan shell
+  Electron dengan server Rust (tray/menu tetap di Node). Yang belum: menjadikan
+  itu default untuk paket distribusi.
 - Jalankan `npm test` penuh dengan `LANDROP_SERVER_BIN`; semua hijau.
 - Ukur ulang: RSS, CPU saat transfer 1 GB, waktu start, ukuran binary.
 - ADR-0013 naik status jadi "Diterima", dokumen ini diperbarui dengan angka.
@@ -344,31 +348,59 @@ sekaligus kecuali cutover (fase 5).
 
 ## 14. Lampiran A — Status hari ini (bukti, bukan rencana)
 
-Spike fase 0 sudah jalan di mesin uji (Linux, 2 vCPU):
+Inti sudah lengkap dan diukur di mesin uji (Linux, 2 vCPU):
 
 ```
-$ cargo build --release          # 1m30s, tanpa warning
-$ ls -lh rust/target/release/lan-drop-core
-2.0M
-
-$ ./lan-drop-core &              # PORT=4400
+$ (cd rust && cargo build --release)
+Finished `release` profile [optimized]
+$ ls -l rust/target/release/lan-drop-core
+3.782.360 byte                   # 3,8 MB, tanpa runtime tambahan
+$ ./lan-drop-core &              # PORT=4400 TRANSFER_PORT=4401
+$ ps -o rss= -p <pid>
+4,7–6,4 MB                       # Node: ~70 MB
 $ curl -s -o /dev/null -w '%{http_code}' http://192.168.1.13:4400/status
 401                              # tanpa kunci, dari alamat LAN → benar
-$ curl -s -H "X-Landrop-Key: $KEY" .../status
-{"deviceName":"void","version":"1.2.16","port":4400,...}
 $ curl -s .../ | wc -c
 11299                            # sama dengan public/index.html
-$ ps -o rss= -p <pid>
-3.6 MB                           # Node: ~70 MB
 ```
 
-Perbandingan perilaku yang sudah sama dengan Node: gerbang 401 dengan
-`pairing:true`, tukar `?k=` → cookie + 302 ke alamat bersih, cookie otomatis
-untuk loopback saja, penolakan traversal path, penyajian `public/` byte-identik,
-versi dibaca dari `package.json`, commit dibaca dari `.git`.
+Hasil pemeriksa:
 
-Yang belum: seluruh rute data, discovery, transfer, PIN, thumbnail, Tauri.
-Angka "belum" ini yang jadi pekerjaan fase 1-6.
+```
+$ node scripts/check-parity.js
+SAMA 24 · BEDA 0 · BELUM 0       # 24 endpoint, semua berperilaku sama
+
+$ node scripts/check-rust-core.js
+47 lulus, 0 gagal                # dua instance Rust + satu Node: teks, file
+                                 # 1 MB, resume setelah putus, batal, riwayat,
+                                 # thumbnail, konversi video, interop dua arah,
+                                 # log dashboard, penolakan target, rute data
+```
+
+Yang **sudah** ada di Rust: 25 rute HTTP + statis, gerbang akses (cookie,
+header, `?k=`, sesi PIN, loopback), discovery UDP (broadcast per interface
+dari prefix, anti-hijack, lease 10 s, `LANDROP_PEERS`), transfer TCP penuh
+(frame, accept/reject, resume ber-identitas, partial saat putus, batal
+eksplisit, teks + `text-saved`, batas frame/koneksi/idle, sweep), settings,
+PIN dashboard, log ring buffer, riwayat, thumbnail foto+video lewat cache
+JPEG, konversi video sebelum kirim (mp4 / mp3 untuk audio saja), `/system/disk`.
+
+Yang **belum**:
+
+- `npm start` masih menjalankan Node; binary Rust dijalankan terpisah. Node
+  belum turun pangkat jadi oracle saja (fase 5).
+- Shell desktop masih Electron; Tauri belum ditulis (fase 6).
+- ffmpeg dipanggil sebagai proses luar, tidak di-bundle. Mesin tanpa ffmpeg
+  mengirim video apa adanya dan hanya punya thumbnail gambar — sama dengan
+  Node, tapi artinya "sudah jalan" di laptop pengembang tidak otomatis berarti
+  "sudah jalan" di mesin pengguna. Perlu diuji di satu mesin tanpa ffmpeg.
+- Jalur Windows (folder simpan per kategori, `WINDOWS_SAVE_DIR`) sudah ditulis
+  tapi belum pernah dijalankan di Windows.
+- Autostart, tray, single-instance: masih milik shell Electron.
+- `check-access`, `check-security`, `check-settings`, `check-routing` adalah
+  pemeriksa yang membaca **sumber Node** (regex atas `server/*.js`). Itu memang
+  tidak bisa dijalankan ke Rust dan tidak dijadwalkan untuk itu; penggantinya
+  untuk inti Rust adalah `check-rust-core.js` + `check-parity.js`.
 
 ## 15. Lampiran B — Daftar periksa manual shell desktop (fase 6)
 

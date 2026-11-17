@@ -48,7 +48,10 @@
     "check:access": "node scripts/check-access.js",
     "check:transfer-integrity": "node scripts/check-transfer-integrity.js",
     "check:resume": "node scripts/check-resume.js",
-    "check:parity": "node scripts/check-parity.js"
+    "check:parity": "node scripts/check-parity.js",
+    "check:rust-core": "node scripts/check-rust-core.js",
+    "core:build": "cargo build --release --manifest-path rust/Cargo.toml",
+    "core": "node scripts/run-core.js"
   },
   "keywords": [
     "lan",

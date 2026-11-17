@@ -121,6 +121,24 @@ Reasoning lives in [`docs/adr/`](docs/adr) — start with
 [ADR-0007](docs/adr/0007-keamanan-berlapis-tanpa-autentikasi.md) and
 [ADR-0011](docs/adr/0011-batas-frame-tcp-dan-host-guard.md).
 
+## Rust core
+
+The server core is being ported to Rust (`rust/`) with the same wire protocol:
+same TCP frames, same UDP announce, same resume key, same access cookie. The
+frontend in `public/` is served as-is, no build step. The two implementations can
+talk to each other — a Rust sender to a Node receiver and back are both tested.
+
+```bash
+npm run core:build                   # cargo build --release
+npm run core                         # run the Rust core on its own
+LANDROP_CORE=rust npm run electron-dev   # Electron shell, Rust server
+node scripts/check-parity.js         # Node vs Rust, per endpoint
+node scripts/check-rust-core.js      # two Rust instances + one Node, end to end
+```
+
+Reasoning and the phase plan: [`docs/adr/0013`](docs/adr/0013-port-inti-ke-rust.md),
+[`docs/prd-port-rust.md`](docs/prd-port-rust.md).
+
 ## Changelog
 
 Latest version: **1.2.16** — a documentation-only release: the README that shipped with 1.2.15 still said 1.2.12.
