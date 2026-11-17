@@ -55,6 +55,11 @@ Positif:
 - Pemeriksa regresi jadi lebih bermakna: `check-rust-core.js` menguji sistem
   (dua instance saling kirim, resume setelah putus), bukan bentuk kode.
 
+- Dashboard tetap berfungsi tanpa perubahan frontend: `/status` mengisi field
+  `node` dengan penanda runtime Rust, `/logs` berisi aktivitas transfer nyata
+  (bukan array kosong), dan `/thumbnail` memakai gerbang kunci/PIN yang sama
+  ketatnya dengan Node.
+
 Biaya:
 
 - Dua bahasa di satu repo sampai fase 7 selesai. Setiap perubahan protokol

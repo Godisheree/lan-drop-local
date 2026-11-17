@@ -385,6 +385,11 @@ eksplisit, teks + `text-saved`, batas frame/koneksi/idle, sweep), settings,
 PIN dashboard, log ring buffer, riwayat, thumbnail foto+video lewat cache
 JPEG, konversi video sebelum kirim (mp4 / mp3 untuk audio saja), `/system/disk`.
 
+Frontend `public/` yang tidak diubah juga sudah dijalankan langsung di browser
+terhadap inti Rust: dashboard login PIN, daftar perangkat, kirim teks, dan
+kirim file 40 KB lewat file picker — berkas mendarat identik di folder simpan
+instance tujuan (diverifikasi `ls` + byte).
+
 Yang **belum**:
 
 - `npm start` masih menjalankan Node; binary Rust dijalankan terpisah. Node

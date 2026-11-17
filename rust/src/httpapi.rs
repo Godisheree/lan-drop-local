@@ -473,6 +473,10 @@ pub async fn status(
         "commit": state.commit,
         "pid": std::process::id(),
         "runtime": "rust",
+        // Dashboard lama menampilkan field `node` (versi runtime). Di inti Rust
+        // field itu diisi penanda runtime yang sebenarnya, bukan dikosongkan —
+        // kolom kosong terbaca seperti server rusak.
+        "node": format!("rust {}", env!("CARGO_PKG_VERSION")),
         "platform": std::env::consts::OS,
         "uptimeSeconds": state.uptime_seconds(),
         "startedAt": state.started_at_ms,
