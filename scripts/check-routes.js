@@ -199,10 +199,27 @@ async function transferText(from, to, targetIp, targetTransferPort, text) {
     body: JSON.stringify({ targetIp, targetPort: targetTransferPort, fileName: 'Teks' }),
   });
 
-  // Teks langsung diterima tanpa modal.
+  // Teks dari peer yang telah ditemukan diterima otomatis. Kalau announce
+  // belum tiba, request tetap pending dan perlu disetujui (pada produksi ini
+  // ditampilkan sebagai modal). Test menerima lewat API setelah memastikan
+  // statusnya pending, supaya race discovery tidak membuat tes flakey.
+  let sendStatus = null;
   for (let i = 0; i < 40; i++) {
-    const status = await getJson(`http://127.0.0.1:${from.port}/transfer/status/${requestId}`);
-    if (status.status === 'accepted') break;
+    sendStatus = await getJson(`http://127.0.0.1:${from.port}/transfer/status/${requestId}`);
+    if (sendStatus.status === 'accepted') break;
+    if (sendStatus.status === 'pending') {
+      const pending = await getJson(`http://127.0.0.1:${to.port}/transfer/pending`);
+      const req = pending.find((p) => p.requestId === requestId)
+        || pending.find((p) => p.kind === 'text' && p.senderName === from.deviceName);
+      if (req) {
+        await getJson(`http://127.0.0.1:${to.port}/transfer/respond`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId: req.requestId, accept: true }),
+        });
+        break;
+      }
+    }
     await sleep(150);
   }
 
@@ -242,8 +259,30 @@ function clearDir(dir) {
   }
 }
 
+/**
+ * Tunggu sampai kedua instance saling melihat lewat discovery.
+ *
+ * Teks hanya diterima otomatis dari peer yang sedang terlihat: kiriman dari
+ * alamat yang belum dikenal masuk antrean persetujuan (itu yang mencegah klien
+ * acak di Wi-Fi menaruh teks di kotak masuk). Announce berjalan tiap beberapa
+ * detik, jadi tes harus menunggu, bukan mengirim lebih dulu.
+ */
+async function waitForPeer(port, name, attempts = 40) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const devices = await getJson(`http://127.0.0.1:${port}/devices`);
+      if (Array.isArray(devices) && devices.some((d) => d.deviceName === name)) return true;
+    } catch (_) {}
+    await sleep(250);
+  }
+  return false;
+}
+
 async function runRoute(label, a, b, targetIp, procs) {
   console.log(`\n[${label}] ${targetIp}`);
+
+  const seen = await waitForPeer(a.port, b.deviceName);
+  if (!seen) console.log(`    (peer ${b.deviceName} belum terlihat lewat discovery)`);
 
   const dumpLogs = () => {
     for (const [name, proc] of Object.entries(procs || {})) {
@@ -349,8 +388,8 @@ async function main() {
     await waitForServer(portA);
     await waitForServer(portB);
 
-    const a = { port: portA, transferPort: transferA, saveDir: saveA };
-    const b = { port: portB, transferPort: transferB, saveDir: saveB };
+    const a = { port: portA, transferPort: transferA, saveDir: saveA, deviceName: 'MesinA' };
+    const b = { port: portB, transferPort: transferB, saveDir: saveB, deviceName: 'MesinB' };
 
     // 1. Loopback
     await runRoute('loopback', a, b, '127.0.0.1', procs);

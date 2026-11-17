@@ -9,6 +9,7 @@ const thumbnail = require('./thumbnail');
 const history = require('./history');
 const settings = require('./settings');
 const logbus = require('./logbus');
+const discovery = require('./discovery');
 
 // ===================== Konstanta =====================
 // Port transfer diambil dari server/ports.js, bukan angka tetap: kalau portnya
@@ -85,6 +86,8 @@ const transferProgress = new Map(); // requestId -> { fileName, fileSize, bytesT
 let receivedTexts = []; // { id, senderName, text, timestamp } — teks masuk, diambil frontend via polling
 const TEXT_TTL = 10 * 60 * 1000; // text received dibersihkan setelah 10 menit
 let tcpServer = null;
+let sweepTimer = null;
+let staleCleanupTimer = null;
 
 // ===================== Frame Parser =====================
 
@@ -103,6 +106,26 @@ let tcpServer = null;
  * buang cek-nya.
  */
 const MAX_FRAME_BYTES = 64 * 1024;
+
+// Batas teks satu pesan. Teks disimpan di RAM (bukan di disk), jadi tanpa
+// batas satu pengirim bisa mengisi memori penerima lewat fitur "kirim teks".
+const MAX_TEXT_BYTES = 1024 * 1024;
+
+// Socket penerima yang tidak mengirim apa pun selama ini ditutup. Tanpa
+// timeout, permintaan transfer yang tidak pernah diterima/ditolak menahan
+// socket selamanya — penyerang cukup membuka banyak koneksi lalu diam.
+const CONNECTION_IDLE_TIMEOUT = 120 * 1000;
+
+// Jumlah koneksi TCP masuk bersamaan. Satu perangkat wajar membuka beberapa
+// (satu per file dalam batch), tapi tidak tak terbatas.
+const MAX_TCP_CONNECTIONS = 64;
+
+// Entri progres/permintaan keluar disimpan sebentar setelah selesai supaya
+// frontend masih bisa membacanya, lalu dibuang. Dulu tidak pernah dibuang:
+// tiap transfer meninggalkan satu entri (beserta referensi socket) selamanya.
+const TRANSFER_RETENTION = 10 * 60 * 1000;
+const SWEEP_INTERVAL = 60 * 1000;
+const STALE_CLEANUP_INTERVAL = 6 * 60 * 60 * 1000;
 
 class FrameParser {
   /**
@@ -231,12 +254,42 @@ function resolveSaveDir(safeName) {
   return dir;
 }
 
+/**
+ * Sumber transfer ini boleh dipercaya untuk diterima tanpa persetujuan?
+ *
+ * Ya kalau datang dari mesin ini sendiri (loopback) atau dari alamat peer yang
+ * sedang terlihat lewat discovery. Bukan "autentikasi": peer di LAN tetap
+ * bisa announce lalu mengirim — itu memang janji produk (drop box tanpa
+ * setup). Yang ditutup: klien acak (curl, browser tetangga, skrip) yang tidak
+ * pernah jadi bagian dari jaringan LAN DROP.
+ *
+ * @param {string|null} address
+ * @returns {boolean}
+ */
+function isTrustedSource(address) {
+  const addr = String(address || '').replace(/^::ffff:/, '').split('%')[0];
+  if (!addr) return false;
+  if (addr === '::1' || addr === '::' || addr.startsWith('127.')) return true;
+  try {
+    return discovery.isKnownPeerAddress(addr);
+  } catch (_) {
+    return false;
+  }
+}
+
 // ===================== Resume: identitas transfer & partial =====================
-// Key = identitas stabil (pengirim + file). Dipakai penerima buat nyocokin
-// partial pas pengirim ngirim ulang file yang sama (setelah putus/retry).
-function makeTransferKey(senderName, batchId, fileName, fileSize) {
+// Key = identitas stabil SATU FILE dari SATU pengirim.
+//
+// Kenapa `senderId` + `resumeId` ikut: dulu key cuma nama+ukuran, jadi dua
+// file berbeda yang kebetulan bernama dan berukuran sama akan dianggap file
+// yang sama, lalu disambung jadi satu. Hasilnya file rusak yang dilaporkan
+// "berhasil" — bukan kegagalan yang kelihatan.
+//
+// `resumeId` dibuat pengirim sekali per file dan dipakai ulang saat "Kirim
+// ulang", jadi resume tetap bekerja untuk percobaan yang memang lanjutan.
+function makeTransferKey(senderId, resumeId, fileName, fileSize) {
   return crypto.createHash('sha1')
-    .update(`${senderName || ''}|${batchId || ''}|${fileName || ''}|${fileSize || 0}`)
+    .update(`${senderId || ''}|${resumeId || ''}|${fileName || ''}|${fileSize || 0}`)
     .digest('hex')
     .slice(0, 16);
 }
@@ -278,6 +331,43 @@ function sanitizeFileName(name) {
     .trim();
   if (!n || n === '.' || n === '..') n = 'file';
   return n.slice(0, 200);
+}
+
+/**
+ * Klaim nama file tujuan secara atomik.
+ *
+ * Dua pengirim bisa mengirim file bernama sama pada saat yang bersamaan.
+ * Versi lama memilih kandidat dengan `existsSync` lalu membuat write stream
+ * belakangan — di antara dua langkah itu keduanya bisa memilih nama yang sama
+ * dan saling menimpa. Di sini klaimnya memakai open(O_EXCL): yang kalah dapat
+ * EEXIST dan lanjut ke nomor berikutnya.
+ *
+ * @param {string} saveDir
+ * @param {string} safeName
+ * @returns {{finalPath: string, partPath: string}|null}
+ */
+function claimPartPath(saveDir, safeName) {
+  const ext = path.extname(safeName);
+  const base = path.basename(safeName, ext);
+
+  for (let i = 0; i < 10000; i++) {
+    const name = i === 0 ? safeName : `${base} (${i})${ext}`;
+    const finalPath = path.join(saveDir, name);
+    const partPath = finalPath + PART_SUFFIX;
+
+    // Nama final sudah dipakai file lain? Lanjut nomor berikutnya.
+    if (fs.existsSync(finalPath)) continue;
+
+    try {
+      const fd = fs.openSync(partPath, 'wx');
+      fs.closeSync(fd);
+      return { finalPath, partPath };
+    } catch (err) {
+      if (err.code === 'EEXIST') continue; // sudah diklaim proses lain
+      throw err;
+    }
+  }
+  return null;
 }
 
 // Pastikan folder simpan + subfolder kategori ada sejak startup. Kalau drive
@@ -533,6 +623,19 @@ function startRawReceive(requestId, req) {
       if (buf.length < 4) return;
       expectedLen = buf.readUInt32BE(0);
       buf = buf.slice(4);
+
+      // Batas yang sama dengan FrameParser. Tanpa ini, jalur file-start
+      // menerima prefix 4-byte apa pun: peer cukup mengaku "frame 4 GB" lalu
+      // mengalirkan data sampai RAM penerima habis. FrameParser (fase
+      // handshake) sudah membatasi; pembaca kedua ini dulu tidak.
+      if (expectedLen > MAX_FRAME_BYTES) {
+        console.warn(`[Transfer] ⚠️ frame metadata ${requestId} ditolak: ${expectedLen} byte (maks ${MAX_FRAME_BYTES})`);
+        socket.destroy();
+        const p = transferProgress.get(requestId);
+        if (p && p.status === 'transferring') p.status = 'failed';
+        pendingRequests.delete(requestId);
+        return;
+      }
     }
     if (buf.length < expectedLen) return;
 
@@ -542,7 +645,19 @@ function startRawReceive(requestId, req) {
       if (meta.type === 'text') {
         // ===== Teks: baca sisa payload, simpan in-memory, TANPA tulis ke disk =====
         socket.removeListener('data', metaHandler);
-        const textLength = meta.length || Infinity; // byte length payload UTF-8
+
+        // Panjang teks adalah KLAIM pengirim dan dulu dipakai apa adanya
+        // (`meta.length || Infinity`): satu frame tanpa `length` membuat
+        // penerima menampung byte sampai socket ditutup — RAM habis tanpa
+        // batas. Sekarang wajib angka dan dibatasi MAX_TEXT_BYTES.
+        const textLength = Number(meta.length);
+        if (!Number.isInteger(textLength) || textLength < 0 || textLength > MAX_TEXT_BYTES) {
+          console.warn(`[Transfer] ⚠️ text ${requestId} rejected: implausible length ${meta.length}`);
+          socket.destroy();
+          pendingRequests.delete(requestId);
+          return;
+        }
+
         let chunks = [buf.slice(expectedLen)]; // data yang udah ikut dalam buffer
         let collected = chunks[0].length;
         let finished = false;
@@ -576,6 +691,13 @@ function startRawReceive(requestId, req) {
           req.status = 'completed';
           history.add({ direction: 'receive', fileName: 'Teks', fileSize: 0, peer: req.senderName });
           console.log(`[Transfer] ✅ ${requestId} — text received (${text.length} chars) from ${req.senderName}`);
+
+          // ACK eksplisit. Dulu penerima cuma menutup socket, dan pengirim
+          // menganggap "selesai" begitu socket tertutup — jadi teks yang
+          // tidak pernah mendarat tetap tercatat terkirim.
+          try {
+            sendFramedMessage(socket, { type: 'text-saved', length: text.length });
+          } catch (_) {}
           socket.end();
         }
 
@@ -591,7 +713,11 @@ function startRawReceive(requestId, req) {
         const safeName = sanitizeFileName(meta.fileName || req.fileName || 'file');
         // Key resume: pakai dari request frame (nama+size upload asli) supaya
         // stabil walaupun isinya dikonversi ffmpeg di sisi pengirim
-        const transferKey = req.transferKey || makeTransferKey(req.senderName, req.batchId, safeName, actualSize);
+        // Key sudah dihitung di frame transfer-request (dari nama+ukuran
+        // ASLI, sebelum transcoding). Fallback hanya untuk klien lama yang
+        // belum mengirim resumeId/senderId.
+        const transferKey = req.transferKey
+          || makeTransferKey(req.senderId, req.resumeId, safeName, actualSize);
         req.transferKey = transferKey;
 
         // ===== Guard ukuran nyata (transfer yang diterima otomatis) =====
@@ -634,6 +760,14 @@ function startRawReceive(requestId, req) {
         let partPath = finalPath + PART_SUFFIX;
 
         // ===== Resume: cek partial dari percobaan sebelumnya =====
+        //
+        // Hanya menyambung kalau IDENTITAS file-nya sama: pengirim yang sama,
+        // `resumeId` yang sama (dibuat sekali per file, dipakai ulang saat
+        // "Kirim ulang"), nama sama, ukuran sama. Kunci lama hanya memakai
+        // nama+ukuran, jadi dua file BERBEDA dengan nama dan ukuran kebetulan
+        // sama akan disambung jadi satu — hasilnya file rusak yang dilaporkan
+        // "berhasil". Terbukti: 2000 byte file A + 2000 byte file B, status
+        // completed.
         let startBytes = 0;
         const partMeta = readPartMeta(transferKey);
         if (partMeta && partMeta.actualFileSize === actualSize && partMeta.partPath) {
@@ -651,18 +785,23 @@ function startRawReceive(requestId, req) {
           } catch (_) {}
         }
 
-        // Bukan resume & nama file udah ada → tambah suffix (n), jangan nimpa
-        if (startBytes === 0 && fs.existsSync(finalPath)) {
-          const ext = path.extname(safeName);
-          const base = path.basename(safeName, ext);
-          for (let i = 1; i < 10000; i++) {
-            const candidate = path.join(saveDir, `${base} (${i})${ext}`);
-            if (!fs.existsSync(candidate)) {
-              finalPath = candidate;
-              displayName = path.basename(candidate);
-              partPath = candidate + PART_SUFFIX;
-              break;
-            }
+        // Bukan resume & nama file udah ada → pakai nama "(n)" yang belum
+        // dipakai. Klaim nama dilakukan dengan open(O_EXCL) pada file .part,
+        // bukan existsSync lalu createWriteStream: dua pengirim dengan nama
+        // file sama yang datang bersamaan dulu bisa memilih kandidat yang
+        // sama dan saling menimpa.
+        if (startBytes === 0) {
+          const claimed = claimPartPath(saveDir, safeName);
+          if (claimed) {
+            finalPath = claimed.finalPath;
+            displayName = path.basename(finalPath);
+            partPath = claimed.partPath;
+          } else {
+            console.warn(`[Transfer] ${requestId} — could not claim a file name in ${saveDir}, transfer aborted`);
+            transferProgress.delete(requestId);
+            socket.end();
+            pendingRequests.delete(requestId);
+            return;
           }
         }
 
@@ -690,6 +829,12 @@ function startRawReceive(requestId, req) {
           const remaining = actualSize - startBytes;
           if (free === null || remaining > free) {
             console.warn(`[Transfer] ⏸️ ${requestId} — not enough disk space for the remaining ${remaining} byte, transfer dibatalkan`);
+            // Klaim nama di atas sudah membuat file `.part` kosong. Kalau
+            // dibiarkan, folder simpan user penuh sampah 0 byte untuk setiap
+            // kiriman yang ditolak.
+            if (startBytes === 0) {
+              try { fs.unlinkSync(partPath); } catch (_) {}
+            }
             transferProgress.delete(requestId);
             socket.end();
             pendingRequests.delete(requestId);
@@ -776,14 +921,20 @@ function startRawReceive(requestId, req) {
           writeStream.end();
         }
 
-        let peerEnded = false; // sender nutup bersih (FIN) = cancel eksplisit, bukan drop
-        socket.on('end', () => { peerEnded = true; });
-
+        // FIN BUKAN pembatalan.
+        //
+        // Dulu pengirim yang menutup tab, mematikan aplikasi, atau kehilangan
+        // Wi-Fi dengan rapi mengirim FIN — dan penerima memperlakukannya
+        // persis seperti tombol "Batal": `.landrop-part` dihapus. Akibatnya
+        // fitur "lanjutkan sampai 7 hari" tidak pernah berlaku untuk
+        // kegagalan yang paling sering terjadi. Sekarang hanya pembatalan
+        // eksplisit dari perangkat ini (req.cancelledByUser) yang membuang
+        // partial; FIN sebelum ukuran tercapai = terputus, partial disimpan.
         socket.on('close', () => {
           const p = transferProgress.get(requestId);
           if (p && p.status === 'transferring') {
-            if (req.cancelledByUser || peerEnded) {
-              // Dibatalkan user / FIN sebelum lengkap → buang partial
+            if (req.cancelledByUser) {
+              // Dibatalkan user di perangkat ini → buang partial
               p.status = 'cancelled';
               writeStream.destroy();
               fs.unlink(partPath, () => {});
@@ -791,8 +942,9 @@ function startRawReceive(requestId, req) {
             } else if (written >= actualSize) {
               p.status = 'completed';
             } else {
-              // Koneksi mati mendadak → SIMPAN partial buat resume nanti
+              // Koneksi berhenti (FIN atau RST) → SIMPAN partial buat resume
               p.status = 'failed';
+              p.reason = `interrupted at ${written}/${actualSize} bytes — partial kept, resend to resume`;
               persistPart(true);
               console.log(`[Transfer] ⚠️ ${requestId} — putus di ${written}/${actualSize}, partial kept for resume`);
             }
@@ -811,8 +963,24 @@ function startRawReceive(requestId, req) {
           }
           req.status = 'completed';
 
-          // Part → final: rename dalam satu folder = atomic, tanpa copy
+          // Part → final: rename dalam satu folder = atomic, tanpa copy.
+          // Kalau file tujuan muncul di antara klaim nama dan saat ini (mis.
+          // proses lain menulis nama yang sama), pilih nama berikutnya dulu —
+          // rename menimpa tanpa bertanya.
           try {
+            if (startBytes === 0) {
+              let target = finalPath;
+              if (fs.existsSync(target)) {
+                const ext2 = path.extname(finalPath);
+                const base2 = path.basename(finalPath, ext2);
+                for (let i = 1; i < 10000; i++) {
+                  const candidate = path.join(saveDir, `${base2} (${i})${ext2}`);
+                  if (!fs.existsSync(candidate)) { target = candidate; break; }
+                }
+              }
+              finalPath = target;
+              displayName = path.basename(finalPath);
+            }
             fs.renameSync(partPath, finalPath);
             deletePartMeta(transferKey);
 
@@ -846,7 +1014,10 @@ function startRawReceive(requestId, req) {
               });
             }
 
-            if (p) p.savedTo = finalPath;
+            if (p) {
+              p.savedTo = finalPath;
+              p.savePath = finalPath;
+            }
 
             // Daftarkan file ini supaya bisa di-thumbnail (foto/video).
             // Thumbnail dihitung server-side karena file-nya ada di
@@ -937,10 +1108,15 @@ function startRawReceive(requestId, req) {
  *
  * @param {{senderName: string, fileSize: number}} msg
  * @param {number} [resumeOffset] byte yang sudah ada di disk (tidak perlu ruang baru)
+ * @param {string|null} [senderIp] alamat asli socket pengirim (bukan klaim)
  * @returns {{accept: boolean, reason?: string}}
  */
-function decideAutoAccept(msg, resumeOffset = 0) {
-  if (!settings.isAutoApprovePeer(msg.senderName)) return { accept: false };
+function decideAutoAccept(msg, resumeOffset = 0, senderIp = null) {
+  // Nama pengirim cuma klaim; alamat socket tidak bisa dipalsukan. Discovery
+  // jadi sumber "alamat sah" untuk nama itu (lihat settings.isAutoApprovePeer).
+  if (!settings.isAutoApprovePeer(msg.senderName, senderIp, discovery.knownIpsForName)) {
+    return { accept: false };
+  }
 
   const size = Number(msg.fileSize);
   // Ukuran tidak diketahui → tidak bisa dijamin muat. Jangan tebak.
@@ -1001,6 +1177,41 @@ function listenTransfer(port, triesLeft) {
   tcpServer.listen(port, '0.0.0.0');
 }
 
+// Penanda "entri ini sudah selesai sejak kapan" — dipakai sweeper di bawah.
+const endedAt = new Map();
+
+/**
+ * Buang entri transfer yang sudah lama selesai.
+ *
+ * `transferProgress` dan `outgoingRequests` dulu tidak pernah dibersihkan
+ * saat transfer sukses (delete hanya ada di jalur error), jadi server yang
+ * hidup berhari-hari menyimpan satu objek per transfer — termasuk referensi
+ * socket yang sudah tertutup — dan terus menyajikannya lewat
+ * `/transfer/progress/:id`.
+ */
+function sweepFinishedTransfers() {
+  const now = Date.now();
+  const terminal = (status) => status && !['pending', 'accepted', 'transferring'].includes(status);
+
+  for (const [id, p] of transferProgress) {
+    if (!terminal(p.status)) { endedAt.delete(id); continue; }
+    if (!endedAt.has(id)) endedAt.set(id, now);
+    if (now - endedAt.get(id) > TRANSFER_RETENTION) {
+      transferProgress.delete(id);
+      endedAt.delete(id);
+    }
+  }
+
+  for (const [id, req] of outgoingRequests) {
+    if (!terminal(req.status)) continue;
+    if (!endedAt.has(id)) endedAt.set(id, now);
+    if (now - endedAt.get(id) > TRANSFER_RETENTION) {
+      outgoingRequests.delete(id);
+      endedAt.delete(id);
+    }
+  }
+}
+
 function startTransferServer() {
   // Idempoten: pemanggil boleh terpanggil dua kali (mis. retry listen yang
   // dulu menumpuk listener). Tanpa ini, `tcpServer` lama ditinggal tanpa
@@ -1008,18 +1219,39 @@ function startTransferServer() {
   if (tcpServer && tcpServer.listening) return;
 
   cleanupStale(); // buang upload & partial yang udah kedaluwarsa
-  ensureSaveDirExists(); // pastikan folder simpan (mis. Downloads\LAN-DROP) ada dari awal
+  ensureSaveDirExists();
+
+  // Bersihkan sampah selama server hidup, bukan cuma saat start: server di
+  // HP bisa menyala berhari-hari, dan upload yang tidak terpakai dulu baru
+  // dibuang pada restart berikutnya.
+  if (!staleCleanupTimer) {
+    staleCleanupTimer = setInterval(cleanupStale, STALE_CLEANUP_INTERVAL);
+    if (typeof staleCleanupTimer.unref === 'function') staleCleanupTimer.unref();
+  }
+  if (!sweepTimer) {
+    sweepTimer = setInterval(sweepFinishedTransfers, SWEEP_INTERVAL);
+    if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
+  } // pastikan folder simpan (mis. Downloads\LAN-DROP) ada dari awal
   tcpServer = net.createServer((socket) => {
     console.log(`[Transfer] 📥 Incoming TCP connection from ${socket.remoteAddress}:${socket.remotePort}`);
+
+    // Socket yang diam (menunggu accept yang tak pernah datang, atau file-start
+    // yang tak pernah dikirim) tidak boleh menahan slot selamanya.
+    socket.setTimeout(CONNECTION_IDLE_TIMEOUT);
+    socket.on('timeout', () => {
+      console.warn(`[Transfer] ⏱️ connection from ${socket.remoteAddress} idle ${CONNECTION_IDLE_TIMEOUT / 1000}s — closing`);
+      socket.destroy();
+    });
     const parser = new FrameParser((msg) => {
       if (msg.type === 'transfer-request') {
         const requestId = crypto.randomBytes(4).toString('hex');
-        // Key resume: identitas stabil pengirim+file. Kalau pengirim ngirim
-        // ulang file yang sama (retry setelah putus), key-nya sama dan
-        // penerima bisa lanjutin dari partial sebelumnya.
+        // Key resume: identitas stabil file ini. `resumeId` datang dari
+        // pengirim (dibuat sekali per file, dipakai ulang saat "Kirim ulang"),
+        // jadi resume tetap jalan untuk percobaan lanjutan tapi tidak pernah
+        // menyambung dua file berbeda.
         const transferKey = msg.kind === 'text'
           ? null
-          : makeTransferKey(msg.senderName, msg.batchId, msg.fileName, msg.fileSize);
+          : makeTransferKey(msg.senderId, msg.resumeId, msg.fileName, msg.fileSize);
         const entry = {
           socket,
           parser,
@@ -1030,6 +1262,11 @@ function startTransferServer() {
           // Alamat IP pengirim dari socket — satu-satunya identitas yang tidak
           // bisa dipalsukan pengirim lewat payload.
           senderIp: socket.remoteAddress || null,
+          // Pengirim dikenal? Hanya peer yang sedang terlihat lewat discovery
+          // (atau proses di mesin ini sendiri) yang boleh diterima tanpa
+          // persetujuan. Klien acak di Wi-Fi — yang tidak pernah announce —
+          // harus muncul di antrean dulu.
+          knownSender: isTrustedSource(socket.remoteAddress),
           batchId: msg.batchId, // optional: grouping multi-file
           kind: msg.kind,       // 'file' | 'text' — text langsung diterima, tanpa modal
           transferKey,
@@ -1052,14 +1289,22 @@ function startTransferServer() {
         pendingRequests.set(requestId, entry);
         console.log(`[Transfer] Incoming request ${requestId}: ${msg.fileName} (${msg.fileSize} bytes) from ${msg.senderName}`);
 
-        // Text: langsung auto-accept + terima frame isi, tanpa menunggu modal
+        // Teks: langsung diterima TANPA modal, tapi hanya dari pengirim yang
+        // dikenal. Dulu siapa pun yang menyambung ke port transfer bisa
+        // menaruh teks di kotak masuk korban tanpa lewat HTTP sama sekali.
         if (msg.kind === 'text') {
-          respondToRequest(requestId, true);
+          if (entry.knownSender) {
+            respondToRequest(requestId, true);
+          } else {
+            console.log(`[Transfer] 📩 text from unknown ${socket.remoteAddress} — queued for approval`);
+          }
           return;
         }
 
         // Terima otomatis (kalau diaktifkan) — jalan tanpa frontend.
-        const decision = decideAutoAccept(msg, entry.resumeOffset);
+        const decision = entry.knownSender
+          ? decideAutoAccept(msg, entry.resumeOffset, entry.senderIp)
+          : { accept: false };
         if (decision.accept) {
           entry.auto = true;
           console.log(`[Transfer] ⚡ ${requestId} accepted automatically from ${msg.senderName}`);
@@ -1099,6 +1344,10 @@ function startTransferServer() {
     });
   });
 
+  // Batas koneksi bersamaan: tanpa ini, siapa pun di jaringan bisa membuka
+  // ribuan koneksi dan menghabiskan file descriptor.
+  tcpServer.maxConnections = MAX_TCP_CONNECTIONS;
+
   listenTransfer(ports.transfer, MAX_PORT_TRIES);
 }
 
@@ -1120,6 +1369,14 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
       fileSize: metadata.fileSize,
       senderName: metadata.senderName,
       senderId: metadata.senderId,
+      // Kunci perangkat penerima. Tanpa ini, port transfer TCP adalah pintu
+      // terbuka: siapa pun di Wi-Fi bisa menyambung langsung dan mengirim
+      // teks (yang diterima otomatis) atau file (kalau auto-approve menyala),
+      // tanpa pernah lewat HTTP yang sudah dijaga kunci.
+      // Identitas file untuk resume: dibuat sekali oleh pengirim dan dipakai
+      // ulang saat "Kirim ulang". Tanpa ini, penerima hanya punya nama+ukuran
+      // dan bisa menyambung dua file berbeda.
+      resumeId: metadata.resumeId || null,
       batchId: metadata.batchId, // optional: grouping multi-file
       kind: metadata.kind || 'file'
     });
@@ -1167,6 +1424,7 @@ function sendTransferRequest(targetIp, targetPort, metadata) {
     targetPort,
     fileName: metadata.fileName,
     fileSize: metadata.fileSize,
+    resumeId: metadata.resumeId || null,
     batchId: metadata.batchId, // optional: grouping multi-file
     peerName: metadata.peerName, // untuk history
     createdAt: Date.now()
@@ -1389,17 +1647,32 @@ async function startTextSend(requestId, text) {
   sendFramedMessage(socket, { type: 'text', length: Buffer.byteLength(text, 'utf-8') });
   socket.write(Buffer.from(text, 'utf-8'));
 
+  // ACK dari penerima: satu-satunya bukti teksnya benar-benar diterima.
+  // Dulu status "terkirim" dipasang begitu socket ditutup, jadi teks yang
+  // tidak pernah mendarat tetap tercatat sukses.
+  let textAcked = false;
+  const ackParser = new FrameParser((msg) => {
+    if (msg.type === 'text-saved') textAcked = true;
+  }, () => { socket.destroy(); });
+  socket.on('data', (data) => ackParser.feed(data));
+
   socket.on('close', () => {
     const p = transferProgress.get(requestId);
-    if (p && p.status === 'transferring') p.status = 'completed';
-    req.status = 'completed';
+    const size = Buffer.byteLength(text, 'utf-8');
+    if (p && p.status === 'transferring') {
+      p.status = textAcked ? 'completed' : 'unconfirmed';
+      if (!textAcked) p.reason = 'penerima tidak mengonfirmasi teks diterima';
+    }
+    req.status = p ? p.status : 'disconnected';
     history.add({
       direction: 'send',
       fileName: 'Teks',
-      fileSize: Buffer.byteLength(text, 'utf-8'),
-      peer: req.peerName || req.targetIp
+      fileSize: size,
+      peer: req.peerName || req.targetIp,
+      status: p ? p.status : 'unconfirmed',
+      reason: textAcked ? null : 'penerima tidak mengonfirmasi teks diterima'
     });
-    console.log(`[Transfer] ✅ ${requestId} — teks terkirim, dikonfirmasi penerima`);
+    console.log(`[Transfer] ${textAcked ? '✅' : '⚠️'} ${requestId} — teks ${textAcked ? 'terkirim & dikonfirmasi penerima' : 'terkirim tanpa konfirmasi'}`);
   });
 
   return { requestId };
@@ -1641,6 +1914,8 @@ function cancelIncomingTransfer(requestId) {
 }
 
 function stopTransferServer() {
+  if (sweepTimer) { clearInterval(sweepTimer); sweepTimer = null; }
+  if (staleCleanupTimer) { clearInterval(staleCleanupTimer); staleCleanupTimer = null; }
   if (tcpServer) { tcpServer.close(); tcpServer = null; }
   for (const [, req] of pendingRequests) { if (req.socket) req.socket.destroy(); }
   pendingRequests.clear();
@@ -1674,4 +1949,8 @@ module.exports = {
   assertInsideUploads, // diekspor buat regression test (scripts/check-security.js)
   FrameParser, // diekspor buat regression test batas frame
   MAX_FRAME_BYTES,
+  MAX_TEXT_BYTES,
+  makeTransferKey,
+  claimPartPath, // diekspor buat regression test klaim nama file
+  sweepFinishedTransfers,
 };

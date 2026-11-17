@@ -330,5 +330,9 @@
   "status.node": "Node",
   "status.platform": "Platform",
   "status.uptime": "Uptime",
-  "status.httpPort": "HTTP port"
+  "status.httpPort": "HTTP port",
+  "pairing.title": "This device is not paired yet",
+  "pairing.body": "LAN DROP uses one access key per device. Open this page on a device that is already connected and scan the QR in the \"Connect\" panel — or paste its invite link here.",
+  "pairing.hint": "A link without the key grants no access to any data. That is what keeps a neighbour on the same Wi-Fi from seeing your devices.",
+  "pairing.retry": "Try again"
 }

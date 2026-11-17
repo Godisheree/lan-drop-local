@@ -221,6 +221,7 @@ export function addTransferItem(requestId, data) {
       fileName: data.fileName,
       fileSize: data.fileSize,
       batchId: data.batchId,
+      resumeId: data.resumeId,
       ip: data.ip,
       port: data.port,
       targetName: data.targetName,
@@ -630,6 +631,13 @@ export async function cancelTransfer(requestId, role) {
   }
 }
 
+function newResumeId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
 /**
  * Kirim ulang file yang gagal. Memakai batchId yang sama supaya peer bisa
  * melanjutkan dari partial yang sudah ada.
@@ -649,6 +657,10 @@ export async function retryTransfer(requestId, onResent) {
       targetPort: info.port,
       fileName: info.fileName,
       fileSize: info.fileSize,
+      // resumeId yang sama seperti percobaan pertama → penerima melanjutkan
+      // dari partial yang ada. Kalau hilang (item lama), buat baru: lebih baik
+      // mulai dari nol daripada menyambung file yang salah.
+      resumeId: info.resumeId || newResumeId(),
       batchId: info.batchId,
       targetName: info.targetName,
     });

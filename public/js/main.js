@@ -437,8 +437,19 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('beforeunload', stopPolling);
 
+// Perangkat tanpa kunci akses: tampilkan layar pairing, bukan toast. Ini
+// didengar dari lapisan API supaya satu 401 di mana pun berakhir sama.
+window.addEventListener('landrop:pairing-required', () => {
+  import('./features/pairing.js').then((m) => m.showPairingScreen());
+});
+
 init().catch(async (err) => {
   console.error('[app] gagal init:', err);
+
+  // Belum dipasangkan bukan kegagalan aplikasi — layar pairing sudah tampil,
+  // jadi jangan tambah toast error di atasnya.
+  if (err && err.pairing) return;
+
   // Elemen wajib hilang = gejala HTML dan JS beda versi (cache service worker
   // tertinggal). Buang cache lalu muat ulang sekali sebelum menyerah — biar
   // user tidak melihat pesan teknis untuk masalah cache.

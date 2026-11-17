@@ -330,5 +330,9 @@
   "status.node": "Node",
   "status.platform": "Platform",
   "status.uptime": "Lama aktif",
-  "status.httpPort": "Port HTTP"
+  "status.httpPort": "Port HTTP",
+  "pairing.title": "Perangkat ini belum dipasangkan",
+  "pairing.body": "LAN DROP memakai satu kunci akses per perangkat. Buka halaman ini dari perangkat yang sudah tersambung, lalu pindai QR di panel \"Sambung\" — atau tempel tautan undangannya di sini.",
+  "pairing.hint": "Tautan yang tidak memuat kunci tidak memberi akses ke data apa pun. Ini yang membuat tetangga di Wi-Fi yang sama tidak bisa melihat perangkatmu.",
+  "pairing.retry": "Coba lagi"
 }

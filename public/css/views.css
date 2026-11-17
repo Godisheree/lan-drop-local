@@ -259,3 +259,58 @@
 
   .btn-file-pick { font-size: var(--text-xs); }
 }
+
+/* =========================================================================
+   Layar pairing — perangkat ini belum punya kunci akses.
+   Sengaja menutupi seluruh viewport: aplikasi tidak bisa dipakai sebelum
+   perangkat dipasangkan, jadi setengah UI kosong cuma bikin bingung.
+   ========================================================================= */
+.pairing-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6, 24px);
+  background: var(--color-bg, #0d0d12);
+}
+
+.pairing-card {
+  max-width: 34rem;
+  width: 100%;
+  background: var(--color-surface, #17171f);
+  border: 1px solid var(--color-border, #2a2a36);
+  border-radius: var(--radius-lg, 18px);
+  padding: var(--space-8, 32px);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
+}
+
+.pairing-card h1 {
+  margin: 0 0 var(--space-3, 12px);
+  font-size: var(--text-xl, 1.4rem);
+  line-height: 1.25;
+}
+
+.pairing-card p {
+  margin: 0 0 var(--space-3, 12px);
+  color: var(--color-text-muted, #a2a2b4);
+  line-height: 1.55;
+}
+
+.pairing-hint {
+  font-size: var(--text-sm, 0.875rem);
+  border-left: 2px solid var(--color-accent, #8b6cff);
+  padding-left: var(--space-3, 12px);
+}
+
+.pairing-detail {
+  font-size: var(--text-sm, 0.875rem);
+  font-family: var(--font-mono, monospace);
+  opacity: 0.8;
+}
+
+.pairing-actions {
+  margin-top: var(--space-5, 20px);
+  display: flex;
+  gap: var(--space-3, 12px);
+}
