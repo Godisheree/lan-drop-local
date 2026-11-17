@@ -12,6 +12,7 @@ const tailscale = require('./tailscale');
 const history = require('./history');
 const settings = require('./settings');
 const pin = require('./pin');
+const access = require('./access');
 const thumbnail = require('./thumbnail');
 const tray = require('./tray');
 const { securityHeaders, rateLimit, sameOriginGuard, hostGuard, isAllowedTargetIp, isSelfTarget } = require('./security');
@@ -57,7 +58,15 @@ const ports = require('./ports');
 app.use(securityHeaders);
 app.use(hostGuard);
 app.use(sameOriginGuard);
+// Bootstrap pairing: browser lokal dapat cookie kunci otomatis, dan `?k=`
+// dari QR ditukar jadi cookie lalu dialihkan ke alamat bersih.
+app.use(access.bootstrapPairing);
 app.use(express.json());
+
+// Semua endpoint di bawah ini butuh kunci perangkat (cookie hasil pairing /
+// header X-Landrop-Key) atau sesi PIN dashboard. Halaman statis tetap terbuka
+// — isinya kerangka aplikasi, bukan data.
+const requireAccess = access.requireAccess;
 
 // Manifest & service worker butuh Content-Type & Cache-Control khusus.
 // Diletakkan SEBELUM express.static supaya header-nya kita kendalikan.
@@ -170,18 +179,31 @@ app.use(express.static(path.join(__dirname, '../public')));
 // listLANIPv4() (interface-nya difilter sebagai virtual), jadi tidak
 // mungkin dobel.
 function getLanUrls() {
-  const urls = listLANIPv4().map(({ name, address }) => ({
-    ip: address,
-    url: `http://${address}:${ports.http}`,
-    label: name,
-    via: 'lan',
-  }));
+  // Kunci pairing ikut di dalam URL: QR di panel "Sambung" adalah cara
+  // perangkat lain mendapatkan akses, dan memindai satu QR tetap "nol setup".
+  //
+  // URL yang ditampilkan = URL yang disalin = isi QR. Menyembunyikan kunci
+  // hanya di teks tidak menambah keamanan: QR di layar yang sama sudah memuat
+  // kunci itu, dan siapa pun yang bisa memotret layar ini juga bisa memindai
+  // QR-nya.
+  const withKey = (base) => `${base}/?k=${settings.getAccessKey()}`;
+
+  const urls = listLANIPv4().map(({ name, address }) => {
+    const base = `http://${address}:${ports.http}`;
+    return {
+      ip: address,
+      url: withKey(base),
+      label: name,
+      via: 'lan',
+    };
+  });
 
   const tsIP = tailscale.getSelfTailscaleIP();
   if (tsIP) {
+    const base = `http://${tsIP}:${ports.http}`;
     urls.push({
       ip: tsIP,
-      url: `http://${tsIP}:${ports.http}`,
+      url: withKey(base),
       label: 'Tailscale',
       via: 'tailscale',
     });
@@ -190,7 +212,7 @@ function getLanUrls() {
   return urls;
 }
 
-app.get('/me', (req, res) => {
+app.get('/me', requireAccess, (req, res) => {
   res.json({ deviceName: DEVICE_NAME, urls: getLanUrls() });
 });
 
@@ -199,7 +221,7 @@ app.get('/me', (req, res) => {
 // Tujuannya: "device gak pernah muncul" harus punya jawaban yang jelas.
 // Isinya HANYA status (tanpa path absolut, tanpa stack trace) — kelas data
 // yang sama dengan /devices + /me.
-app.get('/discovery/status', (req, res) => {
+app.get('/discovery/status', requireAccess, (req, res) => {
   res.json({
     deviceName: DEVICE_NAME,
     ...discovery.getDiagnostics(),
@@ -226,7 +248,7 @@ function readCommit() {
 }
 
 // GET /status — identitas proses server (read-only).
-app.get('/status', (req, res) => {
+app.get('/status', requireAccess, (req, res) => {
   let version = '';
   try {
     version = require('../package.json').version;
@@ -267,7 +289,7 @@ app.get('/logs', (req, res) => {
 });
 
 // GET /transfer/active — transfer yang sedang berjalan (kirim & terima).
-app.get('/transfer/active', (req, res) => {
+app.get('/transfer/active', requireAccess, (req, res) => {
   res.json(transfer.getActiveTransfers());
 });
 
@@ -276,7 +298,7 @@ app.get('/transfer/active', (req, res) => {
 // `?via=lan|tailscale` memilih jalur alamat yang dipakai: kalau user buka
 // aplikasi lewat link Tailscale, peer juga dijangkau lewat Tailscale.
 // Tanpa parameter ini, jalur LAN yang dipakai.
-app.get('/devices', (req, res) => {
+app.get('/devices', requireAccess, (req, res) => {
   res.json(discovery.getDevices(req.query.via));
 });
 
@@ -292,8 +314,8 @@ const transferLimiter = rateLimit({ windowMs: 60 * 1000, max: 1200 });
 const destructiveLimiter = rateLimit({ windowMs: 60 * 1000, max: 20 });
 
 // POST /transfer/request — kirim permintaan transfer ke device lain
-app.post('/transfer/request', transferLimiter, (req, res) => {
-  const { targetIp, targetPort, fileName, fileSize, batchId, targetName } = req.body;
+app.post('/transfer/request', requireAccess, transferLimiter, (req, res) => {
+  const { targetIp, targetPort, fileName, fileSize, batchId, targetName, resumeId } = req.body;
 
   if (!targetIp || !targetPort || !fileName || fileSize === undefined) {
     return res.status(400).json({ error: 'Missing fields: targetIp, targetPort, fileName, fileSize' });
@@ -314,10 +336,16 @@ app.post('/transfer/request', transferLimiter, (req, res) => {
     const result = transfer.sendTransferRequest(targetIp, parseInt(targetPort), {
       fileName,
       fileSize,
+      // Identitas file untuk resume, dibuat pengirim dan dipakai ulang saat
+      // "Kirim ulang". Tanpa ini penerima hanya punya nama+ukuran.
+      resumeId,
       batchId, // optional: grouping request multi-file
       peerName: targetName, // untuk history
       senderName: DEVICE_NAME,
-      senderId: `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`
+      // Identitas pengirim yang STABIL (dari settings): dipakai sebagai bagian
+      // kunci resume dan identitas auto-approve. Dulu acak tiap request, jadi
+      // tidak bisa dipakai untuk apa pun.
+      senderId: settings.getDeviceId()
     });
     res.json(result);
   } catch (err) {
@@ -326,12 +354,12 @@ app.post('/transfer/request', transferLimiter, (req, res) => {
 });
 
 // GET /transfer/pending — cek request masuk
-app.get('/transfer/pending', (req, res) => {
+app.get('/transfer/pending', requireAccess, (req, res) => {
   res.json(transfer.getPendingRequests());
 });
 
 // POST /transfer/respond — accept/reject request
-app.post('/transfer/respond', transferLimiter, (req, res) => {
+app.post('/transfer/respond', requireAccess, transferLimiter, (req, res) => {
   const { requestId, accept } = req.body;
 
   if (!requestId || accept === undefined) {
@@ -347,7 +375,7 @@ app.post('/transfer/respond', transferLimiter, (req, res) => {
 });
 
 // GET /transfer/status/:requestId — cek status request yg dikirim
-app.get('/transfer/status/:requestId', (req, res) => {
+app.get('/transfer/status/:requestId', requireAccess, (req, res) => {
   const status = transfer.getRequestStatus(req.params.requestId);
   if (!status) {
     return res.status(404).json({ error: 'Request not found' });
@@ -358,7 +386,7 @@ app.get('/transfer/status/:requestId', (req, res) => {
 // ===================== Hari 4 — Streaming Endpoints =====================
 
 // POST /transfer/request-text — kirim permintaan transfer teks
-app.post('/transfer/request-text', transferLimiter, (req, res) => {
+app.post('/transfer/request-text', requireAccess, transferLimiter, (req, res) => {
   const { targetIp, targetPort, fileName } = req.body;
 
   if (!targetIp || !targetPort || !fileName) {
@@ -379,7 +407,7 @@ app.post('/transfer/request-text', transferLimiter, (req, res) => {
       fileSize: 0,
       kind: 'text',
       senderName: DEVICE_NAME,
-      senderId: `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`
+      senderId: settings.getDeviceId()
     });
     res.json(result);
   } catch (err) {
@@ -388,7 +416,7 @@ app.post('/transfer/request-text', transferLimiter, (req, res) => {
 });
 
 // POST /transfer/cancel/:requestId — batalin transfer (sisi pengirim 'send' / penerima 'receive')
-app.post('/transfer/cancel/:requestId', transferLimiter, (req, res) => {
+app.post('/transfer/cancel/:requestId', requireAccess, transferLimiter, (req, res) => {
   const { requestId } = req.params;
   const { role } = req.body; // 'send' atau 'receive'
   try {
@@ -404,7 +432,7 @@ app.post('/transfer/cancel/:requestId', transferLimiter, (req, res) => {
 });
 
 // POST /transfer/send-text — kirim isi teks setelah accepted
-app.post('/transfer/send-text', transferLimiter, async (req, res) => {
+app.post('/transfer/send-text', requireAccess, transferLimiter, async (req, res) => {
   const { requestId, text } = req.body;
 
   if (!requestId || typeof text !== 'string') {
@@ -420,19 +448,19 @@ app.post('/transfer/send-text', transferLimiter, async (req, res) => {
 });
 
 // GET /transfer/text — polling teks masuk (langsung dihapus setelah diambil)
-app.get('/transfer/text', (req, res) => {
+app.get('/transfer/text', requireAccess, (req, res) => {
   res.json(transfer.getReceivedTexts());
 });
 
 // POST /transfer/text/:id/ack — tandai teks selesai ditampilkan, hapus dari queue
-app.post('/transfer/text/:id/ack', (req, res) => {
+app.post('/transfer/text/:id/ack', requireAccess, (req, res) => {
   const removed = transfer.consumeReceivedText(req.params.id);
   if (!removed) return res.status(404).json({ error: 'Text not found' });
   res.json({ ok: true });
 });
 
 // POST /transfer/send-file — mulai streaming file setelah accepted
-app.post('/transfer/send-file', transferLimiter, async (req, res) => {
+app.post('/transfer/send-file', requireAccess, transferLimiter, async (req, res) => {
   const { requestId, filePath } = req.body;
 
   if (!requestId || !filePath) {
@@ -448,7 +476,7 @@ app.post('/transfer/send-file', transferLimiter, async (req, res) => {
 });
 
 // GET /transfer/progress/:requestId — polling progress transfer
-app.get('/transfer/progress/:requestId', (req, res) => {
+app.get('/transfer/progress/:requestId', requireAccess, (req, res) => {
   const progress = transfer.getTransferProgress(req.params.requestId);
   if (!progress) {
     return res.status(404).json({ error: 'Progress not found' });
@@ -466,16 +494,12 @@ app.get('/transfer/progress/:requestId', (req, res) => {
 // ukuran penuh (`ensureThumbnail` mengembalikan file asli apa adanya kalau
 // ffmpeg tidak terpasang). Ini kelas data yang justru ingin dilindungi
 // gerbang PIN di ADR-0009.
-app.get('/thumbnail/:id', async (req, res) => {
+app.get('/thumbnail/:id', access.requireDeviceKey, async (req, res) => {
   const id = String(req.params.id || '');
 
   // Id harus hex 16 karakter — tolak yang lain tanpa menyentuh filesystem.
   if (!/^[0-9a-f]{16}$/.test(id)) {
     return res.status(400).json({ error: 'Invalid thumbnail id' });
-  }
-
-  if (!pin.isAuthorized(req)) {
-    return res.status(401).json({ error: 'Perlu PIN dashboard' });
   }
 
   try {
@@ -497,7 +521,7 @@ app.get('/thumbnail/:id', async (req, res) => {
 //
 // Dipakai receiver untuk menolak file besar yang tidak muat, dengan pesan
 // yang jelas — lebih baik ditolak di awal daripada gagal di tengah transfer.
-app.get('/system/disk', (req, res) => {
+app.get('/system/disk', requireAccess, (req, res) => {
   try {
     const { getSaveDirRoot, getSaveDirFreeSpace } = require('./platform');
 
@@ -516,7 +540,7 @@ app.get('/system/disk', (req, res) => {
 // ===================== Upload Route (Hari 5) =====================
 
 // POST /transfer/upload — terima file dari browser, simpan sementara
-app.post('/transfer/upload', transferLimiter, upload.array('file', 50), (req, res) => {
+app.post('/transfer/upload', requireAccess, transferLimiter, upload.array('file', 50), (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -543,14 +567,14 @@ app.post('/transfer/upload', transferLimiter, upload.array('file', 50), (req, re
 // user harus sadar perangkatnya sedang jadi "drop box"). Tapi daftar `peers`
 // cuma untuk dashboard: isinya nama perangkat yang boleh masuk tanpa dialog,
 // dan itu peta buat penyerang yang mau menyamar jadi salah satunya.
-app.get('/settings/auto-approve', (req, res) => {
+app.get('/settings/auto-approve', requireAccess, (req, res) => {
   const current = settings.getAutoApprove();
   if (pin.isAuthorized(req)) return res.json(current);
   res.json({ enabled: !!current.enabled, peers: [] });
 });
 
 // POST /settings/auto-approve — nyalain/matiin terima otomatis
-app.post('/settings/auto-approve', transferLimiter, (req, res) => {
+app.post('/settings/auto-approve', requireAccess, transferLimiter, (req, res) => {
   if (!pin.isAuthorized(req)) return res.status(401).json({ error: 'Perlu PIN dashboard' });
 
   const { enabled, peers } = req.body || {};
@@ -573,7 +597,7 @@ app.post('/settings/auto-approve', transferLimiter, (req, res) => {
 // penerima) dan `thumbnailId` (kunci buat `GET /thumbnail/<id>`, lihat di
 // sana) dibuang. Panel riwayat di UI kirim file tetap hidup — nama file,
 // peer, arah, status — tapi tidak lagi jadi peta harta karun buat tetangga.
-app.get('/history', (req, res) => {
+app.get('/history', requireAccess, (req, res) => {
   const items = history.list();
   if (pin.isAuthorized(req)) return res.json(items);
 
@@ -582,7 +606,7 @@ app.get('/history', (req, res) => {
 
 // POST /history/clear — hapus semua riwayat. Butuh PIN: kalau terbuka,
 // penyerang bisa menghapus jejak file yang baru dia selundupkan.
-app.post('/history/clear', destructiveLimiter, (req, res) => {
+app.post('/history/clear', requireAccess, destructiveLimiter, (req, res) => {
   if (!pin.isAuthorized(req)) return res.status(401).json({ error: 'Perlu PIN dashboard' });
 
   history.clear();

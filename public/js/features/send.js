@@ -69,6 +69,18 @@ function uploadFiles(files, onProgress, signal) {
 }
 
 /**
+ * Identitas acak satu file, dipakai untuk mencocokkan resume di penerima.
+ * @returns {string}
+ */
+function newResumeId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback untuk browser lama / konteks tanpa crypto.randomUUID
+  return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+/**
  * Kirim batch file ke sebuah perangkat.
  *
  * @param {Object} target - { ip, port, targetName }
@@ -94,6 +106,12 @@ export async function sendBatch(target, files) {
   let sent = 0;
 
   for (const file of files) {
+    // Identitas file ini untuk resume. Dibuat SEKALI di sini dan dipakai lagi
+    // saat "Kirim ulang", supaya penerima tahu percobaan berikutnya benar-benar
+    // lanjutan file yang sama. Kalau dihitung dari nama+ukuran saja, dua file
+    // berbeda dengan nama dan ukuran kebetulan sama akan disambung jadi satu.
+    const resumeId = newResumeId();
+
     let res;
     try {
       res = await postJson('/transfer/request', {
@@ -101,6 +119,7 @@ export async function sendBatch(target, files) {
         targetPort: target.port,
         fileName: file.name,
         fileSize: file.size,
+        resumeId,
         batchId,
         targetName: target.targetName,
       });
@@ -121,12 +140,14 @@ export async function sendBatch(target, files) {
       port: target.port,
       batchId,
       batchSize: files.length,
+      resumeId,
     };
 
     addTransferItem(item.requestId, {
       direction: 'send',
       fileName: item.fileName,
       fileSize: item.fileSize,
+      resumeId,
       targetName: item.targetName,
       status: 'waiting',
       statusText: t('transfer.waitingSent'),

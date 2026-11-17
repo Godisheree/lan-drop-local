@@ -25,13 +25,18 @@ const CLEANUP_INTERVAL = 3000;
 // lain), peer harus diarahkan ke port yang benar-benar listen, bukan ke 3000
 // yang tidak menjawab apa-apa.
 const ports = require('./ports');
+const settings = require('./settings');
 const DEVICE_NAME = getDeviceName();
-const deviceId = `${DEVICE_NAME}-${Math.random().toString(36).slice(2, 8)}`;
+// Identitas perangkat dipakai peer untuk membedakan device (dan jadi kunci
+// entri di knownDevices). Diambil dari settings supaya stabil antar restart —
+// dulu acak tiap boot, jadi entri peer lama dan baru tidak pernah menyatu.
+const deviceId = settings.getDeviceId();
 const deviceName = DEVICE_NAME;
 
 // ===================== State =====================
 const knownDevices = new Map();
 const recentReplies = new Map(); // ip -> timestamp terakhir kita reply-back
+const lastRejectedAnnounce = new Map(); // "deviceId|bucket" -> waktu terakhir ditolak (dedupe log)
 let broadcastIntervals = []; // satu interval per interface LAN
 let reconcileInterval = null; // pemeriksa berkala: interface LAN berubah?
 let tailscaleInterval = null;
@@ -279,18 +284,29 @@ function startListener() {
           ? payloadVia
           : 'lan';
 
-      // Alamat peer: pakai yang dipayload kalau layak, kalau tidak pakai
-      // alamat sumber. Jadi `ip: 'localhost'` (HP tanpa interface LAN) tidak
-      // pernah tersimpan sebagai alamat peer.
+      // Alamat peer SELALU alamat sumber paket. Dulu payload `ip` dipakai
+      // kalau "layak", dan itu membuat siapa pun bisa mengumumkan alamat
+      // sembarang: satu paket palsu cukup untuk memindahkan kartu perangkat
+      // teman ke alamat penyerang, lalu kiriman user masuk ke sana.
+      // Satu-satunya pengecualian: loopback (dua instance di satu host),
+      // di situ alamat sumber memang tidak berarti apa-apa.
       const payloadIp = String(data.ip || '');
-      const ip = isUsablePeerAddress(payloadIp) ? payloadIp : source;
+      const ip = isLoopbackAddress(source) && isUsablePeerAddress(payloadIp) ? payloadIp : source;
 
-      upsertPeer(data.deviceId, {
-        deviceName: data.deviceName,
+      // Port dari payload tetap dipakai (di belakang NAT loopback itu
+      // satu-satunya sumber), tapi harus angka yang masuk akal. Dulu nilai
+      // mentah dari jaringan diteruskan sampai ke net.createConnection().
+      const httpPort = toPort(data.port);
+      const transferPortValue = toPort(data.transferPort);
+      if (!httpPort || !transferPortValue) return;
+
+      upsertPeer(String(data.deviceId || ''), {
+        deviceName: sanitizePeerName(data.deviceName),
         ip,
-        port: data.port,
-        transferPort: data.transferPort,
+        port: httpPort,
+        transferPort: transferPortValue,
         via,
+        source,
       });
       lastAnnounceAt = Date.now();
 
@@ -395,7 +411,7 @@ function seedStaticPeers() {
       deviceId: `static-${ipPart}-${port}`,
       deviceName: namePart,
       addresses: {
-        lan: { ip: ipPart, port, transferPort },
+        lan: { ip: ipPart, port, transferPort, source: ipPart },
       },
       lastSeen: Date.now(),
       static: true,
@@ -448,21 +464,95 @@ function isLoopbackAddress(address) {
 //
 // Jadi alamat disimpan TERPISAH per jalur, dan frontend memilih jalurnya
 // sesuai link yang dipakai user (LAN atau Tailscale).
+/**
+ * Port dari jaringan harus angka 1..65535. Selain itu ditolak — nilai mentah
+ * dari paket UDP pernah diteruskan sampai ke net.createConnection().
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function toPort(value) {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return port;
+}
+
+/** Nama peer dipakai di UI & log: buang karakter kontrol, batasi panjangnya. */
+function sanitizePeerName(value) {
+  const text = String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return (text || 'Perangkat').slice(0, 64);
+}
+
+/**
+ * Tambah/perbarui satu peer.
+ *
+ * Aturan anti-pengambilalihan: alamat yang SUDAH dipakai peer aktif tidak
+ * boleh diganti oleh paket dari alamat lain selama peer itu masih hidup
+ * (lastSeen < DEVICE_TIMEOUT). Tanpa aturan ini, satu paket announce dengan
+ * deviceId yang sama sudah cukup untuk memindahkan kartu perangkat ke alamat
+ * penyerang. Perangkat yang benar-benar pindah jaringan akan diterima setelah
+ * jeda DEVICE_TIMEOUT tanpa announce dari alamat lamanya.
+ *
+ * @param {string} deviceId
+ * @param {{deviceName: string, ip: string, port: number, transferPort: number, via: 'lan'|'tailscale', source?: string}} info
+ * @returns {object|null} null kalau announce ditolak
+ */
 function upsertPeer(deviceId, info) {
+  if (!deviceId) return null;
+
   const existing = knownDevices.get(deviceId);
   const peer = existing || { deviceId, deviceName: info.deviceName, addresses: {} };
   if (info.deviceName) peer.deviceName = info.deviceName;
 
   const bucket = info.via === 'tailscale' ? 'tailscale' : 'lan';
+  const source = normalizeAddress(info.source || info.ip);
+  const current = peer.addresses[bucket];
+
+  if (current && current.source && source && current.source !== source
+    && Date.now() - (peer.lastSeen || 0) < DEVICE_TIMEOUT) {
+    const key = `${deviceId}|${bucket}`;
+    const last = lastRejectedAnnounce.get(key) || 0;
+    if (Date.now() - last > 60000) {
+      lastRejectedAnnounce.set(key, Date.now());
+      console.warn(`[Discovery] Announce for "${peer.deviceName}" from ${source} ignored — `
+        + `that device is still active at ${current.source}. `
+        + 'If it really moved, wait a few seconds for the lease to expire.');
+    }
+    return null;
+  }
+
   peer.addresses[bucket] = {
     ip: info.ip,
     port: info.port,
-    transferPort: info.transferPort || (info.port + 1),
+    transferPort: info.transferPort,
+    source,
   };
   peer.lastSeen = Date.now();
 
   knownDevices.set(deviceId, peer);
   return peer;
+}
+
+/**
+ * Semua alamat yang diumumkan peer dengan nama tertentu.
+ *
+ * Dipakai allowlist terima otomatis: nama di frame transfer-request cuma
+ * klaim, jadi harus dicocokkan dengan alamat yang benar-benar terlihat di
+ * jaringan.
+ *
+ * @param {string} name
+ * @returns {string[]}
+ */
+function knownIpsForName(name) {
+  const wanted = String(name || '').trim();
+  if (!wanted) return [];
+  const ips = [];
+  for (const peer of knownDevices.values()) {
+    if (peer.deviceName !== wanted) continue;
+    for (const addr of Object.values(peer.addresses)) {
+      if (addr && addr.ip) ips.push(addr.ip);
+    }
+  }
+  return ips;
 }
 
 /**
@@ -497,6 +587,28 @@ function getDevices(preferVia) {
     }
     return null;
   }).filter(Boolean);
+}
+
+/**
+ * Apakah alamat ini milik peer yang sedang terlihat lewat discovery?
+ *
+ * Dipakai jalur transfer TCP: kiriman dari alamat yang tidak dikenal (bukan
+ * sesama LAN DROP yang lagi announce) tidak boleh diterima diam-diam — dia
+ * harus muncul sebagai permintaan yang menunggu persetujuan.
+ *
+ * @param {string|null} ip
+ * @returns {boolean}
+ */
+function isKnownPeerAddress(ip) {
+  const want = String(ip || '').replace(/^::ffff:/, '').split('%')[0];
+  if (!want) return false;
+  for (const peer of knownDevices.values()) {
+    for (const bucket of Object.values(peer.addresses || {})) {
+      const got = String(bucket.ip || '').replace(/^::ffff:/, '').split('%')[0];
+      if (got === want) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -539,4 +651,11 @@ function getDiagnostics() {
   };
 }
 
-module.exports = { startDiscovery, stopDiscovery, getDevices, getDiagnostics };
+module.exports = {
+  startDiscovery,
+  stopDiscovery,
+  getDevices,
+  getDiagnostics,
+  knownIpsForName,
+  isKnownPeerAddress,
+};

@@ -40,6 +40,9 @@ npm run check:identity # regression check nama device
 npm run check:routing  # regression check routing peer (LAN vs Tailscale)
 npm run check:routes   # 2 instance sungguhan di 3 jalur (loopback, WiFi, Tailscale)
 npm run check:autoapprove # terima otomatis: fail-closed saat ukuran mencurigakan
+npm run check:access   # kunci perangkat: tiap rute data punya gerbang, ?k= -> cookie
+npm run check:resume   # transport wajib kunci, FIN tidak hapus partial, resume tidak campur file
+npm run check:transfer-integrity # kunci resume, klaim nama atomik, batas frame/teks, sweeper
 npm run check:tui      # menu launcher tui.js (panah, Enter, escape terpotong) — tanpa tty
 npm run check:tray     # struktur icon.ico + tray tidak boleh menarik Electron lagi
 npm run smoke          # 3 viewport + cek error console (butuh server jalan)

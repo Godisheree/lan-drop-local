@@ -5,6 +5,23 @@
  * ke user (tanpa membocorkan stack trace).
  */
 
+let pairingNotified = false;
+
+/**
+ * Kabari aplikasi sekali bahwa perangkat ini belum punya kunci akses.
+ *
+ * Dipakai event, bukan import langsung, supaya lapisan API tetap tidak tahu
+ * apa-apa soal UI. Sekali saja: kalau polling jalan tiap 3 detik, tanpa
+ * penjaga ini event-nya jadi badai dan layar pairing dibuat berulang.
+ */
+function notifyPairingRequired() {
+  if (pairingNotified) return;
+  pairingNotified = true;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('landrop:pairing-required'));
+  }
+}
+
 /**
  * @param {string} url
  * @param {RequestInit} [opts]
@@ -20,13 +37,24 @@ export async function api(url, opts = {}) {
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
+    let needsPairing = false;
     try {
       const body = await res.json();
       if (body && body.error) message = body.error;
+      // Server menandai 401 dengan `pairing: true` kalau masalahnya kunci
+      // perangkat, bukan PIN dashboard. Bedanya penting: PIN bisa diketik,
+      // kunci hanya bisa didapat dengan memindai QR.
+      if (res.status === 401 && body && body.pairing) needsPairing = true;
     } catch (_) {
       // respons bukan JSON — pakai pesan default
     }
-    throw new Error(message);
+
+    if (needsPairing) notifyPairingRequired();
+
+    const err = new Error(message);
+    err.pairing = needsPairing;
+    err.status = res.status;
+    throw err;
   }
 
   if (res.status === 204) return null;

@@ -1,6 +1,6 @@
 # ADR-0007 — Keamanan Berlapis Tanpa Autentikasi (Path Allowlist + Batas Jaringan)
 
-- **Status:** Diterima
+- **Status:** Sebagian digantikan oleh ADR-0012 (kunci akses per perangkat)
 - **Tanggal:** 2025-10-21
 - **Memengaruhi:** `server/security.js` (baru), `server/index.js`, `server/transfer.js`, `scripts/check-security.js` (baru), `.claude/settings.local.json`
 
