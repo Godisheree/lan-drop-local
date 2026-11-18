@@ -786,13 +786,11 @@ async fn receive_file(
         if meta_size == actual_size {
             if let Some(recorded) = part_meta.get("partPath").and_then(|v| v.as_str()) {
                 if let Ok(st) = std::fs::metadata(recorded) {
-                    start_bytes = std::cmp::min(
-                        part_meta
-                            .get("bytesWritten")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0),
-                        st.len(),
-                    );
+                    // Panjang berkas di disk yang menentukan, bukan angka
+                    // `bytesWritten`: meta hanya disimpan tiap 2 detik, jadi
+                    // proses yang mati mendadak meninggalkan angka lama di
+                    // samping partial yang sudah lebih panjang.
+                    start_bytes = std::cmp::min(st.len(), actual_size);
                     if start_bytes > 0 {
                         part_path = PathBuf::from(recorded);
                         if let Some(final_recorded) =
@@ -803,12 +801,6 @@ async fn receive_file(
                         if let Some(name) = part_meta.get("actualFileName").and_then(|v| v.as_str())
                         {
                             display_name = name.to_string();
-                        }
-                        if st.len() != start_bytes {
-                            let _ = std::fs::OpenOptions::new()
-                                .write(true)
-                                .open(&part_path)
-                                .and_then(|f| f.set_len(start_bytes));
                         }
                         println!(
                             "[Transfer] {request_id} — RESUMING from byte {start_bytes}/{actual_size}"
