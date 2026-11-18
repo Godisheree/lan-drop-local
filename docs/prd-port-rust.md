@@ -377,7 +377,7 @@ $ node scripts/check-rust-core.js
                                  # log dashboard, penolakan target, rute data
 
 $ node scripts/check-rust-hardening.js
-77 lulus, 0 gagal                # port tujuan < 1024 ditolak, banjir 400
+73 lulus, 0 gagal                # port tujuan < 1024 ditolak, banjir 400
                                  # announce, thumbnail dengan ffmpeg
                                  # menggantung, upload tanpa ruang disk,
                                  # Host/Origin palsu, traversal statis, frame
