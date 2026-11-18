@@ -377,18 +377,25 @@ $ node scripts/check-rust-core.js
                                  # log dashboard, penolakan target, rute data
 
 $ node scripts/check-rust-hardening.js
-57 lulus, 0 gagal                # Host/Origin palsu, traversal statis, frame
-                                 # 8 MB, JSON rusak, 80 koneksi menganggur,
-                                 # penolakan beralasan, nama file traversal,
-                                 # file kembar, batal, upload 3 MB / 64 MB,
-                                 # 6 transfer paralel, resume lintas restart,
-                                 # settings.json rusak, anti-hijack announce,
-                                 # rate limit PIN + Retry-After
+63 lulus, 0 gagal                # Host/Origin palsu, traversal statis, frame
+                                 # 8 MB, JSON rusak, 90 request acak tanpa
+                                 # panic, 80 koneksi menganggur, penolakan
+                                 # beralasan, nama file traversal, file kembar,
+                                 # batal, upload 3 MB / 64 MB / batch 5 berkas,
+                                 # 6 transfer paralel, ffmpeg hilang, resume
+                                 # lintas restart, settings.json rusak,
+                                 # anti-hijack announce, rate limit PIN
 
 $ (cd rust && cargo test --release)
 16 passed                        # nama file, kunci resume, frame, host guard,
                                  # target IP privat/link-local, self target
 ```
+
+Dua jalur yang tidak bisa dimasukkan ke skrip (butuh hak root / disk khusus)
+diverifikasi manual dan lolos: penerima dengan filesystem penuh menolak dengan
+alasan "ruang disk tidak cukup", tidak meninggalkan partial, dan servernya tetap
+melayani; serta `LANDROP_FFMPEG` yang menunjuk berkas tidak ada membuat video
+dikirim apa adanya, bukan gagal.
 
 Yang ditemukan uji ini dan sudah diperbaiki (semua sempat lolos secara manual):
 upload > 2 MB ditolak batas body axum (aplikasi transfer file yang tidak bisa

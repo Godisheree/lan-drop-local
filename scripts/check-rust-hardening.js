@@ -641,6 +641,55 @@ async function main() {
     }
     try { d.proc.kill('SIGKILL'); } catch (_) {}
 
+    // ── 6d. HTTP acak: server harus tetap hidup ────────────────────────────
+    section('HTTP acak (anti-panik)');
+
+    const base = `http://127.0.0.1:${aPorts.http}`;
+    const oddPaths = [
+      '/../etc/passwd', '/%2e%2e/%2e%2e/etc/passwd', `/${'a'.repeat(4000)}`,
+      '/status?x=%00%ff', '/<script>alert(1)</script>', '/transfer/status/../../..',
+      '/js/%2e%2e/server/access.js', '/thumbnail/../../etc/passwd', '/%c0%ae%c0%ae/',
+    ];
+    for (const odd of oddPaths) {
+      try { await fetch(base + odd).then((r) => r.text()); } catch (_) {}
+    }
+    for (const method of ['PATCH', 'PROPFIND', 'TRACE', 'DELETE', 'OPTIONS']) {
+      try { await fetch(`${base}/transfer/request`, { method }).then((r) => r.text()); } catch (_) {}
+    }
+    // JSON rusak dan angka aneh di rute yang membaca body.
+    const badBodies = ['{', '[]', 'null', '{"targetPort":"abc"}', '{"targetIp":null}',
+      '{"fileSize":-1}', '{"requestId":{"a":1}}', `{"resumeOffset":1e309}`];
+    for (const route of ['/transfer/request', '/transfer/respond', '/transfer/send-file', '/transfer/cancel']) {
+      for (const body of badBodies) {
+        try {
+          await fetch(base + route, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+            .then((r) => r.text());
+        } catch (_) {}
+      }
+    }
+    // Multipart rusak & header kepanjangan.
+    try {
+      await fetch(`${base}/transfer/upload`, {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data; boundary=----x' },
+        body: 'bukan multipart sama sekali',
+      }).then((r) => r.text());
+      await fetch(`${base}/transfer/upload`, {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data' },
+        body: '----x--',
+      }).then((r) => r.text());
+      await fetch(`${base}/status`, { headers: { 'x-pad': 'x'.repeat(8000) } }).then((r) => r.text());
+    } catch (_) {}
+
+    const stillUp = await fetch(`${base}/status`).then((r) => r.status).catch(() => 0);
+    check('server tetap melayani setelah ~90 request cacat', stillUp === 200, `status ${stillUp}`);
+    const panicked = a.log.join('').includes('panicked at');
+    check('tidak ada panic di log server', !panicked, panicked ? 'ADA panic' : 'bersih');
+    const survivors = await Promise.all([aPorts.http, bPorts.http].map((port) =>
+      fetch(`http://127.0.0.1:${port}/status`).then((r) => r.status).catch(() => 0)));
+    check('instance lain tidak terpengaruh', survivors.every((code) => code === 200), survivors.join('/'));
+
     // ── 7. Restart & ketahanan state ───────────────────────────────────────
     section('Restart & state di disk');
 
