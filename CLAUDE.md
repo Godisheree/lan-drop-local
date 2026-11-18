@@ -16,6 +16,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Transfer:** Raw TCP (net module) port 3001, custom length-prefixed frame protocol
 - **UI language:** Bahasa Indonesia
 - **Desktop packaging:** Electron + electron-builder (NSIS)
+- **Rust core (`rust/`)** — port inti server: `axum` + `tokio`, satu binary.
+  Kontrak kabel identik dengan Node (frame TCP, announce UDP, kunci resume,
+  cookie akses). Frontend `public/` dipakai apa adanya. Lihat ADR-0013.
 
 ## Running
 
@@ -43,6 +46,14 @@ npm run check:autoapprove # terima otomatis: fail-closed saat ukuran mencurigaka
 npm run check:access   # kunci perangkat: tiap rute data punya gerbang, ?k= -> cookie
 npm run check:resume   # transport wajib kunci, FIN tidak hapus partial, resume tidak campur file
 npm run check:transfer-integrity # kunci resume, klaim nama atomik, batas frame/teks, sweeper
+npm run check:parity   # Node vs Rust: bentuk respons 24 endpoint (SAMA/BEDA/BELUM)
+npm run check:rust-core # dua instance Rust: teks, file, resume, batal, riwayat
+npm run check:rust-hardening # input cacat, banjir koneksi, traversal, restart, rate limit
+npm run core:test      # unit test Rust (nama file, kunci resume, host/target guard)
+npm run core:lint      # clippy -D warnings (fallback clippy-driver)
+npm run check:rust-ci  # workflow CI benar-benar menguji Rust (fmt, clippy, test)
+npm run test:core      # build + lint + seluruh pemeriksaan inti Rust
+                         # (bangun dulu: cd rust && cargo build --release)
 npm run check:tui      # menu launcher tui.js (panah, Enter, escape terpotong) — tanpa tty
 npm run check:tray     # struktur icon.ico + tray tidak boleh menarik Electron lagi
 npm run smoke          # 3 viewport + cek error console (butuh server jalan)

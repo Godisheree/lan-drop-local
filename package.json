@@ -47,7 +47,16 @@
     "check-discovery-rebind": "node scripts/check-discovery-rebind.js",
     "check:access": "node scripts/check-access.js",
     "check:transfer-integrity": "node scripts/check-transfer-integrity.js",
-    "check:resume": "node scripts/check-resume.js"
+    "check:resume": "node scripts/check-resume.js",
+    "check:parity": "node scripts/check-parity.js",
+    "check:rust-core": "node scripts/check-rust-core.js",
+    "core:build": "cargo build --release --manifest-path rust/Cargo.toml",
+    "core": "node scripts/run-core.js",
+    "check:rust-hardening": "node scripts/check-rust-hardening.js",
+    "core:test": "cargo test --release --manifest-path rust/Cargo.toml",
+    "test:core": "npm run core:build && npm run core:lint && npm run core:test && npm run check:parity && npm run check:rust-core && npm run check:rust-hardening && npm run check:rust-ci",
+    "core:lint": "node scripts/core-lint.js",
+    "check:rust-ci": "node scripts/check-rust-ci.js"
   },
   "keywords": [
     "lan",
