@@ -108,10 +108,24 @@ function startRustCore() {
     dialog.showErrorBox('LAN DROP', `Inti Rust gagal dijalankan: ${err.message}`);
     app.quit();
   });
-  rustProc.on('exit', (code) => {
-    if (code !== 0 && code !== null) console.error(`[core] berhenti dengan kode ${code}`);
+  // Proses inti mati bukan hal yang boleh dilihat user sebagai "UI beku":
+  // jendela tetap menampilkan dashboard terakhir yang sudah basi, tanpa satu
+  // pun tombolnya bekerja. Beri tahu, lalu tutup supaya jelas harus dijalankan
+  // ulang. Saat aplikasi memang sedang berhenti, diam saja.
+  let shuttingDown = false;
+  rustProc.on('exit', (code, signal) => {
+    if (shuttingDown) return;
+    if (code === 0) return;
+    const reason = signal ? `sinyal ${signal}` : `kode ${code}`;
+    console.error(`[core] berhenti dengan ${reason}`);
+    dialog.showErrorBox(
+      'LAN DROP',
+      `Inti Rust berhenti tak terduga (${reason}). Aplikasi akan ditutup — jalankan ulang untuk melanjutkan.`,
+    );
+    app.quit();
   });
   app.on('will-quit', () => {
+    shuttingDown = true;
     if (rustProc && !rustProc.killed) rustProc.kill();
   });
 }

@@ -234,13 +234,37 @@ async fn main() {
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(async {
-        let _ = tokio::signal::ctrl_c().await;
-        println!("[Server] Shutting down...");
-    })
+    .with_graceful_shutdown(shutdown_signal())
     .await
     {
         eprintln!("[Server] berhenti: {err}");
         std::process::exit(1);
     }
+}
+
+/// Ctrl+C di terminal, SIGTERM dari Electron (`rustProc.kill()`) maupun
+/// `docker stop` — semuanya jalur berhenti yang wajar, jadi semuanya harus
+/// menutup server dengan rapi, bukan dibunuh paksa di tengah transfer.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            // Signal handler gagal dipasang: biarkan ctrl_c yang menentukan.
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {}
+        _ = terminate => {}
+    }
+    println!("[Server] Shutting down...");
 }
