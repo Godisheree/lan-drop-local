@@ -113,6 +113,13 @@
     ],
     "extraMetadata": {
       "main": "main.js"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "rust/target/release",
+        "to": "core",
+        "filter": ["lan-drop-core", "lan-drop-core.exe"]
+      }
+    ]
   }
 }
