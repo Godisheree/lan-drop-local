@@ -546,9 +546,9 @@ async function refreshActive() {
   const alive = new Set(transfers.map((t) => t.requestId));
   for (const id of transferSnapshots.keys()) if (!alive.has(id)) transferSnapshots.delete(id);
 
-  const rows = transfers.map((t) => {
-    const percent = Number(t.percent) || 0;
-    const { speed, eta } = measure(t);
+  const rows = transfers.map((tr) => {
+    const percent = Number(tr.percent) || 0;
+    const { speed, eta } = measure(tr);
 
     const progress = el('div', { class: 'dash-progress' }, [
       el('div', { class: 'dash-progress-track' }, [
@@ -568,16 +568,16 @@ async function refreshActive() {
       type: 'button',
       text: t('modal.cancel'),
       title: t('transfer.cancelAction'),
-      onclick: () => cancelTransfer(t.requestId, t.direction === 'receive' ? 'receive' : 'send', cancel),
+      onclick: () => cancelTransfer(tr.requestId, tr.direction === 'receive' ? 'receive' : 'send', cancel),
     });
 
     return row([
-      t.direction === 'receive' ? t('field.received') : t('field.sent'),
-      el('div', { class: 'dash-file', text: dash(t.fileName), title: dash(t.fileName) }),
-      formatBytes(t.fileSize),
-      dash(t.peer),
-      statusTag(t.status),
-      t.bytesTransferred ? progress : el('span', { class: 'dash-mono', text: dash(t.status) }),
+      tr.direction === 'receive' ? t('field.received') : t('field.sent'),
+      el('div', { class: 'dash-file', text: dash(tr.fileName), title: dash(tr.fileName) }),
+      formatBytes(tr.fileSize),
+      dash(tr.peer),
+      statusTag(tr.status),
+      tr.bytesTransferred ? progress : el('span', { class: 'dash-mono', text: dash(tr.status) }),
       cancel,
     ]);
   });
