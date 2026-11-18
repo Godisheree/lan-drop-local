@@ -24,3 +24,24 @@ jobs:
       # --omit=dev tidak dipakai: sebagian pemeriksaan butuh devDependency.
       - run: npm ci
       - run: npm test
+
+  # Inti Rust dulu tidak diuji siapa pun: 6k baris yang hanya diperiksa kalau
+  # seseorang ingat menjalankan `npm run test:core` di mesinnya sendiri.
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # Versi dipin: `cargo fmt --check` peka terhadap versi rustfmt, dan
+      # toolchain yang bergeser sendiri membuat CI merah tanpa perubahan kode.
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - run: cargo fmt --manifest-path rust/Cargo.toml --check
+      # Peringatan lint adalah bug yang belum kejadian.
+      - run: cargo clippy --release --all-targets --manifest-path rust/Cargo.toml -- -D warnings
+      - run: cargo test --release --manifest-path rust/Cargo.toml
+      - run: cargo build --release --manifest-path rust/Cargo.toml

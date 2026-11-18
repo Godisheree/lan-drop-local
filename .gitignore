@@ -15,3 +15,6 @@ out/
 
 electron.zip
 .tmp-*
+
+# Artefak build Rust
+rust/target/
