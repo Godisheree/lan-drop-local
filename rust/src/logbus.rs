@@ -59,7 +59,12 @@ impl LogBus {
     pub fn tail(&self, since_id: u64) -> Tail {
         match self.inner.lock() {
             Ok(inner) => Tail {
-                lines: inner.0.iter().filter(|line| line.id > since_id).cloned().collect(),
+                lines: inner
+                    .0
+                    .iter()
+                    .filter(|line| line.id > since_id)
+                    .cloned()
+                    .collect(),
                 last_id: inner.1.saturating_sub(1),
                 depth: DEPTH,
             },

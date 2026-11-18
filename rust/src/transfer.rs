@@ -239,7 +239,8 @@ fn is_save_fallback(state: &AppState, dir: &Path) -> bool {
 /// `/transfer/send-file` bisa dipakai membaca file apa pun di disk.
 pub fn assert_inside_uploads(state: &AppState, file_path: &str) -> Result<PathBuf, String> {
     let root = state.upload_dir.clone();
-    let resolved = std::path::absolute(Path::new(file_path)).map_err(|_| "Invalid file path".to_string())?;
+    let resolved =
+        std::path::absolute(Path::new(file_path)).map_err(|_| "Invalid file path".to_string())?;
     let root_abs = std::path::absolute(&root).unwrap_or(root.clone());
     let inside = |base: &Path, target: &Path| -> bool {
         match (std::fs::canonicalize(base), std::fs::canonicalize(target)) {
@@ -315,7 +316,9 @@ async fn read_frame(
             if buffered.len() >= 4 + len {
                 let payload: Vec<u8> = buffered[4..4 + len].to_vec();
                 buffered.drain(..4 + len);
-                return Ok(Some(serde_json::from_slice(&payload).unwrap_or(Value::Null)));
+                return Ok(Some(
+                    serde_json::from_slice(&payload).unwrap_or(Value::Null),
+                ));
             }
         }
         let mut chunk = [0u8; 16 * 1024];
@@ -370,7 +373,11 @@ async fn send_frame(stream: &mut TcpStream, value: &Value) -> bool {
 
 fn is_trusted_source(state: &AppState, address: Option<&str>) -> bool {
     let Some(addr) = address else { return false };
-    let normalized = addr.trim_start_matches("::ffff:").split('%').next().unwrap_or(addr);
+    let normalized = addr
+        .trim_start_matches("::ffff:")
+        .split('%')
+        .next()
+        .unwrap_or(addr);
     if normalized.is_empty() {
         return false;
     }
@@ -398,7 +405,10 @@ fn decide_auto_accept(
 
     let size = msg.get("fileSize").and_then(|v| v.as_u64()).unwrap_or(0);
     if size == 0 {
-        return (false, Some("Ukuran file tidak diketahui, terima otomatis dilewati".to_string()));
+        return (
+            false,
+            Some("Ukuran file tidak diketahui, terima otomatis dilewati".to_string()),
+        );
     }
     let free = platform::free_space(&state.save_dir);
     let Some(free) = free else {
@@ -409,16 +419,16 @@ fn decide_auto_accept(
     };
     let remaining = size.saturating_sub(resume_offset);
     if remaining > free {
-        return (false, Some("Ruang disk penerima tidak cukup untuk terima otomatis".to_string()));
+        return (
+            false,
+            Some("Ruang disk penerima tidak cukup untuk terima otomatis".to_string()),
+        );
     }
     (true, None)
 }
 
 async fn handle_incoming(state: Arc<AppState>, mut stream: TcpStream) {
-    let peer_ip = stream
-        .peer_addr()
-        .ok()
-        .map(|a| a.ip().to_string());
+    let peer_ip = stream.peer_addr().ok().map(|a| a.ip().to_string());
     let mut buffered: Vec<u8> = Vec::new();
 
     let msg = match read_frame(&mut stream, &mut buffered, IO_TIMEOUT).await {
@@ -472,7 +482,10 @@ async fn handle_incoming(state: Arc<AppState>, mut stream: TcpStream) {
     let mut resume_offset = 0u64;
     if let Some(key) = &transfer_key {
         if let Some(meta) = read_part_meta(&state, key) {
-            let bytes_written = meta.get("bytesWritten").and_then(|v| v.as_u64()).unwrap_or(0);
+            let bytes_written = meta
+                .get("bytesWritten")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             if bytes_written > 0 {
                 if let Some(part) = meta.get("partPath").and_then(|v| v.as_str()) {
                     if let Ok(st) = std::fs::metadata(part) {
@@ -517,7 +530,10 @@ async fn handle_incoming(state: Arc<AppState>, mut stream: TcpStream) {
 
     if kind == "text" {
         if known_sender {
-            state.transfers.respond(&state, &request_id, true, None).ok();
+            state
+                .transfers
+                .respond(&state, &request_id, true, None)
+                .ok();
         } else {
             println!(
                 "[Transfer] text from unknown {} — queued for approval",
@@ -533,10 +549,16 @@ async fn handle_incoming(state: Arc<AppState>, mut stream: TcpStream) {
                 }
             }
             println!("[Transfer] {request_id} accepted automatically from {sender_name}");
-            state.transfers.respond(&state, &request_id, true, None).ok();
+            state
+                .transfers
+                .respond(&state, &request_id, true, None)
+                .ok();
         } else if let Some(reason) = reason {
             println!("[Transfer] {request_id} not auto-accepted: {reason}");
-            state.transfers.respond(&state, &request_id, false, Some(reason)).ok();
+            state
+                .transfers
+                .respond(&state, &request_id, false, Some(reason))
+                .ok();
         }
     }
 
@@ -712,6 +734,7 @@ async fn receive_text(
     let _ = send_frame(stream, &json!({"type": "text-saved", "length": length})).await;
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn receive_file(
     state: &AppState,
     stream: &mut TcpStream,
@@ -745,9 +768,8 @@ async fn receive_file(
     }
     let save_fallback = is_save_fallback(state, &save_dir);
 
-    let key = transfer_key.unwrap_or_else(|| {
-        protocol::make_transfer_key("", "", &safe_name, actual_size)
-    });
+    let key = transfer_key
+        .unwrap_or_else(|| protocol::make_transfer_key("", "", &safe_name, actual_size));
 
     let mut display_name = safe_name.clone();
     let mut final_path = save_dir.join(&display_name);
@@ -765,15 +787,21 @@ async fn receive_file(
             if let Some(recorded) = part_meta.get("partPath").and_then(|v| v.as_str()) {
                 if let Ok(st) = std::fs::metadata(recorded) {
                     start_bytes = std::cmp::min(
-                        part_meta.get("bytesWritten").and_then(|v| v.as_u64()).unwrap_or(0),
+                        part_meta
+                            .get("bytesWritten")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
                         st.len(),
                     );
                     if start_bytes > 0 {
                         part_path = PathBuf::from(recorded);
-                        if let Some(final_recorded) = part_meta.get("finalPath").and_then(|v| v.as_str()) {
+                        if let Some(final_recorded) =
+                            part_meta.get("finalPath").and_then(|v| v.as_str())
+                        {
                             final_path = PathBuf::from(final_recorded);
                         }
-                        if let Some(name) = part_meta.get("actualFileName").and_then(|v| v.as_str()) {
+                        if let Some(name) = part_meta.get("actualFileName").and_then(|v| v.as_str())
+                        {
                             display_name = name.to_string();
                         }
                         if st.len() != start_bytes {
@@ -856,11 +884,14 @@ async fn receive_file(
             return;
         }
     };
-    if start_bytes > 0 {
-        if file.seek(std::io::SeekFrom::Start(start_bytes)).await.is_err() {
-            state.transfers.remove_progress(request_id);
-            return;
-        }
+    if start_bytes > 0
+        && file
+            .seek(std::io::SeekFrom::Start(start_bytes))
+            .await
+            .is_err()
+    {
+        state.transfers.remove_progress(request_id);
+        return;
     }
 
     let mut written = start_bytes;
@@ -909,7 +940,8 @@ async fn receive_file(
             if cancel.load(Ordering::SeqCst) {
                 break None;
             }
-            match tokio::time::timeout(Duration::from_millis(250), stream.read(&mut chunk[..want])).await
+            match tokio::time::timeout(Duration::from_millis(250), stream.read(&mut chunk[..want]))
+                .await
             {
                 Err(_) => {
                     idle += Duration::from_millis(250);
@@ -974,7 +1006,9 @@ async fn receive_file(
         let reason = format!(
             "interrupted at {total_written}/{actual_size} bytes — partial kept, resend to resume"
         );
-        state.transfers.mark_status(request_id, "failed", Some(reason.clone()));
+        state
+            .transfers
+            .mark_status(request_id, "failed", Some(reason.clone()));
         println!("[Transfer] {request_id} — putus di {total_written}/{actual_size}, partial kept for resume");
         return;
     }
@@ -1051,10 +1085,7 @@ async fn receive_file(
                 }),
             )
             .await;
-            state.log(
-                "info",
-                format!("terima: {display_name} dari {sender_name}"),
-            );
+            state.log("info", format!("terima: {display_name} dari {sender_name}"));
             println!(
                 "[Transfer] ✅ {request_id} — {display_name} diterima ({actual_size} bytes) → {}",
                 final_path.display()
@@ -1102,12 +1133,20 @@ pub async fn send_transfer_request(
     let address = format!("{}:{}", meta.target_ip, meta.target_port);
     state.log(
         "info",
-        format!("kirim: {} → {}", meta.file_name, meta.peer_name.clone().unwrap_or_else(|| meta.target_ip.clone())),
+        format!(
+            "kirim: {} → {}",
+            meta.file_name,
+            meta.peer_name
+                .clone()
+                .unwrap_or_else(|| meta.target_ip.clone())
+        ),
     );
     println!(
         "[Transfer] 🔌 → {} ke {} ({address}) [requestId={request_id}]",
         meta.file_name,
-        meta.peer_name.clone().unwrap_or_else(|| meta.target_ip.clone())
+        meta.peer_name
+            .clone()
+            .unwrap_or_else(|| meta.target_ip.clone())
     );
 
     // Entri DIDAFTARKAN dulu, koneksi menyusul di task terpisah. Node juga
@@ -1201,19 +1240,26 @@ async fn handshake(
         return Err("Peer answered with an unexpected frame".to_string());
     }
 
-    let accepted = msg.get("accepted").and_then(|v| v.as_bool()).unwrap_or(false);
+    let accepted = msg
+        .get("accepted")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     if let Ok(mut outgoing) = state.transfers.outgoing.lock() {
         if let Some(entry) = outgoing.get_mut(request_id) {
             entry.status = if accepted { "accepted" } else { "rejected" }.to_string();
             entry.resume_offset = if accepted {
-                msg.get("resumeOffset").and_then(|v| v.as_u64()).unwrap_or(0)
+                msg.get("resumeOffset")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
             } else {
                 0
             };
             entry.reject_message = if accepted {
                 None
             } else {
-                msg.get("message").and_then(|v| v.as_str()).map(str::to_string)
+                msg.get("message")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
             };
             if entry.cancelled_by_user {
                 return Ok(());
@@ -1289,14 +1335,22 @@ async fn prepare_send_file(state: &AppState, path: &Path, name: &str) -> Prepare
     let out_dir = state.upload_dir.clone();
 
     // Audio saja (mis. mp4 berisi album art) → mp3, jauh lebih kecil.
-    if let Some(info) = crate::ffmpeg::probe(&path.to_path_buf()).await {
+    if let Some(info) = crate::ffmpeg::probe(path).await {
         if !info.has_real_video && info.has_audio {
             let out = out_dir.join(format!("{stem}.mp3"));
             let out_str = out.to_string_lossy().to_string();
             let args: Vec<String> = vec![
-                "-nostdin".into(), "-loglevel".into(), "error".into(), "-y".into(),
-                "-i".into(), input, "-vn".into(),
-                "-c:a".into(), "libmp3lame".into(), "-q:a".into(), "2".into(),
+                "-nostdin".into(),
+                "-loglevel".into(),
+                "error".into(),
+                "-y".into(),
+                "-i".into(),
+                input,
+                "-vn".into(),
+                "-c:a".into(),
+                "libmp3lame".into(),
+                "-q:a".into(),
+                "2".into(),
                 out_str,
             ];
             if crate::ffmpeg::run_ffmpeg(&args, std::time::Duration::from_secs(1800))
@@ -1322,12 +1376,24 @@ async fn prepare_send_file(state: &AppState, path: &Path, name: &str) -> Prepare
     let out = out_dir.join(format!("{stem}.mp4"));
     let out_str = out.to_string_lossy().to_string();
     let args: Vec<String> = vec![
-        "-nostdin".into(), "-loglevel".into(), "error".into(), "-y".into(),
-        "-i".into(), input,
-        "-c:v".into(), "libx264".into(), "-preset".into(), "veryfast".into(),
-        "-crf".into(), "23".into(),
-        "-c:a".into(), "aac".into(), "-b:a".into(), "128k".into(),
-        "-movflags".into(), "+faststart".into(),
+        "-nostdin".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-y".into(),
+        "-i".into(),
+        input,
+        "-c:v".into(),
+        "libx264".into(),
+        "-preset".into(),
+        "veryfast".into(),
+        "-crf".into(),
+        "23".into(),
+        "-c:a".into(),
+        "aac".into(),
+        "-b:a".into(),
+        "128k".into(),
+        "-movflags".into(),
+        "+faststart".into(),
         out_str,
     ];
     println!("[Transfer] konversi {name} → mp4...");
@@ -1419,7 +1485,9 @@ pub async fn start_file_send(
     )
     .await
     {
-        state.transfers.mark_status(request_id, "failed", Some("koneksi putus".to_string()));
+        state
+            .transfers
+            .mark_status(request_id, "failed", Some("koneksi putus".to_string()));
         return Err("Failed to start the file stream".to_string());
     }
 
@@ -1458,11 +1526,19 @@ pub async fn start_file_send(
     if send_error.is_none() {
         let _ = stream.flush().await;
         let mut buffered: Vec<u8> = Vec::new();
-        match tokio::time::timeout(Duration::from_secs(60), read_frame(&mut stream, &mut buffered, IO_TIMEOUT)).await {
-            Ok(Ok(Some(msg))) => match msg.get("type").and_then(|v| v.as_str()) {
+        if let Ok(Ok(Some(msg))) = tokio::time::timeout(
+            Duration::from_secs(60),
+            read_frame(&mut stream, &mut buffered, IO_TIMEOUT),
+        )
+        .await
+        {
+            match msg.get("type").and_then(|v| v.as_str()) {
                 Some("transfer-saved") => {
                     saved = true;
-                    saved_to = msg.get("savedTo").and_then(|v| v.as_str()).map(str::to_string);
+                    saved_to = msg
+                        .get("savedTo")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string);
                 }
                 Some("transfer-save-failed") => {
                     save_reason = Some(
@@ -1473,8 +1549,7 @@ pub async fn start_file_send(
                     );
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
     let _ = stream.shutdown().await;
@@ -1577,24 +1652,28 @@ pub async fn start_text_send(
     );
 
     if !send_frame(&mut stream, &json!({"type": "text", "length": size})).await {
-        state.transfers.mark_status(request_id, "failed", Some("koneksi putus".to_string()));
+        state
+            .transfers
+            .mark_status(request_id, "failed", Some("koneksi putus".to_string()));
         return Err("Failed to send the text".to_string());
     }
     if stream.write_all(&bytes).await.is_err() {
-        state.transfers.mark_status(request_id, "failed", Some("koneksi putus".to_string()));
+        state
+            .transfers
+            .mark_status(request_id, "failed", Some("koneksi putus".to_string()));
         return Err("Failed to send the text".to_string());
     }
     let _ = stream.flush().await;
 
     let mut acked = false;
     let mut buffered: Vec<u8> = Vec::new();
-    match tokio::time::timeout(Duration::from_secs(30), read_frame(&mut stream, &mut buffered, IO_TIMEOUT)).await {
-        Ok(Ok(Some(msg))) => {
-            if msg.get("type").and_then(|v| v.as_str()) == Some("text-saved") {
-                acked = true;
-            }
-        }
-        _ => {}
+    if let Ok(Ok(Some(msg))) = tokio::time::timeout(
+        Duration::from_secs(30),
+        read_frame(&mut stream, &mut buffered, IO_TIMEOUT),
+    )
+    .await
+    {
+        acked = msg.get("type").and_then(|v| v.as_str()) == Some("text-saved");
     }
     let _ = stream.shutdown().await;
 
@@ -1757,7 +1836,9 @@ impl Transfers {
 
     fn take_reject_message(&self, request_id: &str) -> Option<String> {
         let pending = self.pending.lock().ok()?;
-        pending.get(request_id).and_then(|e| e.reject_message.clone())
+        pending
+            .get(request_id)
+            .and_then(|e| e.reject_message.clone())
     }
 
     pub fn pending_list(&self) -> Vec<Value> {
@@ -1953,7 +2034,10 @@ impl Transfers {
         let entry = outgoing
             .get_mut(request_id)
             .ok_or_else(|| format!("Request {request_id} not found"))?;
-        if matches!(entry.status.as_str(), "completed" | "failed" | "cancelled" | "rejected") {
+        if matches!(
+            entry.status.as_str(),
+            "completed" | "failed" | "cancelled" | "rejected"
+        ) {
             return Err("Transfer sudah selesai, tidak bisa dibatalkan".to_string());
         }
         entry.cancelled_by_user = true;
@@ -1978,7 +2062,10 @@ impl Transfers {
         let entry = pending
             .get_mut(request_id)
             .ok_or_else(|| format!("Request {request_id} not found"))?;
-        if matches!(entry.status.as_str(), "completed" | "failed" | "cancelled" | "rejected") {
+        if matches!(
+            entry.status.as_str(),
+            "completed" | "failed" | "cancelled" | "rejected"
+        ) {
             return Err("Transfer sudah selesai, tidak bisa dibatalkan".to_string());
         }
         entry.status = "cancelled".to_string();
@@ -2083,7 +2170,10 @@ pub fn start_server(state: Arc<AppState>) {
                     break;
                 }
                 Err(err) => {
-                    println!("⚠️ Transfer port {port} is taken — LAN DROP moved to {}", port + 1);
+                    println!(
+                        "⚠️ Transfer port {port} is taken — LAN DROP moved to {}",
+                        port + 1
+                    );
                     let _ = err;
                     port += 1;
                 }
@@ -2128,7 +2218,10 @@ mod tests {
 
     #[test]
     fn forbidden_characters_replaced() {
-        assert_eq!(sanitize_file_name("a:b*c?d|e\"f<g>h.txt"), "a_b_c_d_e_f_g_h.txt");
+        assert_eq!(
+            sanitize_file_name("a:b*c?d|e\"f<g>h.txt"),
+            "a_b_c_d_e_f_g_h.txt"
+        );
         assert_eq!(sanitize_file_name("baris\nbaru.txt"), "baris_baru.txt");
     }
 
@@ -2153,6 +2246,9 @@ mod tests {
 
     #[test]
     fn unicode_names_survive() {
-        assert_eq!(sanitize_file_name("foto-日本語-🎉.png"), "foto-日本語-🎉.png");
+        assert_eq!(
+            sanitize_file_name("foto-日本語-🎉.png"),
+            "foto-日本語-🎉.png"
+        );
     }
 }

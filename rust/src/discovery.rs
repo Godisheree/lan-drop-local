@@ -30,7 +30,6 @@ const DEVICE_TIMEOUT_MS: u128 = 10_000;
 const CLEANUP_INTERVAL: Duration = Duration::from_secs(3);
 const REJECT_LOG_TTL_MS: u128 = 60_000;
 
-
 /// Bind UDP dengan SO_REUSEADDR, seperti `reuseAddr: true` di Node.
 ///
 /// Paket broadcast dikirim ke semua socket yang memegang port itu, jadi dua
@@ -52,6 +51,12 @@ pub struct Address {
     pub transfer_port: u16,
     pub source: String,
 }
+
+/// Batas atas peer yang disimpan. `/devices` mengirim seluruh isinya ke
+/// dashboard, jadi jumlah entri ikut menentukan biaya render.
+const MAX_PEERS: usize = 256;
+/// Batas per alamat sumber: satu mesin tidak boleh memenuhi daftar sendirian.
+const MAX_PEERS_PER_SOURCE: usize = 32;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
@@ -177,7 +182,9 @@ impl Discovery {
             if name.is_empty() || addr.is_empty() {
                 continue;
             }
-            let Some(colon) = addr.rfind(':') else { continue };
+            let Some(colon) = addr.rfind(':') else {
+                continue;
+            };
             let ip = &addr[..colon];
             if ip.is_empty() {
                 continue;
@@ -203,7 +210,9 @@ impl Discovery {
             if let Ok(mut peers) = self.peers.lock() {
                 peers.insert(id, peer);
             }
-            println!("[Discovery] Peer statis terdaftar: {name} ({ip}:{port}, transfer {transfer_port})");
+            println!(
+                "[Discovery] Peer statis terdaftar: {name} ({ip}:{port}, transfer {transfer_port})"
+            );
         }
     }
 
@@ -277,7 +286,10 @@ impl Discovery {
         // loopback (dua instance di satu host), di situ alamat sumber tidak
         // berarti apa-apa sehingga `ip` dari payload dipakai.
         let payload_ip = msg.get("ip").and_then(|v| v.as_str()).unwrap_or("");
-        let ip = if is_loopback_address(&source) && !payload_ip.is_empty() && payload_ip != "localhost" {
+        let ip = if is_loopback_address(&source)
+            && !payload_ip.is_empty()
+            && payload_ip != "localhost"
+        {
             payload_ip.to_string()
         } else {
             source.clone()
@@ -297,7 +309,15 @@ impl Discovery {
             .to_string();
         let device_name = sanitize_peer_name(msg.get("deviceName").unwrap_or(&Value::Null));
 
-        if self.upsert_peer(&device_id, &device_name, &ip, http_port, transfer_port, via, &source) {
+        if self.upsert_peer(
+            &device_id,
+            &device_name,
+            &ip,
+            http_port,
+            transfer_port,
+            via,
+            &source,
+        ) {
             self.last_announce_at
                 .store(now_ms().min(u64::MAX as u128) as u64, Ordering::SeqCst);
         }
@@ -324,6 +344,24 @@ impl Discovery {
             Ok(p) => p,
             Err(_) => return false,
         };
+        // Satu host di LAN bisa mengirim announce dengan deviceId acak ribuan
+        // per detik; entri baru hidup 10 detik, jadi tanpa batas `/devices`
+        // membengkak puluhan ribu dan respons dashboard ikut membengkak.
+        if !peers.contains_key(device_id) {
+            if peers.len() >= MAX_PEERS {
+                return false;
+            }
+            let from_source = peers
+                .values()
+                .filter(|peer| {
+                    peer.lan.as_ref().is_some_and(|a| a.source == source)
+                        || peer.tailscale.as_ref().is_some_and(|a| a.source == source)
+                })
+                .count();
+            if from_source >= MAX_PEERS_PER_SOURCE {
+                return false;
+            }
+        }
         let entry = peers.entry(device_id.to_string()).or_insert_with(|| Peer {
             device_name: device_name.to_string(),
             lan: None,
@@ -341,8 +379,18 @@ impl Discovery {
             entry.lan.clone()
         };
         if let Some(current) = current {
-            if !current.source.is_empty() && current.source != source && now.saturating_sub(entry.last_seen) < DEVICE_TIMEOUT_MS {
-                let key = format!("{device_id}|{}", if via == "tailscale" { "tailscale" } else { "lan" });
+            if !current.source.is_empty()
+                && current.source != source
+                && now.saturating_sub(entry.last_seen) < DEVICE_TIMEOUT_MS
+            {
+                let key = format!(
+                    "{device_id}|{}",
+                    if via == "tailscale" {
+                        "tailscale"
+                    } else {
+                        "lan"
+                    }
+                );
                 let should_log = match self.rejected.lock() {
                     Ok(mut rejected) => match rejected.get(&key) {
                         Some(last) if now.saturating_sub(*last) < REJECT_LOG_TTL_MS => false,
@@ -435,7 +483,10 @@ impl Discovery {
                 if socket.set_broadcast(true).is_err() {
                     eprintln!("[Discovery] set_broadcast gagal di {bind}");
                 }
-                println!("[Discovery] Broadcasting as \"{}\" ({}) → {target}", this.device_name, this.device_id);
+                println!(
+                    "[Discovery] Broadcasting as \"{}\" ({}) → {target}",
+                    this.device_name, this.device_id
+                );
                 let _ = &address;
                 let mut last_error: Option<String> = None;
                 loop {

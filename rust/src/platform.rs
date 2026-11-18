@@ -108,7 +108,8 @@ pub fn device_name() -> String {
     }
     let host = hostname();
     let host = host.trim();
-    if host.is_empty() || host.eq_ignore_ascii_case("localhost") || host == "localhost.localdomain" {
+    if host.is_empty() || host.eq_ignore_ascii_case("localhost") || host == "localhost.localdomain"
+    {
         "Android".to_string()
     } else {
         host.to_string()
@@ -126,8 +127,6 @@ pub fn own_addresses() -> Vec<String> {
     out
 }
 
-/// IPv4 LAN yang bisa dipakai perangkat lain, plus nama interface-nya.
-
 /// Interface LAN beserta alamat broadcast-nya: `(nama, ip, broadcast)`.
 ///
 /// Broadcast dihitung dari prefix, bukan `255.255.255.255`: alamat terakhir
@@ -135,7 +134,14 @@ pub fn own_addresses() -> Vec<String> {
 /// paket announce tidak pernah sampai ke tetangga Wi-Fi.
 /// Interface yang bukan jalur LAN sesungguhnya — nama di-lowercase, dicek
 /// substring, sama persis dengan daftar di `server/platform.js`.
-const VIRTUAL_IFACE_HINTS: &[&str] = &["vmware", "virtualbox", "docker", "vethernet", "warp", "tailscale"];
+const VIRTUAL_IFACE_HINTS: &[&str] = &[
+    "vmware",
+    "virtualbox",
+    "docker",
+    "vethernet",
+    "warp",
+    "tailscale",
+];
 const WIFI_IFACE_HINTS: &[&str] = &["wl", "wifi", "wlan", "en0"];
 
 fn is_virtual_iface(name: &str) -> bool {
@@ -164,7 +170,9 @@ pub fn lan_interfaces() -> Vec<(String, String, String)> {
             if is_virtual_iface(&name) || name == "lo" {
                 continue;
             }
-            let if_addrs::IfAddr::V4(v4) = iface.addr else { continue };
+            let if_addrs::IfAddr::V4(v4) = iface.addr else {
+                continue;
+            };
             if v4.ip.is_loopback() || v4.ip.is_link_local() {
                 continue;
             }
@@ -185,7 +193,6 @@ pub fn lan_interfaces() -> Vec<(String, String, String)> {
     out.sort_by_key(|(name, _, _)| if is_wifi_iface(name) { 0 } else { 1 });
     out
 }
-
 
 /// Alamat CGNAT Tailscale (100.64.0.0/10).
 pub fn is_tailscale_ipv4(address: &str) -> bool {

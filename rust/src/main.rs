@@ -74,33 +74,50 @@ fn router(state: Arc<AppState>) -> Router {
         .route("/discovery/status", get(httpapi::discovery_status))
         .route("/transfer/active", get(httpapi::transfer_active))
         .route("/transfer/request", post(httpapi::transfer_request))
-        .route("/transfer/request-text", post(httpapi::transfer_request_text))
+        .route(
+            "/transfer/request-text",
+            post(httpapi::transfer_request_text),
+        )
         .route("/transfer/pending", get(httpapi::transfer_pending))
         .route("/transfer/respond", post(httpapi::transfer_respond))
-        .route("/transfer/status/{request_id}", get(httpapi::transfer_status))
-        .route("/transfer/cancel/{request_id}", post(httpapi::transfer_cancel))
+        .route(
+            "/transfer/status/{request_id}",
+            get(httpapi::transfer_status),
+        )
+        .route(
+            "/transfer/cancel/{request_id}",
+            post(httpapi::transfer_cancel),
+        )
         .route("/transfer/send-text", post(httpapi::transfer_send_text))
         .route("/transfer/send-file", post(httpapi::transfer_send_file))
         .route("/transfer/text", get(httpapi::transfer_text_list))
         .route("/transfer/text/{id}/ack", post(httpapi::transfer_text_ack))
-        .route("/transfer/progress/{request_id}", get(httpapi::transfer_progress))
+        .route(
+            "/transfer/progress/{request_id}",
+            get(httpapi::transfer_progress),
+        )
         // Batas body axum default 2 MB — cukup untuk semua rute lain, tapi
         // mematikan upload video. Batas sebenarnya dicek per berkas di handler
         // (LANDROP_MAX_UPLOAD_MB); di sini hanya longgarkan pintunya.
         .route(
             "/transfer/upload",
-            post(httpapi::transfer_upload)
-                .layer(axum::extract::DefaultBodyLimit::max(
-                    platform::max_upload_mb() as usize * 1024 * 1024 + 16 * 1024 * 1024,
-                )),
+            post(httpapi::transfer_upload).layer(axum::extract::DefaultBodyLimit::max(
+                platform::max_upload_mb() as usize * 1024 * 1024 + 16 * 1024 * 1024,
+            )),
         )
         .route("/thumbnail/{id}", get(httpapi::thumbnail))
         .route("/system/disk", get(httpapi::system_disk))
-        .route("/settings/auto-approve", get(httpapi::auto_approve_get).post(httpapi::auto_approve_set))
+        .route(
+            "/settings/auto-approve",
+            get(httpapi::auto_approve_get).post(httpapi::auto_approve_set),
+        )
         .route("/history", get(httpapi::history_list))
         .route("/history/clear", post(httpapi::history_clear))
         .fallback(get(httpapi::static_fallback))
-        .layer(middleware::from_fn_with_state(state.clone(), httpapi::guard))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            httpapi::guard,
+        ))
         .with_state(state)
 }
 
@@ -109,7 +126,10 @@ async fn main() {
     let data_dir = platform::data_dir();
     let settings = Arc::new(Settings::load(&data_dir));
     if settings.access_key().is_empty() {
-        eprintln!("[Rust] settings.json di {} belum punya accessKey.", data_dir.display());
+        eprintln!(
+            "[Rust] settings.json di {} belum punya accessKey.",
+            data_dir.display()
+        );
         std::process::exit(2);
     }
 
@@ -158,14 +178,20 @@ async fn main() {
                 break;
             }
             Err(err) => {
-                eprintln!("⚠️ Port {port} is already taken by another app — LAN DROP moved to {}", port + 1);
+                eprintln!(
+                    "⚠️ Port {port} is already taken by another app — LAN DROP moved to {}",
+                    port + 1
+                );
                 let _ = err;
                 port += 1;
             }
         }
     }
     let Some(listener) = listener else {
-        eprintln!("[Server] Port {} sampai +{} semuanya terpakai — jalankan dengan PORT=<angka lain>.", http_port, MAX_PORT_TRIES);
+        eprintln!(
+            "[Server] Port {} sampai +{} semuanya terpakai — jalankan dengan PORT=<angka lain>.",
+            http_port, MAX_PORT_TRIES
+        );
         std::process::exit(1);
     };
     ports.set_http(port);

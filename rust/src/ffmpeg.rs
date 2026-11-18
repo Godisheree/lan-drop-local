@@ -6,7 +6,7 @@
 //! dikirim apa adanya. Yang tidak boleh terjadi adalah "janji lalu diam" —
 //! setiap kegagalan ffmpeg jatuh ke jalur asli, bukan menggantung transfer.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Stdio;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -77,33 +77,33 @@ fn ffprobe_path() -> String {
 /// Jalankan ffmpeg dan tunggu hasilnya. `None` = gagal/timeout.
 pub async fn run_ffmpeg(args: &[String], timeout: Duration) -> Option<String> {
     let bin = ffmpeg_path()?.to_string();
+    // `kill_on_drop`: dua jalur berakhir tanpa `wait` — timeout, dan request
+    // HTTP yang dibatalkan klien (future-nya di-drop). Tanpa ini ffmpeg terus
+    // berjalan memakan CPU. Sekaligus menghapus ketergantungan pada binary
+    // `kill` yang tidak ada di Windows.
     let child = tokio::process::Command::new(bin)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .ok()?;
 
-    let pid = child.id();
     let output = match tokio::time::timeout(timeout, child.wait_with_output()).await {
         Ok(Ok(out)) => out,
-        _ => {
-            // Timeout: proses ffmpeg yang menggantung harus dibunuh, kalau
-            // tidak dia terus memakan CPU setelah transfernya dibatalkan.
-            if let Some(pid) = pid {
-                let _ = std::process::Command::new("kill")
-                    .args(["-9", &pid.to_string()])
-                    .status();
-            }
-            return None;
-        }
+        // Future `wait_with_output` memegang child; drop di sini memicunya.
+        _ => return None,
     };
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     if output.status.success() {
         Some(stderr)
     } else {
-        eprintln!("[ffmpeg] gagal ({}): {}", output.status, stderr.lines().next().unwrap_or(""));
+        eprintln!(
+            "[ffmpeg] gagal ({}): {}",
+            output.status,
+            stderr.lines().next().unwrap_or("")
+        );
         None
     }
 }
@@ -115,7 +115,7 @@ pub struct StreamInfo {
 
 /// Baca daftar stream. `None` kalau ffprobe tidak ada atau file-nya rusak —
 /// pemanggil lalu memakai jalur "kirim apa adanya".
-pub async fn probe(path: &PathBuf) -> Option<StreamInfo> {
+pub async fn probe(path: &Path) -> Option<StreamInfo> {
     let bin = ffprobe_path();
     let child = tokio::process::Command::new(bin)
         .args([
@@ -129,6 +129,7 @@ pub async fn probe(path: &PathBuf) -> Option<StreamInfo> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
+        .kill_on_drop(true)
         .spawn()
         .ok()?;
 
@@ -163,4 +164,75 @@ pub async fn probe(path: &PathBuf) -> Option<StreamInfo> {
         has_real_video,
         has_audio,
     })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// ffmpeg palsu: menjawab `-version` (supaya dianggap ada), selain itu
+    /// menulis pid-nya lalu tidur lama.
+    fn fake_ffmpeg(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
+        let script = dir.join("ffmpeg-palsu.sh");
+        let pidfile = dir.join("pid.txt");
+        let mut file = std::fs::File::create(&script).unwrap();
+        write!(
+            file,
+            "#!/bin/sh\nif [ \"$1\" = \"-version\" ]; then echo 'ffmpeg version 0'; exit 0; fi\necho $$ > {}\nexec sleep 30\n",
+            pidfile.display()
+        )
+        .unwrap();
+        drop(file);
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (script, pidfile)
+    }
+
+    /// Klien membatalkan request HTTP sebelum ffmpeg selesai: future-nya
+    /// di-drop. Tanpa `kill_on_drop`, ffmpeg terus berjalan memakan CPU sampai
+    /// selesai sendiri — dan pemanggilan `kill` lewat binary tidak ada di
+    /// Windows, jadi jalur timeout di sana tidak membunuh apa pun.
+    #[tokio::test]
+    async fn ffmpeg_dibunuh_saat_future_dibatalkan() {
+        let dir = std::env::temp_dir().join(format!("lan-drop-ffmpeg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (script, pidfile) = fake_ffmpeg(&dir);
+        std::env::set_var("LANDROP_FFMPEG", &script);
+
+        let args = ["-i".to_string(), "masukan.mkv".to_string()];
+        let cancelled = tokio::time::timeout(
+            Duration::from_millis(400),
+            run_ffmpeg(&args, Duration::from_secs(30)),
+        )
+        .await;
+        assert!(cancelled.is_err(), "ffmpeg palsu seharusnya masih berjalan");
+
+        let mut pid: Option<i32> = None;
+        for _ in 0..40 {
+            if let Ok(text) = std::fs::read_to_string(&pidfile) {
+                if let Ok(value) = text.trim().parse::<i32>() {
+                    pid = Some(value);
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let pid = pid.expect("ffmpeg palsu tidak sempat menulis pid");
+
+        let mut still_alive = true;
+        for _ in 0..60 {
+            if !std::path::Path::new(&format!("/proc/{pid}")).exists() {
+                still_alive = false;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            !still_alive,
+            "ffmpeg (pid {pid}) masih hidup setelah future-nya di-drop"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

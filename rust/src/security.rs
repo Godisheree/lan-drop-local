@@ -37,9 +37,8 @@ fn is_allowed_ipv4(addr: &str) -> bool {
     if o[0] == 169 && o[1] == 254 {
         return false; // link-local: metadata cloud, selalu tolak
     }
-    ip.is_loopback()
-        || ip.is_private()
-        || (o[0] == 100 && (64..=127).contains(&o[1])) // CGNAT Tailscale
+    ip.is_loopback() || ip.is_private() || (o[0] == 100 && (64..=127).contains(&o[1]))
+    // CGNAT Tailscale
 }
 
 fn is_allowed_ipv6(addr: &str) -> bool {
@@ -97,6 +96,14 @@ pub fn is_allowed_target_ip(target: &str) -> bool {
     }
 }
 
+/// Port tujuan transfer. Port di bawah 1024 tidak pernah dipakai LAN DROP, dan
+/// membiarkannya berarti pemegang access key bisa memakai `/transfer/request`
+/// sebagai port scanner ke seluruh LAN/Tailscale: beda "connection refused" vs
+/// "timed out" sudah cukup untuk memetakan layanan yang hidup.
+pub fn is_allowed_target_port(port: u64) -> bool {
+    (1024..=65535).contains(&port)
+}
+
 /// Target menunjuk mesin ini sendiri? Kirimannya akan mendarat di pengirim,
 /// bukan di peer — lebih baik ditolak dengan pesan jelas.
 pub fn is_self_target(target: &str) -> bool {
@@ -110,7 +117,10 @@ pub fn is_self_target(target: &str) -> bool {
     if value == "localhost" || value == "localhost.localdomain" {
         return true;
     }
-    let bare = value.trim_start_matches('[').trim_end_matches(']').to_string();
+    let bare = value
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_string();
     if let Ok(ip) = bare.parse::<IpAddr>() {
         if ip.is_loopback() {
             return true;
@@ -181,7 +191,7 @@ pub fn host_guard(headers: &HeaderMap) -> Option<String> {
         Ok(IpAddr::V6(_)) if is_allowed_ipv6(&host) => return None,
         _ => {}
     }
-    if own_hostnames().iter().any(|n| *n == host) {
+    if own_hostnames().contains(&host) {
         return None;
     }
     Some(
@@ -198,9 +208,7 @@ pub fn same_origin_guard(method: &str, headers: &HeaderMap) -> Option<&'static s
     if method == "GET" || method == "HEAD" || method == "OPTIONS" {
         return None;
     }
-    let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) else {
-        return None;
-    };
+    let origin = headers.get("origin").and_then(|v| v.to_str().ok())?;
     let origin_host = origin
         .split("://")
         .nth(1)
@@ -212,7 +220,10 @@ pub fn same_origin_guard(method: &str, headers: &HeaderMap) -> Option<&'static s
     if origin_host.is_empty() {
         return Some("Forbidden: invalid origin");
     }
-    let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let host = headers
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     if origin_host != host {
         return Some("Forbidden: cross-origin request rejected");
     }
@@ -246,9 +257,7 @@ impl RateLimiter {
         if hits.len() > 1024 {
             hits.retain(|_, (_, reset)| *reset > now);
         }
-        let entry = hits
-            .entry(ip.to_string())
-            .or_insert((0, now + self.window));
+        let entry = hits.entry(ip.to_string()).or_insert((0, now + self.window));
         if entry.1 <= now {
             *entry = (0, now + self.window);
         }

@@ -27,7 +27,12 @@ pub fn framed(value: &Value) -> Vec<u8> {
 ///
 /// Identitas pengirim dan resumeId ikut masuk supaya dua file berbeda yang
 /// kebetulan bernama dan berukuran sama tidak pernah disambung jadi satu.
-pub fn make_transfer_key(sender_id: &str, resume_id: &str, file_name: &str, file_size: u64) -> String {
+pub fn make_transfer_key(
+    sender_id: &str,
+    resume_id: &str,
+    file_name: &str,
+    file_size: u64,
+) -> String {
     let mut hasher = Sha1::new();
     hasher.update(format!("{sender_id}|{resume_id}|{file_name}|{file_size}").as_bytes());
     let digest = hasher.finalize();
@@ -65,9 +70,21 @@ mod tests {
     #[test]
     fn transfer_key_changes_with_identity_name_and_size() {
         let base = make_transfer_key("sender1", "resume1", "film.mp4", 1024);
-        assert_ne!(base, make_transfer_key("sender2", "resume1", "film.mp4", 1024));
-        assert_ne!(base, make_transfer_key("sender1", "resume2", "film.mp4", 1024));
-        assert_ne!(base, make_transfer_key("sender1", "resume1", "film2.mp4", 1024));
-        assert_ne!(base, make_transfer_key("sender1", "resume1", "film.mp4", 2048));
+        assert_ne!(
+            base,
+            make_transfer_key("sender2", "resume1", "film.mp4", 1024)
+        );
+        assert_ne!(
+            base,
+            make_transfer_key("sender1", "resume2", "film.mp4", 1024)
+        );
+        assert_ne!(
+            base,
+            make_transfer_key("sender1", "resume1", "film2.mp4", 1024)
+        );
+        assert_ne!(
+            base,
+            make_transfer_key("sender1", "resume1", "film.mp4", 2048)
+        );
     }
 }

@@ -36,6 +36,10 @@ fn ext_of(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
+/// Batas waktu satu pemanggilan ffmpeg — sama dengan `timeout: 20000` di
+/// `server/thumbnail.js`.
+const THUMBNAIL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
 pub fn is_thumbnailable(name: &str) -> bool {
     matches!(platform::classify_extension(name), "photo" | "video")
 }
@@ -146,8 +150,7 @@ impl Thumbnails {
         let video = is_video(input);
         let browser_image = is_browser_image(input);
 
-        if let Some(jpeg) = self.render_with_ffmpeg(input, output, video) {
-            let _ = jpeg;
+        if self.render_with_ffmpeg(input, output, video).is_some() {
             return Rendered::Jpeg;
         }
 
@@ -187,13 +190,34 @@ impl Thumbnails {
             output.to_string_lossy().to_string(),
         ]);
 
-        let status = std::process::Command::new(ffmpeg::ffmpeg_path()?)
+        // Tanpa batas waktu, ffmpeg yang menggantung menahan satu thread
+        // `spawn_blocking` selamanya; beberapa berkas aneh dari peer lalu
+        // `/thumbnail` berulang sudah cukup mematikan seluruh jalur thumbnail.
+        let mut child = std::process::Command::new(ffmpeg::ffmpeg_path()?)
             .args(&args)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .status()
+            .spawn()
             .ok()?;
+        let deadline = std::time::Instant::now() + THUMBNAIL_TIMEOUT;
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {
+                    if std::time::Instant::now() >= deadline {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return None;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                Err(_) => {
+                    let _ = child.kill();
+                    return None;
+                }
+            }
+        };
         if !status.success() {
             return None;
         }

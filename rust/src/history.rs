@@ -41,7 +41,9 @@ impl History {
     }
 
     fn write_now(&self) {
-        let Ok(entries) = self.entries.lock() else { return };
+        let Ok(entries) = self.entries.lock() else {
+            return;
+        };
         if let Some(parent) = self.path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -54,7 +56,9 @@ impl History {
 
     pub fn add(&self, entry: Value) {
         {
-            let Ok(mut entries) = self.entries.lock() else { return };
+            let Ok(mut entries) = self.entries.lock() else {
+                return;
+            };
             let direction = if entry.get("direction").and_then(|v| v.as_str()) == Some("receive") {
                 "receive"
             } else {
@@ -88,10 +92,7 @@ impl History {
     }
 
     pub fn list(&self) -> Vec<Value> {
-        self.entries
-            .lock()
-            .map(|e| e.clone())
-            .unwrap_or_default()
+        self.entries.lock().map(|e| e.clone()).unwrap_or_default()
     }
 
     pub fn clear(&self) {

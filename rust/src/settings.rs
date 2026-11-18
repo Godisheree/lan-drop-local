@@ -101,6 +101,20 @@ fn normalize_peers(value: Option<&Value>) -> Vec<String> {
     }
 }
 
+/// Batasi izin berkas/folder ke pemilik. Di Windows mode POSIX tidak dipakai:
+/// ACL default sudah membatasi ke pengguna yang membuat berkasnya.
+fn restrict_mode(path: &Path, mode: u32) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, mode);
+    }
+}
+
 impl Settings {
     pub fn load(data_dir: &Path) -> Settings {
         let path = data_dir.join("settings.json");
@@ -111,7 +125,10 @@ impl Settings {
 
         let auto = raw.get("autoApprove").cloned().unwrap_or(Value::Null);
         let mut inner = Inner {
-            auto_approve_enabled: auto.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false),
+            auto_approve_enabled: auto
+                .get("enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             auto_approve_peers: normalize_peers(auto.get("peers")),
             dashboard_pin: normalize_pin(raw.get("dashboardPin")),
             access_key: normalize_access_key(raw.get("accessKey")),
@@ -188,12 +205,18 @@ impl Settings {
         }
         if let Some(parent) = self.path.parent() {
             let _ = std::fs::create_dir_all(parent);
+            // Folder data memuat kunci pairing dan PIN: pemilik saja.
+            restrict_mode(parent, 0o700);
         }
         let tmp = self.path.with_extension("json.tmp");
         let text = serde_json::to_string(&merged).unwrap_or_else(|_| "{}".to_string());
         if std::fs::write(&tmp, text).is_err() {
             return false;
         }
+        // Kunci harus dipasang SEBELUM rename: kalau sesudah, ada jendela
+        // singkat saat berkas sudah ada di namanya yang sebenarnya tapi masih
+        // 0644 — dan `accessKey` di dalamnya sudah bisa dibaca.
+        restrict_mode(&tmp, 0o600);
         std::fs::rename(&tmp, &self.path).is_ok()
     }
 
@@ -264,7 +287,12 @@ impl Settings {
     ///
     /// `known_ips` = alamat yang benar-benar diumumkan perangkat bernama itu
     /// lewat discovery. Nama saja tidak cukup: siapa pun bisa menyamar.
-    pub fn is_auto_approve_peer<F>(&self, sender_name: &str, sender_ip: Option<&str>, known_ips: F) -> bool
+    pub fn is_auto_approve_peer<F>(
+        &self,
+        sender_name: &str,
+        sender_ip: Option<&str>,
+        known_ips: F,
+    ) -> bool
     where
         F: Fn(&str) -> Vec<String>,
     {
@@ -305,7 +333,7 @@ impl Settings {
                     if ip.is_empty() {
                         return false;
                     }
-                    advertised.iter().any(|addr| *addr == ip)
+                    advertised.contains(&ip)
                 }
                 Some(at) => {
                     if &text[..at] != name {
@@ -315,5 +343,38 @@ impl Settings {
                 }
             }
         })
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("lan-drop-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// `settings.json` menyimpan `accessKey` dan PIN. Dengan umask biasa (022)
+    /// berkasnya 0644 — tetangga satu mesin bisa membacanya dan memakai kunci
+    /// pairing itu untuk menyamar sebagai peer tepercaya.
+    #[test]
+    fn settings_json_tidak_bisa_dibaca_pengguna_lain() {
+        let dir = temp_dir("perm");
+        let settings = Settings::load(&dir);
+        settings.set_dashboard_pin("4321");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(dir.join("settings.json"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "settings.json harus 0600, bukan {mode:o}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

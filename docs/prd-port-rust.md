@@ -377,7 +377,10 @@ $ node scripts/check-rust-core.js
                                  # log dashboard, penolakan target, rute data
 
 $ node scripts/check-rust-hardening.js
-63 lulus, 0 gagal                # Host/Origin palsu, traversal statis, frame
+77 lulus, 0 gagal                # port tujuan < 1024 ditolak, banjir 400
+                                 # announce, thumbnail dengan ffmpeg
+                                 # menggantung, upload tanpa ruang disk,
+                                 # Host/Origin palsu, traversal statis, frame
                                  # 8 MB, JSON rusak, 90 request acak tanpa
                                  # panic, 80 koneksi menganggur, penolakan
                                  # beralasan, nama file traversal, file kembar,
@@ -386,6 +389,11 @@ $ node scripts/check-rust-hardening.js
                                  # lintas restart, settings.json rusak,
                                  # anti-hijack announce, rate limit PIN
 
+$ npm run core:lint
+clippy bersih                   # -D warnings; lokal lewat clippy-driver kalau
+                                 # shim cargo-clippy tidak terpasang
+$ node scripts/check-rust-ci.js
+6 lulus                         # workflow CI memuat fmt --check, clippy, test
 $ (cd rust && cargo test --release)
 16 passed                        # nama file, kunci resume, frame, host guard,
                                  # target IP privat/link-local, self target

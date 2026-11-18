@@ -19,7 +19,7 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const BIN = path.join(ROOT, 'rust', 'target', 'release', 'lan-drop-core');
@@ -189,6 +189,20 @@ async function upload(port, fileName, payload) {
   return body && body.files ? body.files[0] : null;
 }
 
+async function uploadRaw(port, fileName, payload) {
+  const boundary = `----raw${crypto.randomBytes(4).toString('hex')}`;
+  const head = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\n`
+    + 'Content-Type: application/octet-stream\r\n\r\n', 'utf-8',
+  );
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf-8');
+  return fetch(`http://127.0.0.1:${port}/transfer/upload`, {
+    method: 'POST',
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+    body: Buffer.concat([head, payload, tail]),
+  });
+}
+
 function settingsKey(dir) {
   try {
     return JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf-8')).accessKey || null;
@@ -280,6 +294,30 @@ async function main() {
       headers.headers['x-content-type-options'] === 'nosniff'
       && /frame-ancestors/.test(headers.headers['content-security-policy'] || ''),
       JSON.stringify({ nosniff: headers.headers['x-content-type-options'] }));
+
+    // ── 1b. Port tujuan ────────────────────────────────────────────────────
+    section('Port tujuan');
+
+    // Pemegang access key tidak boleh memakai /transfer/request sebagai port
+    // scanner ke seluruh LAN: beda "refused" vs "timeout" sudah cukup untuk
+    // memetakan layanan. Port < 1024 tidak pernah jadi port transfer.
+    for (const targetPort of [22, 80, 443, 1023]) {
+      const res = await api(aPorts.http, '/transfer/request', {
+        body: {
+          targetIp: '192.168.1.10', targetPort, fileName: 'scan.bin', fileSize: 10,
+          targetName: 'Sasaran',
+        },
+      });
+      check(`port tujuan ${targetPort} ditolak`, res.status === 400, `${res.status}`);
+    }
+    const highPort = await api(aPorts.http, '/transfer/request', {
+      body: {
+        targetIp: '127.0.0.1', targetPort: bPorts.tcp, fileName: 'port-normal.bin',
+        fileSize: 10, targetName: 'MesinB',
+      },
+    });
+    check('port transfer normal (>=1024) tetap diterima', highPort.status === 200,
+      `${highPort.status}`);
 
     // ── 2. Statis & path traversal ─────────────────────────────────────────
     section('Berkas statis & path traversal');
@@ -629,17 +667,133 @@ async function main() {
       await api(dPorts.http, '/transfer/send-file', {
         body: { requestId: aviReq.body.requestId, filePath: aviUp.filePath },
       });
-      const out = path.join(TMP, 'd', 'save', 'tanpa-ffmpeg.avi');
+      const dSave = path.join(TMP, 'd', 'save');
+      let out = path.join(dSave, 'tanpa-ffmpeg.avi');
       for (let i = 0; i < 200 && !fs.existsSync(out); i++) await sleep(50);
       check('tanpa ffmpeg, video tetap terkirim apa adanya',
         fs.existsSync(out) && fs.statSync(out).size === aviUp.fileSize,
-        fs.existsSync(out) ? `${fs.statSync(out).size} byte .avi` : 'tidak ada');
+        fs.existsSync(out)
+          ? `${fs.statSync(out).size} byte .avi`
+          : `tidak ada (isi save: ${fs.existsSync(dSave) ? fs.readdirSync(dSave).join(',') || 'kosong' : 'folder tidak ada'})`);
       check('transfer tanpa ffmpeg selesai',
         (await waitStatus(dPorts.http, aviReq.body.requestId, ['completed'], 60)) === 'completed');
     } else {
       check('instance tanpa ffmpeg hidup', false, 'tidak start');
     }
     try { d.proc.kill('SIGKILL'); } catch (_) {}
+
+    // ── 6d. Thumbnail tidak boleh menggantung ─────────────────────────────
+    section('Thumbnail dengan ffmpeg menggantung');
+
+    const hungBin = path.join(TMP, 'ffmpeg-gantung.sh');
+    fs.writeFileSync(hungBin, `#!/bin/sh\nif [ "$1" = "-version" ]; then echo 'ffmpeg version 0'; exit 0; fi\nexec sleep 300\n`);
+    fs.chmodSync(hungBin, 0o755);
+    const ePorts = { http: await findFreePort(), tcp: await findFreePort(), disc: await findFreePort() };
+    const e = startInstance('MesinE', path.join(TMP, 'e'), ePorts, { LANDROP_FFMPEG: hungBin });
+    if (await waitReady(ePorts.http)) {
+      // Video dikirim ke dirinya sendiri supaya masuk riwayat dan punya
+      // thumbnailId — jalur yang sama dipakai UI saat menampilkan pratinjau.
+      const videoUp = await upload(ePorts.http, 'gantung.mp4', crypto.randomBytes(64 * 1024));
+      const videoReq = await api(ePorts.http, '/transfer/request', {
+        body: {
+          targetIp: '127.0.0.1', targetPort: ePorts.tcp, fileName: 'gantung.mp4',
+          fileSize: videoUp.fileSize, targetName: 'MesinE', resumeId: 'thumbnail-gantung',
+        },
+      });
+      if (videoReq.status === 200) {
+        await api(ePorts.http, '/transfer/respond', {
+          body: { requestId: await pendingId(ePorts.http, 'gantung.mp4'), accept: true },
+        });
+        await api(ePorts.http, '/transfer/send-file', {
+          body: { requestId: videoReq.body.requestId, filePath: videoUp.filePath },
+        });
+        await waitStatus(ePorts.http, videoReq.body.requestId, ['completed'], 120);
+      }
+
+      const eLogin = await api(ePorts.http, '/dashboard/login', { body: { pin: '123456' } });
+      const eCookie = (eLogin.headers.get('set-cookie') || '').split(';')[0];
+      const history = (await api(ePorts.http, '/history', { headers: { cookie: eCookie } })).body || [];
+      const entry = history.find((h) => h.direction === 'receive' && h.fileName === 'gantung.mp4') || {};
+      const thumbId = entry.thumbnailId;
+      check('video yang diterima punya thumbnailId', !!thumbId, `${thumbId || 'tidak ada'}`);
+      if (thumbId) {
+        const startedAt = Date.now();
+        let thumbStatus = 0;
+        try {
+          const res = await fetch(`http://127.0.0.1:${ePorts.http}/thumbnail/${thumbId}`, {
+            headers: { cookie: eCookie },
+            signal: AbortSignal.timeout(40000),
+          });
+          thumbStatus = res.status;
+          await res.arrayBuffer();
+        } catch (_) { thumbStatus = 0; }
+        const spent = Date.now() - startedAt;
+        check('thumbnail menjawab walau ffmpeg menggantung', thumbStatus > 0,
+          `${thumbStatus || 'tidak menjawab'} dalam ${spent}ms`);
+        check('thumbnail selesai di bawah 30 detik', spent < 30000, `${spent}ms`);
+      }
+      check('server tetap hidup setelah thumbnail menggantung',
+        (await fetch(`http://127.0.0.1:${ePorts.http}/status`).then((r) => r.status).catch(() => 0)) === 200);
+    } else {
+      check('instance dengan ffmpeg palsu hidup', false, 'tidak start');
+    }
+    try { e.proc.kill('SIGKILL'); } catch (_) {}
+
+    // ── 6e. Upload melebihi ruang disk ─────────────────────────────────────
+    section('Upload dan ruang disk');
+
+    let smallFs = null;
+    if (process.getuid && process.getuid() === 0) {
+      smallFs = path.join(TMP, 'smallfs');
+      fs.mkdirSync(smallFs, { recursive: true });
+      const mounted = spawnSync('mount', ['-t', 'tmpfs', '-o', 'size=4m', 'tmpfs', smallFs],
+        { stdio: 'ignore' }).status === 0;
+      if (!mounted) smallFs = null;
+    }
+    if (smallFs) {
+      const fPorts = { http: await findFreePort(), tcp: await findFreePort(), disc: await findFreePort() };
+      const fDir = path.join(TMP, 'f');
+      fs.mkdirSync(path.join(fDir, 'save'), { recursive: true });
+      // Yang dibatasi di sini adalah folder unggah (`<data_dir>/uploads`),
+      // bukan folder simpan.
+      const f = startInstance('MesinF', smallFs, fPorts, { LANDROP_SAVE_DIR: path.join(fDir, 'save') });
+      if (await waitReady(fPorts.http)) {
+        // Server menolak SEBELUM membaca seluruh body, jadi koneksinya bisa
+        // ditutup saat klien masih mengirim — itu penolakan, bukan crash.
+        let status = 0;
+        let body = {};
+        try {
+          const res = await uploadRaw(fPorts.http, 'tidak-muat.bin', crypto.randomBytes(9 * 1024 * 1024));
+          status = res.status;
+          body = await res.json().catch(() => ({}));
+        } catch (_) {
+          status = -1;
+        }
+        if (status === -1) {
+          // Konfirmasi lewat jalur kecil: penolakan harus tetap 507.
+          try {
+            const small = await uploadRaw(fPorts.http, 'kecil.bin', crypto.randomBytes(8 * 1024));
+            status = small.status;
+            body = await small.json().catch(() => ({}));
+          } catch (_) { status = -1; }
+        }
+        check('upload melebihi ruang disk ditolak 507', status === 507, `${status}`);
+        check('penolakan menyebut ruang disk',
+          /space|disk|ruang/i.test(JSON.stringify(body)), JSON.stringify(body).slice(0, 120));
+        const uploadDir = path.join(smallFs, 'uploads');
+        const leftovers = fs.existsSync(uploadDir) ? fs.readdirSync(uploadDir) : [];
+        check('tidak ada berkas setengah jadi tertinggal', leftovers.length === 0,
+          leftovers.join(',') || 'bersih');
+        check('server tetap melayani setelah penolakan',
+          (await fetch(`http://127.0.0.1:${fPorts.http}/status`).then((r) => r.status).catch(() => 0)) === 200);
+      } else {
+        check('instance dengan disk kecil hidup', false, 'tidak start');
+      }
+      try { f.proc.kill('SIGKILL'); } catch (_) {}
+      spawnSync('umount', [smallFs], { stdio: 'ignore' });
+    } else {
+      console.log('  SKIP  ruang disk (butuh root + mount tmpfs)');
+    }
 
     // ── 6d. HTTP acak: server harus tetap hidup ────────────────────────────
     section('HTTP acak (anti-panik)');
@@ -806,6 +960,20 @@ async function main() {
     }
     check('announce diterima dan peer masuk daftar', !!seen,
       seen ? `${seen.deviceName} @ ${seen.ip}:${seen.port}` : 'tidak muncul');
+
+    // Satu host di LAN bisa membanjiri announce dengan deviceId acak: entri
+    // bertahan 10 detik, jadi tanpa batas `/devices` membengkak puluhan ribu
+    // dan respons dashboard ikut membengkak.
+    const burst = [];
+    for (let i = 0; i < 400; i++) {
+      burst.push(announce({ deviceId: crypto.randomBytes(6).toString('hex'), deviceName: `banjir-${i}` },
+        '127.0.0.1', '127.0.0.1'));
+      if (i % 40 === 39) await Promise.all(burst.splice(0));
+    }
+    await Promise.all(burst);
+    await sleep(500);
+    const flooded = (await api(aPorts.http, '/devices')).body || [];
+    check('jumlah peer dibatasi (<= 256)', flooded.length <= 256, `${flooded.length} peer`);
 
     // Anti-hijack: deviceId sama dari alamat lain tidak boleh memindahkan
     // kartu peer selama peer aslinya masih hidup.

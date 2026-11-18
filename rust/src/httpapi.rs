@@ -15,11 +15,11 @@ use std::sync::Arc;
 
 use axum::body::{Body, Bytes};
 use axum::extract::multipart::Multipart;
+use axum::extract::Request;
 use axum::extract::{ConnectInfo, Path as AxumPath, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::extract::Request;
 use serde_json::{json, Value};
 
 use crate::access;
@@ -52,12 +52,20 @@ pub async fn guard(
     let uri = req.uri().clone();
 
     if let Some(message) = security::host_guard(&headers) {
-        let mut resp = (StatusCode::FORBIDDEN, axum::Json(json!({ "error": message }))).into_response();
+        let mut resp = (
+            StatusCode::FORBIDDEN,
+            axum::Json(json!({ "error": message })),
+        )
+            .into_response();
         security_headers(&mut resp);
         return resp;
     }
     if let Some(message) = security::same_origin_guard(&method, &headers) {
-        let mut resp = (StatusCode::FORBIDDEN, axum::Json(json!({ "error": message }))).into_response();
+        let mut resp = (
+            StatusCode::FORBIDDEN,
+            axum::Json(json!({ "error": message })),
+        )
+            .into_response();
         security_headers(&mut resp);
         return resp;
     }
@@ -178,12 +186,14 @@ fn server_error(message: &str) -> Response {
         .into_response()
 }
 
+// `Response` besar (128 byte) dibawa sebagai varian `Err`. Membungkusnya
+// dengan Box hanya menambah alokasi di setiap body JSON yang tidak valid.
+#[allow(clippy::result_large_err)]
 async fn json_body(body: Bytes) -> Result<Value, Response> {
     if body.is_empty() {
         return Ok(json!({}));
     }
-    serde_json::from_slice::<Value>(&body)
-        .map_err(|_| bad_request("Invalid JSON"))
+    serde_json::from_slice::<Value>(&body).map_err(|_| bad_request("Invalid JSON"))
 }
 
 fn field_str<'a>(body: &'a Value, key: &str) -> Option<&'a str> {
@@ -220,7 +230,10 @@ fn mime_for(path: &Path) -> &'static str {
 pub fn is_unsafe_path(url_path: &str) -> bool {
     let rel = url_path.trim_start_matches('/');
     Path::new(rel).components().any(|c| {
-        matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir)
+        matches!(
+            c,
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir
+        )
     })
 }
 
@@ -228,7 +241,10 @@ fn resolve_public(public_dir: &Path, url_path: &str) -> Option<PathBuf> {
     let rel = url_path.trim_start_matches('/');
     let rel = if rel.is_empty() { "index.html" } else { rel };
     if Path::new(rel).components().any(|c| {
-        matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir)
+        matches!(
+            c,
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir
+        )
     }) {
         return None;
     }
@@ -241,7 +257,11 @@ fn resolve_public(public_dir: &Path, url_path: &str) -> Option<PathBuf> {
     Some(real)
 }
 
-async fn serve_file(state: &AppState, rel: &str, extra: &[(&'static str, &'static str)]) -> Response {
+async fn serve_file(
+    state: &AppState,
+    rel: &str,
+    extra: &[(&'static str, &'static str)],
+) -> Response {
     let Some(path) = resolve_public(&state.public_dir, rel) else {
         return (StatusCode::NOT_FOUND, "Not found").into_response();
     };
@@ -253,8 +273,10 @@ async fn serve_file(state: &AppState, rel: &str, extra: &[(&'static str, &'stati
     match tokio::fs::read(&path).await {
         Ok(bytes) => {
             let mut resp = Response::new(Body::from(bytes));
-            resp.headers_mut()
-                .insert(header::CONTENT_TYPE, HeaderValue::from_static(mime_for(&path)));
+            resp.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static(mime_for(&path)),
+            );
             for (name, value) in extra {
                 if let (Ok(n), Ok(v)) = (
                     header::HeaderName::from_bytes(name.as_bytes()),
@@ -287,7 +309,12 @@ pub async fn service_worker(State(state): State<Arc<AppState>>) -> Response {
 }
 
 pub async fn manifest(State(state): State<Arc<AppState>>) -> Response {
-    let mut resp = serve_file(&state, "/manifest.webmanifest", &[("cache-control", "no-cache")]).await;
+    let mut resp = serve_file(
+        &state,
+        "/manifest.webmanifest",
+        &[("cache-control", "no-cache")],
+    )
+    .await;
     resp.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/manifest+json"),
@@ -565,6 +592,11 @@ pub async fn transfer_request(
     if target_port == 0 {
         return bad_request("Missing fields: targetIp, targetPort, fileName, fileSize");
     }
+    if !security::is_allowed_target_port(target_port) {
+        return bad_request(
+            "Target port rejected: only ports 1024 and above can be a transfer port",
+        );
+    }
     if !security::is_allowed_target_ip(&target_ip) {
         return bad_request("Target IP rejected: only LAN/Tailscale addresses are allowed");
     }
@@ -586,11 +618,7 @@ pub async fn transfer_request(
     };
     match crate::transfer::send_transfer_request(state.clone(), meta).await {
         Ok(request_id) => axum::Json(json!({ "requestId": request_id })).into_response(),
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            axum::Json(json!({ "error": err })),
-        )
-            .into_response(),
+        Err(err) => (StatusCode::BAD_GATEWAY, axum::Json(json!({ "error": err }))).into_response(),
     }
 }
 
@@ -622,6 +650,11 @@ pub async fn transfer_request_text(
     if target_port == 0 {
         return bad_request("Missing fields: targetIp, targetPort, fileName");
     }
+    if !security::is_allowed_target_port(target_port) {
+        return bad_request(
+            "Target port rejected: only ports 1024 and above can be a transfer port",
+        );
+    }
     if !security::is_allowed_target_ip(&target_ip) {
         return bad_request("Target IP rejected: only LAN/Tailscale addresses are allowed");
     }
@@ -643,11 +676,7 @@ pub async fn transfer_request_text(
     };
     match crate::transfer::send_transfer_request(state.clone(), meta).await {
         Ok(request_id) => axum::Json(json!({ "requestId": request_id })).into_response(),
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            axum::Json(json!({ "error": err })),
-        )
-            .into_response(),
+        Err(err) => (StatusCode::BAD_GATEWAY, axum::Json(json!({ "error": err }))).into_response(),
     }
 }
 
@@ -745,7 +774,9 @@ pub async fn transfer_cancel(
         state.transfers.cancel_outgoing(&request_id)
     };
     match result {
-        Ok(_) => axum::Json(json!({ "requestId": request_id, "status": "cancelled" })).into_response(),
+        Ok(_) => {
+            axum::Json(json!({ "requestId": request_id, "status": "cancelled" })).into_response()
+        }
         Err(err) => not_found(&err),
     }
 }
@@ -836,8 +867,9 @@ pub async fn transfer_send_file(
         return bad_request("Missing fields: requestId, filePath");
     };
     match crate::transfer::start_file_send(state.clone(), &request_id, &file_path).await {
-        Ok(file_size) => axum::Json(json!({ "requestId": request_id, "fileSize": file_size }))
-            .into_response(),
+        Ok(file_size) => {
+            axum::Json(json!({ "requestId": request_id, "fileSize": file_size })).into_response()
+        }
         Err(err) => bad_request(&err),
     }
 }
@@ -932,6 +964,21 @@ pub async fn transfer_upload(
     }
 
     let max_bytes = platform::max_upload_mb() * 1024 * 1024;
+    // Batas 2048 MB x 50 berkas = 100 GB per request. Tanpa cek ruang, yang
+    // terjadi bukan penolakan tapi penulisan yang berhenti di tengah karena
+    // ENOSPC — dilaporkan sebagai 500 generik dan menyisakan berkas separuh.
+    const UPLOAD_DISK_RESERVE: u64 = 32 * 1024 * 1024;
+    if let Some(free) = platform::free_space(&state.upload_dir) {
+        if free < UPLOAD_DISK_RESERVE {
+            return (
+                StatusCode::INSUFFICIENT_STORAGE,
+                axum::Json(json!({
+                    "error": "Not enough disk space in the upload folder — free up space and try again"
+                })),
+            )
+                .into_response();
+        }
+    }
     let mut files: Vec<Value> = Vec::new();
 
     loop {
@@ -949,7 +996,9 @@ pub async fn transfer_upload(
             .file_name()
             .map(str::to_string)
             .unwrap_or_else(|| "file".to_string());
-        let stored = state.upload_dir.join(crate::settings::hex_random_public(16));
+        let stored = state
+            .upload_dir
+            .join(crate::settings::hex_random_public(16));
         let mut file = match tokio::fs::File::create(&stored).await {
             Ok(f) => f,
             Err(err) => return server_error(&format!("Cannot write upload: {err}")),
@@ -960,6 +1009,22 @@ pub async fn transfer_upload(
             match stream.chunk().await {
                 Ok(Some(chunk)) => {
                     size += chunk.len() as u64;
+                    // Ruang bisa habis di tengah batch: periksa berkala, jangan
+                    // menunggu ENOSPC.
+                    if size % (16 * 1024 * 1024) < chunk.len() as u64 {
+                        if let Some(free) = platform::free_space(&state.upload_dir) {
+                            if free < UPLOAD_DISK_RESERVE {
+                                let _ = tokio::fs::remove_file(&stored).await;
+                                return (
+                                    StatusCode::INSUFFICIENT_STORAGE,
+                                    axum::Json(json!({
+                                        "error": "Not enough disk space in the upload folder — free up space and try again"
+                                    })),
+                                )
+                                    .into_response();
+                            }
+                        }
+                    }
                     // Batas per berkas, seperti `limits.fileSize` di multer.
                     // Satu batch 50 foto kecil tidak boleh ditolak karena
                     // jumlahnya — yang dibatasi adalah tiap berkas.

@@ -60,8 +60,13 @@ impl Pin {
 
     pub fn create_session(&self) -> String {
         let token = crate::settings::hex_random_public(24);
+        let now = now_ms();
         if let Ok(mut sessions) = self.sessions.lock() {
-            sessions.insert(token.clone(), now_ms() + TTL_SECONDS * 1000);
+            // Entri mati hanya dibuang saat tokennya dipakai lagi. Tanpa
+            // sapuan di sini, setiap login menambah satu entri yang tidak
+            // pernah dibaca dan map tumbuh sampai proses restart.
+            sessions.retain(|_, expires| *expires > now);
+            sessions.insert(token.clone(), now + TTL_SECONDS * 1000);
         }
         token
     }
@@ -106,5 +111,33 @@ impl Pin {
             Some(age) => format!("{base}; Max-Age={age}"),
             None => base,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sesi_kedaluwarsa_dibuang_saat_sesi_baru_dibuat() {
+        let dir = std::env::temp_dir().join(format!("lan-drop-pin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let pin = Pin::new(std::sync::Arc::new(Settings::load(&dir)));
+
+        for _ in 0..5 {
+            pin.create_session();
+        }
+        // Semua sesi lama dianggap kedaluwarsa (lewat 24 jam).
+        if let Ok(mut sessions) = pin.sessions.lock() {
+            for expires in sessions.values_mut() {
+                *expires = 0;
+            }
+        }
+        pin.create_session();
+
+        let count = pin.sessions.lock().map(|s| s.len()).unwrap_or(0);
+        assert_eq!(count, 1, "sesi mati harus dibuang, tersisa {count} entri");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

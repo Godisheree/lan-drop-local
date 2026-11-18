@@ -54,7 +54,9 @@
     "core": "node scripts/run-core.js",
     "check:rust-hardening": "node scripts/check-rust-hardening.js",
     "core:test": "cargo test --release --manifest-path rust/Cargo.toml",
-    "test:core": "npm run core:build && npm run core:test && npm run check:parity && npm run check:rust-core && npm run check:rust-hardening"
+    "test:core": "npm run core:build && npm run core:lint && npm run core:test && npm run check:parity && npm run check:rust-core && npm run check:rust-hardening && npm run check:rust-ci",
+    "core:lint": "node scripts/core-lint.js",
+    "check:rust-ci": "node scripts/check-rust-ci.js"
   },
   "keywords": [
     "lan",
